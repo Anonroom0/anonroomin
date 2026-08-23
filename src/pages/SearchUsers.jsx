@@ -9,6 +9,7 @@
  * 
  * Corrected Features Included Inline:
  * - Removed internal input (Fixes double search bar overlap)
+ * - Intelligent `@` stripping (allows users to search "@username" seamlessly)
  * - Debounced Network Requests (300ms) with memory leak cleanup
  * - Shimmering Skeleton Matrix for loading states
  * - Apple Liquid Hover Physics on list items
@@ -260,8 +261,9 @@ export default function SearchUsers({ externalTerm, onSelectUser }) {
   // NETWORK & DEBOUNCE LOGIC
   // --------------------------------------------------------------------------
   useEffect(() => {
-    // Safely trim the term passed down from Home.jsx
-    const trimmed = externalTerm?.trim();
+    // NEW: Safely trim the term AND strip out any leading '@' symbol 
+    // so users can search for "@username" seamlessly.
+    const trimmed = externalTerm?.trim().replace(/^@/, '');
 
     // If the input is empty or null, reset the state completely
     if (!trimmed) {
@@ -278,7 +280,8 @@ export default function SearchUsers({ externalTerm, onSelectUser }) {
     // Debounce the Supabase query to prevent rate limits and save network calls
     const timeoutId = setTimeout(async () => {
       try {
-        // Execute fast, indexed ilike query on Supabase 'profiles' table
+        // Execute fast, indexed ilike query on Supabase 'profiles' table.
+        // Postgres ILIKE is case-insensitive, perfectly handling vansh vs VANSH.
         const { data, error } = await supabase
           .from('profiles')
           .select('id, username, avatar_url, is_admin')

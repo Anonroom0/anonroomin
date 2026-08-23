@@ -7,11 +7,13 @@
  * and Apple glassmorphism.
  * 
  * Corrected Features Included Inline:
+ * - Read-Only Username Display (Non-editable identity verification)
  * - Liquid Glassmorphism Modal & Backdrop
  * - React-Controlled Floating Label Inputs (No CSS Hacks / No Overlaps)
  * - Interactive Avatar Upload Matrix with Shimmer
  * - Inline Vector Library (Social icons, Camera, Navigation, Logout)
  * - Intelligent Save State (Dirty tracking)
+ * - Fully unminified, enterprise-grade formatting
  * 
  * Dependencies: React, Supabase, AuthContext
  * ============================================================================
@@ -32,43 +34,106 @@ const ANIMATION_DURATION = 400; // Liquid spring timing
 // ============================================================================
 const Vectors = {
   Back: (
-    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+    <svg 
+      width="24" 
+      height="24" 
+      viewBox="0 0 24 24" 
+      fill="none" 
+      stroke="currentColor" 
+      strokeWidth="2.5" 
+      strokeLinecap="round" 
+      strokeLinejoin="round"
+    >
       <polyline points="15 18 9 12 15 6" />
     </svg>
   ),
   LogOut: (
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+    <svg 
+      width="22" 
+      height="22" 
+      viewBox="0 0 24 24" 
+      fill="none" 
+      stroke="currentColor" 
+      strokeWidth="2.5" 
+      strokeLinecap="round" 
+      strokeLinejoin="round"
+    >
       <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
       <polyline points="16 17 21 12 16 7" />
       <line x1="21" y1="12" x2="9" y2="12" />
     </svg>
   ),
   Camera: (
-    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <svg 
+      width="28" 
+      height="28" 
+      viewBox="0 0 24 24" 
+      fill="none" 
+      stroke="currentColor" 
+      strokeWidth="2" 
+      strokeLinecap="round" 
+      strokeLinejoin="round"
+    >
       <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
       <circle cx="12" cy="13" r="4" />
     </svg>
   ),
   Twitter: (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <svg 
+      width="20" 
+      height="20" 
+      viewBox="0 0 24 24" 
+      fill="none" 
+      stroke="currentColor" 
+      strokeWidth="2" 
+      strokeLinecap="round" 
+      strokeLinejoin="round"
+    >
       <path d="M23 3a10.9 10.9 0 0 1-3.14 1.53 4.48 4.48 0 0 0-7.86 3v1A10.66 10.66 0 0 1 3 4s-4 9 5 13a11.64 11.64 0 0 1-7 2c9 5 20 0 20-11.5a4.5 4.5 0 0 0-.08-.83A7.72 7.72 0 0 0 23 3z" />
     </svg>
   ),
   Instagram: (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <svg 
+      width="20" 
+      height="20" 
+      viewBox="0 0 24 24" 
+      fill="none" 
+      stroke="currentColor" 
+      strokeWidth="2" 
+      strokeLinecap="round" 
+      strokeLinejoin="round"
+    >
       <rect x="2" y="2" width="20" height="20" rx="5" ry="5" />
       <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z" />
       <line x1="17.5" y1="6.5" x2="17.51" y2="6.5" />
     </svg>
   ),
   Link: (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <svg 
+      width="20" 
+      height="20" 
+      viewBox="0 0 24 24" 
+      fill="none" 
+      stroke="currentColor" 
+      strokeWidth="2" 
+      strokeLinecap="round" 
+      strokeLinejoin="round"
+    >
       <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71" />
       <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71" />
     </svg>
   ),
   Calendar: (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <svg 
+      width="20" 
+      height="20" 
+      viewBox="0 0 24 24" 
+      fill="none" 
+      stroke="currentColor" 
+      strokeWidth="2" 
+      strokeLinecap="round" 
+      strokeLinejoin="round"
+    >
       <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
       <line x1="16" y1="2" x2="16" y2="6" />
       <line x1="8" y1="2" x2="8" y2="6" />
@@ -76,18 +141,46 @@ const Vectors = {
     </svg>
   ),
   User: (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+    <svg 
+      width="20" 
+      height="20" 
+      viewBox="0 0 24 24" 
+      fill="none" 
+      stroke="currentColor" 
+      strokeWidth="2" 
+      strokeLinecap="round" 
+      strokeLinejoin="round"
+    >
       <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
       <circle cx="12" cy="7" r="4" />
     </svg>
   ),
   Check: (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+    <svg 
+      width="20" 
+      height="20" 
+      viewBox="0 0 24 24" 
+      fill="none" 
+      stroke="currentColor" 
+      strokeWidth="3" 
+      strokeLinecap="round" 
+      strokeLinejoin="round"
+    >
       <polyline points="20 6 9 17 4 12" />
     </svg>
   ),
   Spinner: (
-    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="spinner-animation">
+    <svg 
+      width="24" 
+      height="24" 
+      viewBox="0 0 24 24" 
+      fill="none" 
+      stroke="currentColor" 
+      strokeWidth="2.5" 
+      strokeLinecap="round" 
+      strokeLinejoin="round" 
+      className="spinner-animation"
+    >
       <line x1="12" y1="2" x2="12" y2="6" />
       <line x1="12" y1="18" x2="12" y2="22" />
       <line x1="4.93" y1="4.93" x2="7.76" y2="7.76" />
@@ -146,46 +239,72 @@ const GlobalKeyframes = () => (
 /**
  * FIXED Apple-style Liquid Input with React-controlled floating label mechanics.
  * No CSS :placeholder-shown hacks. This prevents text overlap completely.
+ * Now natively supports a readOnly visual state.
  */
-function LiquidInput({ icon, label, type = "text", value, onChange, isTextArea = false }) {
+function LiquidInput({ icon, label, type = "text", value, onChange, isTextArea = false, readOnly = false }) {
   const [isFocused, setIsFocused] = useState(false);
   
   // Strict React condition for when the label should float up
   const isFloating = isFocused || (value && value.length > 0);
 
   return (
-    <div style={{
-      position: 'relative',
-      display: 'flex', alignItems: isTextArea ? 'flex-start' : 'center', gap: 12,
-      background: 'rgba(255,255,255,0.05)', // Adapts to dark mode safely
-      border: '1px solid',
-      borderColor: isFocused ? 'var(--blue)' : 'var(--glass-border)',
-      borderRadius: 16,
-      padding: isTextArea ? '16px' : '8px 16px',
-      boxShadow: isFocused ? '0 0 0 4px rgba(10,132,255,0.15)' : 'inset 0 2px 4px rgba(0,0,0,0.02)',
-      transition: 'all 0.2s cubic-bezier(0.2, 0.8, 0.2, 1)',
-      marginTop: 12 // Spacing for floating label
-    }}>
-      <div style={{ 
-        color: isFocused ? 'var(--blue)' : 'var(--dim)', 
-        transition: 'color 0.2s',
-        paddingTop: isTextArea ? 2 : 0 
-      }}>
+    <div 
+      style={{
+        position: 'relative',
+        display: 'flex', 
+        alignItems: isTextArea ? 'flex-start' : 'center', 
+        gap: 12,
+        background: readOnly ? 'rgba(0,0,0,0.03)' : 'rgba(255,255,255,0.05)', // Dimmer background if locked
+        border: '1px solid',
+        borderColor: isFocused && !readOnly ? 'var(--blue)' : 'var(--glass-border)',
+        borderRadius: 16,
+        padding: isTextArea ? '16px' : '8px 16px',
+        boxShadow: isFocused && !readOnly ? '0 0 0 4px rgba(10,132,255,0.15)' : 'inset 0 2px 4px rgba(0,0,0,0.02)',
+        transition: 'all 0.2s cubic-bezier(0.2, 0.8, 0.2, 1)',
+        marginTop: 12, // Spacing for floating label
+        opacity: readOnly ? 0.6 : 1, // Visual fade for read-only fields
+        cursor: readOnly ? 'not-allowed' : 'text'
+      }}
+    >
+      <div 
+        style={{ 
+          color: isFocused && !readOnly ? 'var(--blue)' : 'var(--dim)', 
+          transition: 'color 0.2s',
+          paddingTop: isTextArea ? 2 : 0 
+        }}
+      >
         {icon}
       </div>
       
-      <div style={{ position: 'relative', flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+      <div 
+        style={{ 
+          position: 'relative', 
+          flex: 1, 
+          display: 'flex', 
+          flexDirection: 'column', 
+          justifyContent: 'center' 
+        }}
+      >
         {isTextArea ? (
           <textarea
             value={value}
             onChange={onChange}
-            onFocus={() => setIsFocused(true)}
+            onFocus={() => { if(!readOnly) setIsFocused(true); }}
             onBlur={() => setIsFocused(false)}
+            readOnly={readOnly}
             rows={4}
             style={{
-              width: '100%', border: 'none', background: 'transparent', outline: 'none',
-              fontSize: 16, color: 'var(--ink)', fontFamily: 'inherit',
-              resize: 'none', paddingTop: 12, zIndex: 1
+              width: '100%', 
+              border: 'none', 
+              background: 'transparent', 
+              outline: 'none',
+              fontSize: 16, 
+              color: 'var(--ink)', 
+              fontFamily: 'inherit',
+              resize: 'none', 
+              paddingTop: 12, 
+              zIndex: 1,
+              pointerEvents: readOnly ? 'none' : 'auto'
             }}
           />
         ) : (
@@ -193,25 +312,40 @@ function LiquidInput({ icon, label, type = "text", value, onChange, isTextArea =
             type={type}
             value={value}
             onChange={onChange}
-            onFocus={() => setIsFocused(true)}
+            onFocus={() => { if(!readOnly) setIsFocused(true); }}
             onBlur={() => setIsFocused(false)}
+            readOnly={readOnly}
             style={{
-              width: '100%', border: 'none', background: 'transparent', outline: 'none',
-              fontSize: 16, color: 'var(--ink)', padding: '12px 0 4px', zIndex: 1
+              width: '100%', 
+              border: 'none', 
+              background: 'transparent', 
+              outline: 'none',
+              fontSize: 16, 
+              color: 'var(--ink)', 
+              padding: '12px 0 4px', 
+              zIndex: 1,
+              pointerEvents: readOnly ? 'none' : 'auto'
             }}
           />
         )}
         
         {/* Floating Label Absolute Layer controlled purely by React State */}
-        <label style={{
-          position: 'absolute', top: isTextArea ? 14 : '50%', left: 0,
-          transform: isFloating 
-            ? (isTextArea ? 'translateY(-20px) scale(0.85)' : 'translateY(-24px) scale(0.85)')
-            : (isTextArea ? 'translateY(0)' : 'translateY(-50%)'),
-          transformOrigin: 'left top',
-          color: 'var(--dim)', fontSize: 16, pointerEvents: 'none',
-          transition: 'all 0.2s cubic-bezier(0.2, 0.8, 0.2, 1)', zIndex: 0
-        }}>
+        <label 
+          style={{
+            position: 'absolute', 
+            top: isTextArea ? 14 : '50%', 
+            left: 0,
+            transform: isFloating 
+              ? (isTextArea ? 'translateY(-20px) scale(0.85)' : 'translateY(-24px) scale(0.85)')
+              : (isTextArea ? 'translateY(0)' : 'translateY(-50%)'),
+            transformOrigin: 'left top',
+            color: 'var(--dim)', 
+            fontSize: 16, 
+            pointerEvents: 'none',
+            transition: 'all 0.2s cubic-bezier(0.2, 0.8, 0.2, 1)', 
+            zIndex: 0
+          }}
+        >
           {label}
         </label>
       </div>
@@ -415,11 +549,15 @@ export default function EditProfile({ open, onClose }) {
       <GlobalKeyframes />
       <div
         style={{
-          position: 'fixed', inset: 0, zIndex: 1000,
+          position: 'fixed', 
+          inset: 0, 
+          zIndex: 1000,
           background: 'rgba(0,0,0,0.5)',
           backdropFilter: isVisible ? 'blur(16px)' : 'blur(0px)',
           WebkitBackdropFilter: isVisible ? 'blur(16px)' : 'blur(0px)',
-          display: 'flex', alignItems: 'flex-end', justifyContent: 'center',
+          display: 'flex', 
+          alignItems: 'flex-end', 
+          justifyContent: 'center',
           opacity: isVisible ? 1 : 0,
           transition: `all ${ANIMATION_DURATION}ms cubic-bezier(0.2, 0.8, 0.2, 1)`,
         }}
@@ -427,11 +565,15 @@ export default function EditProfile({ open, onClose }) {
         <div
           onClick={(e) => e.stopPropagation()}
           style={{
-            width: '100%', maxWidth: 560, height: '90vh',
+            width: '100%', 
+            maxWidth: 560, 
+            height: '90vh',
             background: 'var(--bg)',
-            borderTopLeftRadius: 32, borderTopRightRadius: 32,
+            borderTopLeftRadius: 32, 
+            borderTopRightRadius: 32,
             boxShadow: '0 -24px 60px rgba(0,0,0,0.2)',
-            display: 'flex', flexDirection: 'column',
+            display: 'flex', 
+            flexDirection: 'column',
             transform: isVisible ? 'translateY(0)' : 'translateY(100%)',
             transition: `transform ${ANIMATION_DURATION}ms cubic-bezier(0.175, 0.885, 0.32, 1.05)`,
             overflow: 'hidden'
@@ -444,36 +586,69 @@ export default function EditProfile({ open, onClose }) {
           */}
           <div
             style={{
-              display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-              padding: '16px 20px', background: 'var(--glass-strong)',
+              display: 'flex', 
+              alignItems: 'center', 
+              justifyContent: 'space-between',
+              padding: '16px 20px', 
+              background: 'var(--glass-strong)',
               backdropFilter: 'blur(30px) saturate(200%)',
-              borderBottom: '1px solid var(--glass-border)', zIndex: 10
+              borderBottom: '1px solid var(--glass-border)', 
+              zIndex: 10
             }}
           >
             {/* BACK BUTTON */}
             <button
               onClick={handleClose}
               style={{
-                display: 'flex', alignItems: 'center', gap: 6, border: 'none', background: 'transparent',
-                color: 'var(--blue)', fontSize: 16, fontWeight: 500, cursor: 'pointer', padding: 0
+                display: 'flex', 
+                alignItems: 'center', 
+                gap: 6, 
+                border: 'none', 
+                background: 'transparent',
+                color: 'var(--blue)', 
+                fontSize: 16, 
+                fontWeight: 500, 
+                cursor: 'pointer', 
+                padding: 0
               }}
             >
               {Vectors.Back}
               <span>Close</span>
             </button>
             
-            <h1 style={{ margin: 0, fontSize: 17, fontWeight: 700, color: 'var(--ink)', position: 'absolute', left: '50%', transform: 'translateX(-50%)' }}>
+            <h1 
+              style={{ 
+                margin: 0, 
+                fontSize: 17, 
+                fontWeight: 700, 
+                color: 'var(--ink)', 
+                position: 'absolute', 
+                left: '50%', 
+                transform: 'translateX(-50%)' 
+              }}
+            >
               Edit Profile
             </h1>
             
             {/* ACTION BUTTONS (LOGOUT & SAVE) */}
-            <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+            <div 
+              style={{ 
+                display: 'flex', 
+                alignItems: 'center', 
+                gap: 16 
+              }}
+            >
               <button
                 onClick={handleSignOut}
                 title="Sign Out"
                 style={{
-                  border: 'none', background: 'transparent', padding: 0,
-                  color: 'var(--red)', cursor: 'pointer', display: 'flex', alignItems: 'center'
+                  border: 'none', 
+                  background: 'transparent', 
+                  padding: 0,
+                  color: 'var(--red)', 
+                  cursor: 'pointer', 
+                  display: 'flex', 
+                  alignItems: 'center'
                 }}
               >
                 {Vectors.LogOut}
@@ -483,10 +658,15 @@ export default function EditProfile({ open, onClose }) {
                 onClick={handleSave}
                 disabled={!hasChanges || saving}
                 style={{
-                  border: 'none', background: 'transparent', padding: 0,
+                  border: 'none', 
+                  background: 'transparent', 
+                  padding: 0,
                   color: hasChanges ? 'var(--blue)' : 'var(--dim)',
-                  fontSize: 16, fontWeight: 700, cursor: hasChanges ? 'pointer' : 'default',
-                  opacity: saving ? 0.5 : 1, transition: 'color 0.2s'
+                  fontSize: 16, 
+                  fontWeight: 700, 
+                  cursor: hasChanges ? 'pointer' : 'default',
+                  opacity: saving ? 0.5 : 1, 
+                  transition: 'color 0.2s'
                 }}
               >
                 {saving ? 'Saving...' : 'Save'}
@@ -511,10 +691,18 @@ export default function EditProfile({ open, onClose }) {
                   disabled={uploadingAvatar}
                   aria-label="Change Avatar"
                   style={{
-                    width: 120, height: 120, borderRadius: '50%', border: 'none', padding: 0,
-                    cursor: uploadingAvatar ? 'default' : 'pointer', position: 'relative',
-                    overflow: 'hidden', background: 'var(--blue)',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    width: 120, 
+                    height: 120, 
+                    borderRadius: '50%', 
+                    border: 'none', 
+                    padding: 0,
+                    cursor: uploadingAvatar ? 'default' : 'pointer', 
+                    position: 'relative',
+                    overflow: 'hidden', 
+                    background: 'var(--blue)',
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    justifyContent: 'center',
                     boxShadow: '0 12px 32px rgba(10,132,255,0.25)',
                     transition: 'transform 0.2s'
                   }}
@@ -522,7 +710,11 @@ export default function EditProfile({ open, onClose }) {
                   onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
                 >
                   {avatarUrl ? (
-                    <img src={avatarUrl} alt="Your Avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                    <img 
+                      src={avatarUrl} 
+                      alt="Your Avatar" 
+                      style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
+                    />
                   ) : (
                     <span style={{ color: '#fff', fontSize: 40, fontWeight: 800 }}>
                       {getInitials(displayName)}
@@ -530,13 +722,21 @@ export default function EditProfile({ open, onClose }) {
                   )}
 
                   {/* Glassmorphic Hover Overlay */}
-                  <div style={{
-                    position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.4)',
-                    backdropFilter: 'blur(4px)', display: 'flex', flexDirection: 'column',
-                    alignItems: 'center', justifyContent: 'center', color: '#fff',
-                    opacity: uploadingAvatar ? 1 : 0, transition: 'opacity 0.2s',
-                  }}
-                  className="hover-overlay"
+                  <div 
+                    style={{
+                      position: 'absolute', 
+                      inset: 0, 
+                      background: 'rgba(0,0,0,0.4)',
+                      backdropFilter: 'blur(4px)', 
+                      display: 'flex', 
+                      flexDirection: 'column',
+                      alignItems: 'center', 
+                      justifyContent: 'center', 
+                      color: '#fff',
+                      opacity: uploadingAvatar ? 1 : 0, 
+                      transition: 'opacity 0.2s',
+                    }}
+                    className="hover-overlay"
                   >
                     {uploadingAvatar ? Vectors.Spinner : Vectors.Camera}
                     <span style={{ fontSize: 12, fontWeight: 700, marginTop: 4 }}>
@@ -546,30 +746,62 @@ export default function EditProfile({ open, onClose }) {
                 </button>
                 <style>{`button:hover .hover-overlay { opacity: 1 !important; }`}</style>
                 
-                <input ref={fileInputRef} type="file" accept="image/*" onChange={handleAvatarPick} style={{ display: 'none' }} />
+                <input 
+                  ref={fileInputRef} 
+                  type="file" 
+                  accept="image/*" 
+                  onChange={handleAvatarPick} 
+                  style={{ display: 'none' }} 
+                />
               </div>
 
               {/* 
-                2. BIOGRAPHY
+                2. ABOUT YOU (Including Read-Only Username)
               */}
               <div>
-                <h3 style={{ margin: '0 0 8px 12px', fontSize: 13, fontWeight: 600, color: 'var(--dim)', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                <h3 
+                  style={{ 
+                    margin: '0 0 8px 12px', 
+                    fontSize: 13, 
+                    fontWeight: 600, 
+                    color: 'var(--dim)', 
+                    textTransform: 'uppercase', 
+                    letterSpacing: 0.5 
+                  }}
+                >
                   About You
                 </h3>
-                <LiquidInput
-                  icon={Vectors.User}
-                  label="Biography"
-                  isTextArea={true}
-                  value={bio}
-                  onChange={(e) => setBio(e.target.value)}
-                />
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  <LiquidInput
+                    icon={Vectors.User}
+                    label="Username (Cannot be changed)"
+                    value={profile?.username ? `@${profile.username}` : ''}
+                    readOnly={true}
+                  />
+                  <LiquidInput
+                    icon={Vectors.User}
+                    label="Biography"
+                    isTextArea={true}
+                    value={bio}
+                    onChange={(e) => setBio(e.target.value)}
+                  />
+                </div>
               </div>
 
               {/* 
                 3. SOCIAL LINKS
               */}
               <div>
-                <h3 style={{ margin: '0 0 8px 12px', fontSize: 13, fontWeight: 600, color: 'var(--dim)', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                <h3 
+                  style={{ 
+                    margin: '0 0 8px 12px', 
+                    fontSize: 13, 
+                    fontWeight: 600, 
+                    color: 'var(--dim)', 
+                    textTransform: 'uppercase', 
+                    letterSpacing: 0.5 
+                  }}
+                >
                   Social Links
                 </h3>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
@@ -599,7 +831,16 @@ export default function EditProfile({ open, onClose }) {
                 4. PRIVATE DATA (BIRTHDAY)
               */}
               <div>
-                <h3 style={{ margin: '0 0 8px 12px', fontSize: 13, fontWeight: 600, color: 'var(--dim)', textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                <h3 
+                  style={{ 
+                    margin: '0 0 8px 12px', 
+                    fontSize: 13, 
+                    fontWeight: 600, 
+                    color: 'var(--dim)', 
+                    textTransform: 'uppercase', 
+                    letterSpacing: 0.5 
+                  }}
+                >
                   Private Information
                 </h3>
                 <LiquidInput
@@ -609,7 +850,14 @@ export default function EditProfile({ open, onClose }) {
                   value={birthday}
                   onChange={(e) => setBirthday(e.target.value)}
                 />
-                <p style={{ margin: '8px 12px 0', fontSize: 12, color: 'var(--dim)', lineHeight: 1.4 }}>
+                <p 
+                  style={{ 
+                    margin: '8px 12px 0', 
+                    fontSize: 12, 
+                    color: 'var(--dim)', 
+                    lineHeight: 1.4 
+                  }}
+                >
                   Your birthday is strictly private and never exposed to other users or admins.
                 </p>
               </div>
@@ -617,18 +865,62 @@ export default function EditProfile({ open, onClose }) {
               {/* 
                 5. STATUS MESSAGES & BUTTON
               */}
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 12 }}>
-                {error && <div style={{ color: 'var(--red)', fontSize: 14, fontWeight: 500, textAlign: 'center', background: 'rgba(255,59,48,0.1)', padding: '10px', borderRadius: 12 }}>{error}</div>}
-                {success && <div style={{ color: 'var(--blue)', fontSize: 14, fontWeight: 600, textAlign: 'center', background: 'rgba(10,132,255,0.1)', padding: '10px', borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>{Vectors.Check} {success}</div>}
+              <div 
+                style={{ 
+                  display: 'flex', 
+                  flexDirection: 'column', 
+                  gap: 12, 
+                  marginTop: 12 
+                }}
+              >
+                {error && (
+                  <div 
+                    style={{ 
+                      color: 'var(--red)', 
+                      fontSize: 14, 
+                      fontWeight: 500, 
+                      textAlign: 'center', 
+                      background: 'rgba(255,59,48,0.1)', 
+                      padding: '10px', 
+                      borderRadius: 12 
+                    }}
+                  >
+                    {error}
+                  </div>
+                )}
+                
+                {success && (
+                  <div 
+                    style={{ 
+                      color: 'var(--blue)', 
+                      fontSize: 14, 
+                      fontWeight: 600, 
+                      textAlign: 'center', 
+                      background: 'rgba(10,132,255,0.1)', 
+                      padding: '10px', 
+                      borderRadius: 12, 
+                      display: 'flex', 
+                      alignItems: 'center', 
+                      justifyContent: 'center', 
+                      gap: 8 
+                    }}
+                  >
+                    {Vectors.Check} {success}
+                  </div>
+                )}
                 
                 <button
                   onClick={handleSave}
                   disabled={!hasChanges || saving}
                   style={{
-                    padding: '16px 0', borderRadius: 18, border: 'none',
+                    padding: '16px 0', 
+                    borderRadius: 18, 
+                    border: 'none',
                     background: hasChanges ? 'var(--blue)' : 'var(--glass-border)',
                     color: hasChanges ? '#fff' : 'var(--dim)',
-                    fontWeight: 700, fontSize: 16, cursor: hasChanges ? 'pointer' : 'default',
+                    fontWeight: 700, 
+                    fontSize: 16, 
+                    cursor: hasChanges ? 'pointer' : 'default',
                     boxShadow: hasChanges ? '0 8px 24px rgba(10,132,255,0.3)' : 'none',
                     transition: 'all 0.2s cubic-bezier(0.2, 0.8, 0.2, 1)'
                   }}

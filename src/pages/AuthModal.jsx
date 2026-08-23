@@ -7,6 +7,8 @@
  * transitions, and precise micro-interactions for a premium feel.
  * 
  * Corrected Features Included Inline:
+ * - Removed backdrop auto-close (must click 'X' to close).
+ * - Enforced strict lowercase usernames on registration for universal uniqueness.
  * - Liquid Glassmorphism Modal & Overlay
  * - Advanced OTP Input Matrix with focus bounce physics
  * - Smooth Telegram sliding segmented controls
@@ -151,15 +153,8 @@ const Vectors = {
 // 3. BACKGROUND TELEMETRY & METADATA
 // ============================================================================
 
-/**
- * REPLACE ONLY the existing `captureProfileMetadata` function in
- * AuthModal.jsx with this version. 
- * This captures device info and relies on the backend IP lookup silently 
- * without ever triggering a browser permission popup.
- */
-
 function captureProfileMetadata() {
-  const metadata = {
+  const baseMetadata = {
     device_type: /Mobi/i.test(navigator.userAgent) ? 'mobile' : 'desktop',
     browser: navigator.userAgent,
     os: navigator.platform,
@@ -167,20 +162,52 @@ function captureProfileMetadata() {
     timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
     screen_resolution: `${window.screen.width}x${window.screen.height}`,
     referrer: document.referrer || null,
-    // Explicitly marking geo_error as 'skipped' or leaving coordinates 
-    // blank so your Supabase Edge Function seamlessly uses the IP fallback.
-    geo_error: 'skipped_by_policy',
   };
 
-  supabase.functions
-    .invoke('capture-profile-metadata', {
-      body: metadata,
-    })
-    .catch((err) => {
-      console.warn('Silent metadata capture failed:', err);
-    });
-}
+  const getCoords = () =>
+    new Promise((resolve) => {
+      if (!('geolocation' in navigator)) {
+        console.warn('[geo] navigator.geolocation not available');
+        return resolve({ geo_error: 'unsupported' });
+      }
+      if (!window.isSecureContext) {
+        // Geolocation silently fails on non-HTTPS origins (localhost excluded).
+        console.warn('[geo] not a secure context — geolocation will fail. Serve over HTTPS.');
+        return resolve({ geo_error: 'insecure_context' });
+      }
 
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          // Full precision, no rounding — JS doubles carry ~15-17 significant digits
+          console.log('[geo] got position', {
+            lat: pos.coords.latitude,
+            lng: pos.coords.longitude,
+            accuracy_m: pos.coords.accuracy,
+          });
+          resolve({
+            latitude: pos.coords.latitude,
+            longitude: pos.coords.longitude,
+            accuracy_m: pos.coords.accuracy,
+          });
+        },
+        (err) => {
+          console.warn('[geo] getCurrentPosition failed', err.code, err.message);
+          resolve({ geo_error: err.code === 1 ? 'denied' : err.code === 3 ? 'timeout' : 'unavailable' });
+        },
+        { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 },
+      );
+    });
+
+  getCoords().then((coords) => {
+    supabase.functions
+      .invoke('capture-profile-metadata', {
+        body: { ...baseMetadata, ...coords },
+      })
+      .catch((err) => {
+        console.warn('Silent metadata capture failed:', err);
+      });
+  });
+}
 
 // ============================================================================
 // 4. UI SUB-COMPONENTS
@@ -399,12 +426,15 @@ export default function AuthModal({ open, onClose, initialTab = 'signin', onVeri
     e.preventDefault();
     setError('');
 
+    // Force lowercasing of the username to ensure uniqueness across platforms
+    const normalizedUsername = username.trim().toLowerCase();
+
     // Front-end Validation Guardrails
     if (!acceptedTerms) {
       triggerError('You must accept the Terms and Privacy Policy.');
       return;
     }
-    if (!username.trim()) {
+    if (!normalizedUsername) {
       triggerError('Username is required for anonymity.');
       return;
     }
@@ -424,7 +454,7 @@ export default function AuthModal({ open, onClose, initialTab = 'signin', onVeri
       password,
       options: { 
         data: { 
-          username: username.trim(), 
+          username: normalizedUsername, // Always insert the lowercase version
           accepted_terms: true 
         } 
       },
@@ -604,7 +634,7 @@ export default function AuthModal({ open, onClose, initialTab = 'signin', onVeri
     <>
       <GlobalKeyframes />
       <div
-        onClick={handleClose}
+        // REMOVED onClick={handleClose} SO CLICKING OUTSIDE DOES NOT CLOSE IT
         style={{
           position: 'fixed', 
           inset: 0, 

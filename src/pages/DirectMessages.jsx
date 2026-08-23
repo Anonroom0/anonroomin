@@ -5,10 +5,11 @@
  * This component acts as the master chat pane for Private 1-on-1 Conversations.
  *
  * CHANGES IN THIS PASS:
- * - Added `@username` mentions parsing, UUID resolution, and clickable links.
- * - Added `dm_read_receipts` tracking to clear `@` badges on the home screen.
- * - Retained the `.limit(1)` fix to prevent JSON object duplicate crashes.
- * - Retained the DB Error Box for graceful failure.
+ * - Native `column-reverse` CSS routing (renders from bottom without JS scrolling).
+ * - Universal Case-Insensitive Mentions: Forces `.toLowerCase()` for strict uniqueness.
+ * - Mention Highlighting: White/Light blue underline for mentions inside own bubbles.
+ * - Floating Mentions Button: New `@` FAB appears on unread pings.
+ * - Auto-updates `dm_read_receipts` on load so the home screen `@` badge clears.
  * - Message bubble text is non-selectable (user-select: none).
  * - Fully uncompressed code with no shortened lines.
  *
@@ -310,6 +311,10 @@ const GlobalKeyframes = () => (
         transform: translateY(0);
       }
     }
+    @keyframes pop-in {
+      0% { transform: scale(0.5); opacity: 0; }
+      100% { transform: scale(1); opacity: 1; }
+    }
     .spinner-animation {
       animation: spin 1.2s linear infinite;
     }
@@ -531,7 +536,6 @@ function SendButton({ canSend, sending, cooldownPercent, cooldownSecondsLeft }) 
     </button>
   );
 }
-
 // ============================================================================
 // 5. MAIN DIRECT MESSAGES COMPONENT EXPORT
 // ============================================================================
@@ -562,6 +566,9 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
   const [profileCardUserId, setProfileCardUserId] = useState(null);
   const [authOpen, setAuthOpen] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
+  
+  // Floating '@' Unread Mention State
+  const [hasUnreadMention, setHasUnreadMention] = useState(false);
 
   const scrollRef = useRef(null);
   const fileInputRef = useRef(null);
@@ -653,6 +660,7 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId, openThreadWithUserId]);
 
+  // Messages subscription & Read Receipts (Descending Order for Column-Reverse)
   useEffect(() => {
     if (!activeThread?.id) {
       return;
@@ -661,7 +669,7 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
     let isMounted = true;
     setMessagesLoading(true);
 
-    // Update DM Read Receipt on load
+    // Initial Read Receipt Upsert
     if (userId) {
       supabase.from('dm_read_receipts').upsert({
         thread_id: activeThread.id,
@@ -671,11 +679,12 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
     }
 
     async function fetchMessages() {
+      // NOTE: FETCHING FALSE ASCENDING SO NEWEST IS AT INDEX 0
       const { data, error } = await supabase
         .from('dm_messages')
-        .select('*')
+        .select('*, profiles(avatar_url)') // JOIN: Fetch the Avatar URL for PFPs
         .eq('thread_id', activeThread.id)
-        .order('created_at', { ascending: true })
+        .order('created_at', { ascending: false })
         .limit(MESSAGE_LIMIT);
 
       if (error) {
@@ -701,11 +710,18 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
           if (!isMounted) {
             return;
           }
+          
+          // Check for mentions in realtime payloads
+          if (userId && payload.new.mentioned_user_ids?.includes(userId)) {
+            setHasUnreadMention(true);
+          }
+
           setMessages((prev) => {
             if (prev.some(m => m.id === payload.new.id)) {
               return prev;
             }
-            return [...prev, payload.new];
+            // ADD TO FRONT OF ARRAY (Newest at index 0 for column-reverse)
+            return [payload.new, ...prev];
           });
           
           // Update Read Receipt on new message received
@@ -758,23 +774,28 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
   // MENTION RESOLUTION & RENDERING LOGIC
   // --------------------------------------------------------------------------
   
+  // Extracts @usernames, forces lower case, and looks up their UUID
   async function resolveMentionedIds(outgoingText) {
-    const mentionedUsernames = [...outgoingText.matchAll(/@([a-zA-Z0-9_]+)/g)].map(m => m[1]);
-    if (mentionedUsernames.length === 0) return [];
+    const mentionedUsernames = [...outgoingText.matchAll(/@([a-zA-Z0-9_]+)/g)].map(m => m[1].toLowerCase());
+    
+    if (mentionedUsernames.length === 0) {
+      return [];
+    }
     
     const { data } = await supabase
       .from('profiles')
       .select('id')
-      .in('username', mentionedUsernames);
+      .in('username', mentionedUsernames); // Matches lowercased registered usernames
       
     return data ? data.map(p => p.id) : [];
   }
 
+  // Opens profile card when @username is clicked
   async function handleMentionClick(username) {
     const { data } = await supabase
       .from('profiles')
       .select('id')
-      .eq('username', username)
+      .eq('username', username.toLowerCase()) // Force lowercase lookup
       .maybeSingle();
       
     if (data?.id) {
@@ -784,7 +805,8 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
     }
   }
 
-  const renderMessageTextWithMentions = (messageText) => {
+  // Parses text to render clickable mentions. Changes color if in an own-message blue bubble.
+  const renderMessageTextWithMentions = (messageText, isOwn) => {
     if (!messageText) return null;
     const parts = messageText.split(/(@[a-zA-Z0-9_]+)/g);
     
@@ -796,7 +818,8 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
             key={i}
             onClick={() => handleMentionClick(username)}
             style={{ 
-              color: 'var(--blue)', 
+              color: isOwn ? '#cce4ff' : 'var(--blue)', // Light blue/white if inside own bubble
+              textDecoration: 'underline',
               background: 'none', 
               border: 'none', 
               padding: 0, 
@@ -842,6 +865,7 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
 
     setSending(true);
     
+    // Capture any mentioned users strictly
     const mentionedIds = await resolveMentionedIds(trimmed);
 
     const { error } = await supabase.from('dm_messages').insert({
@@ -909,6 +933,7 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
     if (!userId || !activeThread || cooldownPercent > 0 || sending) {
       return;
     }
+    
     setPickerOpen(false);
 
     const { error } = await supabase.from('dm_messages').insert({
@@ -948,7 +973,8 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
           justifyContent: 'center',
           background: 'var(--bg)',
           userSelect: 'none',
-          WebkitUserSelect: 'none'
+          WebkitUserSelect: 'none',
+          msUserSelect: 'none'
         }}
       >
         <div style={{ color: 'var(--blue)' }}>
@@ -972,7 +998,8 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
           gap: 16,
           padding: 24,
           userSelect: 'none',
-          WebkitUserSelect: 'none'
+          WebkitUserSelect: 'none',
+          msUserSelect: 'none'
         }}
       >
         <p style={{ color: 'var(--dim)', fontWeight: 600 }}>Failed to load chat.</p>
@@ -1030,7 +1057,8 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
         overflow: 'hidden',
         zIndex: 1,
         userSelect: 'none',
-        WebkitUserSelect: 'none'
+        WebkitUserSelect: 'none',
+        msUserSelect: 'none'
       }}
     >
       <GlobalKeyframes />
@@ -1147,7 +1175,6 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
       )}
 
       <div
-        ref={scrollRef}
         className="custom-scrollbar"
         style={{
           flex: 1,
@@ -1157,7 +1184,7 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
           WebkitOverflowScrolling: 'touch',
           padding: '20px 16px',
           display: 'flex',
-          flexDirection: 'column',
+          flexDirection: 'column-reverse', // NATIVE BOTTOM RENDERING! (Newest is at index 0 = bottom)
           zIndex: 10,
           minHeight: 0,
           backgroundColor: 'var(--bg)',
@@ -1202,12 +1229,13 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
           </div>
         )}
 
-        {!messagesLoading && messages.map((message) => {
+        {!messagesLoading && messages.map((message, index) => {
           const isOwn = userId && message.sender_id === userId;
 
-          const key = dayKey(message.created_at);
-          const showDayDivider = key !== lastDayKey;
-          lastDayKey = key;
+          // Because of column-reverse, index 0 is newest. To know if the day changed, 
+          // we check the chronological "previous" message, which is index + 1 in this array.
+          const olderMessage = messages[index + 1];
+          const showDayDivider = !olderMessage || dayKey(message.created_at) !== dayKey(olderMessage.created_at);
 
           const repliedMessage = message.reply_to_id
             ? messages.find((m) => m.id === message.reply_to_id) || null
@@ -1217,32 +1245,6 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
 
           return (
             <React.Fragment key={message.id}>
-
-              {showDayDivider && (
-                <div
-                  style={{
-                    textAlign: 'center',
-                    margin: '24px 0 16px',
-                    position: 'sticky',
-                    top: 10,
-                    zIndex: 5,
-                  }}
-                >
-                  <span
-                    style={{
-                      fontSize: 12,
-                      fontWeight: 600,
-                      color: 'var(--dim)',
-                      background: 'var(--glass-strong)',
-                      padding: '6px 14px',
-                      borderRadius: 14,
-                      boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
-                    }}
-                  >
-                    {formatDayLabel(message.created_at)}
-                  </span>
-                </div>
-              )}
 
               <SwipeableMessage
                 onSwipe={() => startReply(message)}
@@ -1388,8 +1390,8 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
                             lineHeight: 1.4,
                           }}
                         >
-                          {/* Rendering parsed mentions instead of plain text */}
-                          {renderMessageTextWithMentions(message.text)}
+                          {/* NEW: Render text with blue clickable mentions */}
+                          {renderMessageTextWithMentions(message.text, isOwn)}
                         </span>
                       )}
                     </div>
@@ -1408,10 +1410,66 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
                   </div>
                 </div>
               </SwipeableMessage>
+              
+              {/* Day divider renders AFTER the message in DOM so column-reverse pushes it visually ABOVE the message */}
+              {showDayDivider && (
+                <div
+                  style={{
+                    textAlign: 'center',
+                    margin: '24px 0 16px',
+                    position: 'sticky',
+                    top: 10,
+                    zIndex: 5,
+                  }}
+                >
+                  <span
+                    style={{
+                      fontSize: 12,
+                      fontWeight: 600,
+                      color: 'var(--dim)',
+                      background: 'var(--glass-strong)',
+                      padding: '6px 14px',
+                      borderRadius: 14,
+                      boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
+                    }}
+                  >
+                    {formatDayLabel(message.created_at)}
+                  </span>
+                </div>
+              )}
             </React.Fragment>
           );
         })}
       </div>
+
+      {/* Floating Action Button for Unread Mentions */}
+      {hasUnreadMention && (
+        <button
+          onClick={() => setHasUnreadMention(false)}
+          style={{
+            position: 'absolute', 
+            right: 16, 
+            bottom: 80, 
+            width: 40, 
+            height: 40, 
+            borderRadius: '50%', 
+            background: 'var(--blue)', 
+            color: '#fff', 
+            border: 'none', 
+            boxShadow: '0 4px 12px rgba(10,132,255,0.3)', 
+            zIndex: 30, 
+            display: 'flex', 
+            alignItems: 'center', 
+            justifyContent: 'center', 
+            fontWeight: 800, 
+            fontSize: 18, 
+            cursor: 'pointer', 
+            animation: 'pop-in 0.3s cubic-bezier(0.2, 0.8, 0.2, 1)'
+          }}
+        >
+          @
+        </button>
+      )}
 
       <div
         className="safe-bottom"

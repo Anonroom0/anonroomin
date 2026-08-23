@@ -5,6 +5,8 @@
  * This component handles the core desktop/mobile master-detail routing.
  *
  * CHANGES IN THIS PASS:
+ * - Added a strict redirect-to-home fallback for invalid/undeployed URLs.
+ * - Profile lookup from URL is now strictly case-insensitive (`toLowerCase()`).
  * - Profile/Menu button moved to the RIGHT side of the search bar.
  * - Added a clear (✕) button inside the search input to return to home.
  * - Added UI support for unread blue '@' mention badges in the sidebar list.
@@ -112,7 +114,9 @@ const Icons = {
 // ============================================================================
 
 function getInitials(name) {
-  if (!name) return '?';
+  if (!name) {
+    return '?';
+  }
   const parts = name.trim().split(' ');
   if (parts.length >= 2) {
     return (parts[0][0] + parts[1][0]).toUpperCase();
@@ -121,7 +125,9 @@ function getInitials(name) {
 }
 
 function formatTelegramTime(dateString) {
-  if (!dateString) return '';
+  if (!dateString) {
+    return '';
+  }
   const date = new Date(dateString);
   const now = new Date();
   const diffMs = now.getTime() - date.getTime();
@@ -323,7 +329,6 @@ function LiquidAvatar({ identity, size = 48, isGroup = false }) {
     </div>
   );
 }
-
 // ============================================================================
 // 5. MAIN HOME COMPONENT (MASTER/DETAIL)
 // ============================================================================
@@ -336,11 +341,13 @@ export default function Home() {
   // WINDOW RESIZE / LAYOUT HOOK
   // --------------------------------------------------------------------------
   const [windowWidth, setWindowWidth] = useState(window.innerWidth);
+  
   useEffect(() => {
     const handleResize = () => setWindowWidth(window.innerWidth);
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
+  
   const isMobile = windowWidth < MOBILE_BREAKPOINT_PX;
 
   // --------------------------------------------------------------------------
@@ -372,7 +379,7 @@ export default function Home() {
     setLoadingList(true);
 
     try {
-      // 1. Fetch All Public Groups
+      // 1. Fetch All Public Groups (Will later need joined check for mention badges)
       const { data: groupsData, error: groupsError } = await supabase
         .from('groups')
         .select('id, slug, name, description, cover_url, created_at')
@@ -432,7 +439,7 @@ export default function Home() {
   }, [fetchData]);
 
   // --------------------------------------------------------------------------
-  // ROUTING
+  // ROUTING & INVALID URL FALLBACKS
   // --------------------------------------------------------------------------
   useEffect(() => {
     let cancelled = false;
@@ -450,19 +457,25 @@ export default function Home() {
 
       const dmUsername = getDmUsernameFromPath();
       if (dmUsername) {
+        // STRICT LOWERCASE LOOKUP
         const { data, error } = await supabase
           .from('profiles')
           .select('id, username')
-          .eq('username', dmUsername)
+          .eq('username', dmUsername.toLowerCase())
           .maybeSingle();
 
         if (cancelled) return;
+        
         if (!error && data) {
           setActiveChatId(data.id);
           setActiveChatType('dm');
           setActiveChatSource('path');
         } else {
+          // INVALID URL FALLBACK: User does not exist, redirect strictly to Home
           window.history.replaceState({}, '', ROOT_PATH);
+          setActiveChatId(null);
+          setActiveChatType(null);
+          setActiveChatSource(null);
         }
       }
     }
@@ -480,13 +493,19 @@ export default function Home() {
         supabase
           .from('profiles')
           .select('id, username')
-          .eq('username', dmUsername)
+          .eq('username', dmUsername.toLowerCase())
           .maybeSingle()
           .then(({ data, error }) => {
             if (!error && data) {
               setActiveChatId(data.id);
               setActiveChatType('dm');
               setActiveChatSource('path');
+            } else {
+              // Invalid path via back button
+              window.history.replaceState({}, '', ROOT_PATH);
+              setActiveChatId(null);
+              setActiveChatType(null);
+              setActiveChatSource(null);
             }
           });
         return;
@@ -548,7 +567,8 @@ export default function Home() {
         width: '100vw', 
         position: 'relative', 
         userSelect: 'none', 
-        WebkitUserSelect: 'none' 
+        WebkitUserSelect: 'none',
+        msUserSelect: 'none'
       }}
     >
       <LiquidBackgroundEffects />
@@ -975,7 +995,8 @@ export default function Home() {
                 onBack={closeActiveChat}
                 onThreadReady={(identity) => {
                   if (identity?.username) {
-                    window.history.replaceState({}, '', buildDmPath(identity.username));
+                    // Update URL securely
+                    window.history.replaceState({}, '', buildDmPath(identity.username.toLowerCase()));
                   }
                 }}
               />
