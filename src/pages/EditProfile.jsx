@@ -654,23 +654,7 @@ export default function EditProfile({ open, onClose }) {
                 {Vectors.LogOut}
               </button>
 
-              <button
-                onClick={handleSave}
-                disabled={!hasChanges || saving}
-                style={{
-                  border: 'none', 
-                  background: 'transparent', 
-                  padding: 0,
-                  color: hasChanges ? 'var(--blue)' : 'var(--dim)',
-                  fontSize: 16, 
-                  fontWeight: 700, 
-                  cursor: hasChanges ? 'pointer' : 'default',
-                  opacity: saving ? 0.5 : 1, 
-                  transition: 'color 0.2s'
-                }}
-              >
-                {saving ? 'Saving...' : 'Save'}
-              </button>
+              
             </div>
           </div>
 

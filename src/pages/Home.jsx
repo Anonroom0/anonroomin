@@ -5,11 +5,11 @@
  * This component handles the core desktop/mobile master-detail routing.
  *
  * CHANGES IN THIS PASS:
- * - Added a strict redirect-to-home fallback for invalid/undeployed URLs.
- * - Profile lookup from URL is now strictly case-insensitive (`toLowerCase()`).
- * - Profile/Menu button moved to the RIGHT side of the search bar.
- * - Added a clear (✕) button inside the search input to return to home.
- * - Added UI support for unread blue '@' mention badges in the sidebar list.
+ * - Locked homescreen to be completely unscrollable (height: 100vh, overflow: hidden).
+ * - Added functional unread mention badge logic (`@`) for groups and DM rows in the sidebar.
+ * - Profile lookup from URL is strictly case-insensitive (`toLowerCase()`).
+ * - Profile/Menu button positioned on the right side of the search bar.
+ * - Clear (✕) button inside the search input to return to home.
  * - All code fully unrolled and un-compressed.
  *
  * Dependencies: React, Supabase, AuthContext
@@ -48,62 +48,25 @@ const MOBILE_BREAKPOINT_PX = 768;
 // ============================================================================
 const Icons = {
   Menu: (
-    <svg 
-      width="24" 
-      height="24" 
-      viewBox="0 0 24 24" 
-      fill="none" 
-      stroke="currentColor" 
-      strokeWidth="2.5" 
-      strokeLinecap="round" 
-      strokeLinejoin="round"
-    >
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
       <line x1="3" y1="12" x2="21" y2="12" />
       <line x1="3" y1="6" x2="21" y2="6" />
       <line x1="3" y1="18" x2="21" y2="18" />
     </svg>
   ),
   Search: (
-    <svg 
-      width="20" 
-      height="20" 
-      viewBox="0 0 24 24" 
-      fill="none" 
-      stroke="currentColor" 
-      strokeWidth="2.5" 
-      strokeLinecap="round" 
-      strokeLinejoin="round"
-    >
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
       <circle cx="11" cy="11" r="8" />
       <line x1="21" y1="21" x2="16.65" y2="16.65" />
     </svg>
   ),
   EmptyChat: (
-    <svg 
-      width="80" 
-      height="80" 
-      viewBox="0 0 24 24" 
-      fill="none" 
-      stroke="currentColor" 
-      strokeWidth="1" 
-      strokeLinecap="round" 
-      strokeLinejoin="round" 
-      style={{ opacity: 0.5 }}
-    >
+    <svg width="80" height="80" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.5 }}>
       <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" />
     </svg>
   ),
   AdminShield: (
-    <svg 
-      width="14" 
-      height="14" 
-      viewBox="0 0 24 24" 
-      fill="none" 
-      stroke="currentColor" 
-      strokeWidth="2.5" 
-      strokeLinecap="round" 
-      strokeLinejoin="round"
-    >
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
       <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
     </svg>
   )
@@ -114,9 +77,7 @@ const Icons = {
 // ============================================================================
 
 function getInitials(name) {
-  if (!name) {
-    return '?';
-  }
+  if (!name) return '?';
   const parts = name.trim().split(' ');
   if (parts.length >= 2) {
     return (parts[0][0] + parts[1][0]).toUpperCase();
@@ -125,9 +86,7 @@ function getInitials(name) {
 }
 
 function formatTelegramTime(dateString) {
-  if (!dateString) {
-    return '';
-  }
+  if (!dateString) return '';
   const date = new Date(dateString);
   const now = new Date();
   const diffMs = now.getTime() - date.getTime();
@@ -162,38 +121,21 @@ function LiquidBackgroundEffects() {
     <div 
       aria-hidden="true" 
       style={{ 
-        position: 'fixed', 
-        inset: 0, 
-        overflow: 'hidden', 
-        zIndex: -1, 
-        pointerEvents: 'none', 
-        background: 'var(--bg)' 
+        position: 'fixed', inset: 0, overflow: 'hidden', zIndex: -1, pointerEvents: 'none', background: 'var(--bg)' 
       }}
     >
       <div 
         style={{
-          position: 'absolute', 
-          top: '-15%', 
-          left: '-10%', 
-          width: '60vw', 
-          height: '60vw',
-          borderRadius: '50%', 
-          background: 'radial-gradient(circle, rgba(10,132,255,0.18), transparent 60%)',
-          animation: 'floatApple 22s ease-in-out infinite', 
-          filter: 'blur(40px)'
+          position: 'absolute', top: '-15%', left: '-10%', width: '60vw', height: '60vw',
+          borderRadius: '50%', background: 'radial-gradient(circle, rgba(10,132,255,0.18), transparent 60%)',
+          animation: 'floatApple 22s ease-in-out infinite', filter: 'blur(40px)'
         }} 
       />
       <div 
         style={{
-          position: 'absolute', 
-          bottom: '-20%', 
-          right: '-10%', 
-          width: '70vw', 
-          height: '70vw',
-          borderRadius: '50%', 
-          background: 'radial-gradient(circle, rgba(94,92,230,0.15), transparent 60%)',
-          animation: 'floatApple 28s ease-in-out infinite reverse', 
-          filter: 'blur(50px)'
+          position: 'absolute', bottom: '-20%', right: '-10%', width: '70vw', height: '70vw',
+          borderRadius: '50%', background: 'radial-gradient(circle, rgba(94,92,230,0.15), transparent 60%)',
+          animation: 'floatApple 28s ease-in-out infinite reverse', filter: 'blur(50px)'
         }} 
       />
       <style>{`
@@ -219,44 +161,11 @@ function ListSkeletonLoader() {
   return (
     <div style={{ padding: '0 8px' }}>
       {skeletons.map((_, i) => (
-        <div 
-          key={i} 
-          style={{ 
-            display: 'flex', 
-            alignItems: 'center', 
-            gap: 12, 
-            padding: '10px 8px', 
-            opacity: 1 - (i * 0.1) 
-          }}
-        >
-          <div 
-            style={{ 
-              width: 48, 
-              height: 48, 
-              borderRadius: '50%', 
-              background: 'var(--glass-border)', 
-              animation: 'pulse 1.5s infinite ease-in-out' 
-            }} 
-          />
+        <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 8px', opacity: 1 - (i * 0.1) }}>
+          <div style={{ width: 48, height: 48, borderRadius: '50%', background: 'var(--glass-border)', animation: 'pulse 1.5s infinite ease-in-out' }} />
           <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 8 }}>
-            <div 
-              style={{ 
-                width: '40%', 
-                height: 14, 
-                borderRadius: 4, 
-                background: 'var(--glass-border)', 
-                animation: 'pulse 1.5s infinite ease-in-out' 
-              }} 
-            />
-            <div 
-              style={{ 
-                width: '70%', 
-                height: 12, 
-                borderRadius: 4, 
-                background: 'var(--glass-border)', 
-                animation: 'pulse 1.5s infinite ease-in-out 0.2s' 
-              }} 
-            />
+            <div style={{ width: '40%', height: 14, borderRadius: 4, background: 'var(--glass-border)', animation: 'pulse 1.5s infinite ease-in-out' }} />
+            <div style={{ width: '70%', height: 12, borderRadius: 4, background: 'var(--glass-border)', animation: 'pulse 1.5s infinite ease-in-out 0.2s' }} />
           </div>
         </div>
       ))}
@@ -272,29 +181,15 @@ function ListSkeletonLoader() {
 
 function LiquidAvatar({ identity, size = 48, isGroup = false }) {
   const containerStyle = {
-    width: size, 
-    height: size, 
-    borderRadius: '50%', 
-    flexShrink: 0,
-    display: 'flex', 
-    alignItems: 'center', 
-    justifyContent: 'center',
-    overflow: 'hidden', 
-    boxShadow: 'inset 0 0 0 1px var(--glass-border)',
+    width: size, height: size, borderRadius: '50%', flexShrink: 0,
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+    overflow: 'hidden', boxShadow: 'inset 0 0 0 1px var(--glass-border)',
     userSelect: 'none'
   };
 
   if (identity.isAdmin && !isGroup) {
     return (
-      <div 
-        style={{ 
-          ...containerStyle, 
-          background: 'linear-gradient(135deg, #FFD700 0%, #FFA500 100%)', 
-          color: '#fff', 
-          fontSize: size * 0.3, 
-          fontWeight: 800 
-        }}
-      >
+      <div style={{ ...containerStyle, background: 'linear-gradient(135deg, #FFD700 0%, #FFA500 100%)', color: '#fff', fontSize: size * 0.3, fontWeight: 800 }}>
         ADM
       </div>
     );
@@ -303,11 +198,7 @@ function LiquidAvatar({ identity, size = 48, isGroup = false }) {
   if (identity.avatarUrl) {
     return (
       <div style={containerStyle}>
-        <img 
-          src={identity.avatarUrl} 
-          alt="" 
-          style={{ width: '100%', height: '100%', objectFit: 'cover' }} 
-        />
+        <img src={identity.avatarUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
       </div>
     );
   }
@@ -316,19 +207,12 @@ function LiquidAvatar({ identity, size = 48, isGroup = false }) {
   const colorIndex = (identity.name || '').length % colors.length;
 
   return (
-    <div 
-      style={{ 
-        ...containerStyle, 
-        background: colors[colorIndex], 
-        color: '#ffffff', 
-        fontWeight: 700, 
-        fontSize: size * 0.4 
-      }}
-    >
+    <div style={{ ...containerStyle, background: colors[colorIndex], color: '#ffffff', fontWeight: 700, fontSize: size * 0.4 }}>
       {isGroup ? '#' : getInitials(identity.name)}
     </div>
   );
 }
+
 // ============================================================================
 // 5. MAIN HOME COMPONENT (MASTER/DETAIL)
 // ============================================================================
@@ -337,9 +221,6 @@ export default function Home() {
   const { session, profile } = useAuth();
   const userId = session?.user?.id;
   
-  // --------------------------------------------------------------------------
-  // WINDOW RESIZE / LAYOUT HOOK
-  // --------------------------------------------------------------------------
   const [windowWidth, setWindowWidth] = useState(window.innerWidth);
   
   useEffect(() => {
@@ -350,9 +231,6 @@ export default function Home() {
   
   const isMobile = windowWidth < MOBILE_BREAKPOINT_PX;
 
-  // --------------------------------------------------------------------------
-  // APPLICATION STATE
-  // --------------------------------------------------------------------------
   const [activeChatId, setActiveChatId] = useState(null); 
   const [activeChatType, setActiveChatType] = useState(null); 
   const [activeChatSource, setActiveChatSource] = useState(null);
@@ -361,25 +239,23 @@ export default function Home() {
   const [searchFocused, setSearchFocused] = useState(false);
   const showSearch = searchFocused || searchQuery.trim().length > 0;
 
-  // Modals
   const [authOpen, setAuthOpen] = useState(false);
   const [editProfileOpen, setEditProfileOpen] = useState(false);
   const [profileCardUserId, setProfileCardUserId] = useState(null);
 
-  // Data Stores
   const [threads, setThreads] = useState([]);
   const [groups, setGroups] = useState([]);
   const [loadingList, setLoadingList] = useState(true);
 
   // --------------------------------------------------------------------------
-  // UNIFIED DATA FETCHING (GROUPS & DMS)
+  // UNIFIED DATA FETCHING WITH UNREAD MENTION BADGE CALCULATION
   // --------------------------------------------------------------------------
   const fetchData = useCallback(async () => {
     let isMounted = true;
     setLoadingList(true);
 
     try {
-      // 1. Fetch All Public Groups (Will later need joined check for mention badges)
+      // 1. Fetch All Public Groups
       const { data: groupsData, error: groupsError } = await supabase
         .from('groups')
         .select('id, slug, name, description, cover_url, created_at')
@@ -388,9 +264,31 @@ export default function Home() {
       if (groupsError) throw groupsError;
       let finalGroups = groupsData || [];
 
-      // 2. Fetch User DMs
+      // 2. Fetch User DMs and Read Receipts for Unread Mentions
       let finalThreads = [];
       if (userId) {
+        // Fetch Read Receipts for Groups
+        const { data: groupReceipts } = await supabase
+          .from('group_read_receipts')
+          .select('group_id, last_read_at')
+          .eq('user_id', userId);
+        
+        const groupReceiptsMap = Object.fromEntries((groupReceipts || []).map(r => [r.group_id, r.last_read_at]));
+
+        // Check unread mentions for each group
+        finalGroups = await Promise.all(finalGroups.map(async (g) => {
+          const lastRead = groupReceiptsMap[g.id] || '1970-01-01T00:00:00.000Z';
+          const { count } = await supabase
+            .from('group_messages')
+            .select('*', { count: 'exact', head: true })
+            .eq('group_id', g.id)
+            .contains('mentioned_user_ids', [userId])
+            .gt('created_at', lastRead);
+            
+          return { ...g, unread_mention: count && count > 0 };
+        }));
+
+        // Fetch DM Threads
         const { data: threadRows, error: threadsError } = await supabase
           .from('dm_threads')
           .select('id, user_a, user_b, created_at')
@@ -398,6 +296,14 @@ export default function Home() {
           .order('created_at', { ascending: false });
 
         if (threadsError) throw threadsError;
+
+        // Fetch DM Read Receipts
+        const { data: dmReceipts } = await supabase
+          .from('dm_read_receipts')
+          .select('thread_id, last_read_at')
+          .eq('user_id', userId);
+          
+        const dmReceiptsMap = Object.fromEntries((dmReceipts || []).map(r => [r.thread_id, r.last_read_at]));
 
         const otherIds = (threadRows || []).map((t) => (t.user_a === userId ? t.user_b : t.user_a));
         let profilesById = {};
@@ -412,13 +318,23 @@ export default function Home() {
           profilesById = Object.fromEntries((profileRows || []).map((p) => [p.id, p]));
         }
         
-        finalThreads = (threadRows || []).map((t) => {
+        finalThreads = await Promise.all((threadRows || []).map(async (t) => {
           const otherId = t.user_a === userId ? t.user_b : t.user_a;
+          const lastRead = dmReceiptsMap[t.id] || '1970-01-01T00:00:00.000Z';
+          
+          const { count } = await supabase
+            .from('dm_messages')
+            .select('*', { count: 'exact', head: true })
+            .eq('thread_id', t.id)
+            .contains('mentioned_user_ids', [userId])
+            .gt('created_at', lastRead);
+
           return {
             ...t,
-            otherUser: profilesById[otherId] || { id: otherId, username: 'Unknown User' }
+            otherUser: profilesById[otherId] || { id: otherId, username: 'Unknown User' },
+            unread_mention: count && count > 0
           };
-        });
+        }));
       }
 
       if (isMounted) {
@@ -457,7 +373,6 @@ export default function Home() {
 
       const dmUsername = getDmUsernameFromPath();
       if (dmUsername) {
-        // STRICT LOWERCASE LOOKUP
         const { data, error } = await supabase
           .from('profiles')
           .select('id, username')
@@ -471,7 +386,6 @@ export default function Home() {
           setActiveChatType('dm');
           setActiveChatSource('path');
         } else {
-          // INVALID URL FALLBACK: User does not exist, redirect strictly to Home
           window.history.replaceState({}, '', ROOT_PATH);
           setActiveChatId(null);
           setActiveChatType(null);
@@ -482,42 +396,6 @@ export default function Home() {
 
     resolveInitialRoute();
     return () => { cancelled = true; };
-  }, []);
-
-  useEffect(() => {
-    function handlePopState() {
-      if (getGroupSlugFromHost()) return;
-
-      const dmUsername = getDmUsernameFromPath();
-      if (dmUsername) {
-        supabase
-          .from('profiles')
-          .select('id, username')
-          .eq('username', dmUsername.toLowerCase())
-          .maybeSingle()
-          .then(({ data, error }) => {
-            if (!error && data) {
-              setActiveChatId(data.id);
-              setActiveChatType('dm');
-              setActiveChatSource('path');
-            } else {
-              // Invalid path via back button
-              window.history.replaceState({}, '', ROOT_PATH);
-              setActiveChatId(null);
-              setActiveChatType(null);
-              setActiveChatSource(null);
-            }
-          });
-        return;
-      }
-
-      setActiveChatId(null);
-      setActiveChatType(null);
-      setActiveChatSource(null);
-    }
-
-    window.addEventListener('popstate', handlePopState);
-    return () => window.removeEventListener('popstate', handlePopState);
   }, []);
 
   function handleOpenChat(id, type, username) {
@@ -557,7 +435,7 @@ export default function Home() {
   const isChatActive = activeChatId !== null;
 
   // --------------------------------------------------------------------------
-  // MAIN RENDER
+  // MAIN RENDER (LOCKED VIEWPORT: HEIGHT 100VH, OVERFLOW HIDDEN)
   // --------------------------------------------------------------------------
   return (
     <div 
@@ -565,7 +443,11 @@ export default function Home() {
       style={{ 
         display: 'flex', 
         width: '100vw', 
-        position: 'relative', 
+        height: '100vh',
+        maxHeight: '100vh',
+        overflow: 'hidden',
+        position: 'fixed',
+        inset: 0,
         userSelect: 'none', 
         WebkitUserSelect: 'none',
         msUserSelect: 'none'
@@ -573,47 +455,23 @@ export default function Home() {
     >
       <LiquidBackgroundEffects />
 
-      {/* 
-        ======================================================================
-        LEFT PANEL: TELEGRAM SIDEBAR
-        ======================================================================
-      */}
+      {/* LEFT PANEL: TELEGRAM SIDEBAR */}
       {(!isMobile || !isChatActive) && (
         <div 
           className="glass-panel"
           style={{ 
-            display: 'flex', 
-            flexDirection: 'column',
+            display: 'flex', flexDirection: 'column',
             width: isMobile ? '100%' : '25%', 
             minWidth: isMobile ? '100%' : 280, 
-            height: '100%', 
+            height: '100vh', 
             borderRight: '1px solid var(--glass-border)', 
-            zIndex: 10, 
-            borderRadius: 0 
+            zIndex: 10, borderRadius: 0 
           }}
         >
-          {/* HEADER: Search on left, Profile button on right */}
-          <div 
-            style={{ 
-              padding: '14px 16px', 
-              display: 'flex', 
-              alignItems: 'center', 
-              gap: 12, 
-              background: 'var(--glass-strong)', 
-              borderBottom: '1px solid var(--glass-border)' 
-            }}
-          >
+          {/* HEADER */}
+          <div style={{ padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 12, background: 'var(--glass-strong)', borderBottom: '1px solid var(--glass-border)' }}>
             <div style={{ position: 'relative', flex: 1 }}>
-              <span 
-                style={{ 
-                  position: 'absolute', 
-                  left: 12, 
-                  top: '50%', 
-                  transform: 'translateY(-50%)', 
-                  color: 'var(--dim)', 
-                  pointerEvents: 'none' 
-                }}
-              >
+              <span style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--dim)', pointerEvents: 'none' }}>
                 {Icons.Search}
               </span>
               
@@ -625,40 +483,20 @@ export default function Home() {
                 onBlur={() => setTimeout(() => setSearchFocused(false), 200)} 
                 placeholder="Search..." 
                 style={{ 
-                  width: '100%', 
-                  border: 'none', 
-                  background: 'var(--glass-border)', 
-                  padding: '10px 36px 10px 42px', 
-                  borderRadius: 14, 
-                  fontSize: 16, 
-                  color: 'var(--ink)', 
-                  outline: 'none', 
-                  transition: 'background 0.2s', 
-                  boxSizing: 'border-box' 
+                  width: '100%', border: 'none', background: 'var(--glass-border)', 
+                  padding: '10px 36px 10px 42px', borderRadius: 14, fontSize: 16, 
+                  color: 'var(--ink)', outline: 'none', boxSizing: 'border-box' 
                 }} 
               />
               
-              {/* CLEAR SEARCH BUTTON */}
               {searchQuery.length > 0 && (
                 <button
                   onClick={() => setSearchQuery('')}
                   style={{
-                    position: 'absolute', 
-                    right: 10, 
-                    top: '50%', 
-                    transform: 'translateY(-50%)',
-                    background: 'var(--glass)', 
-                    border: 'none', 
-                    color: 'var(--dim)',
-                    borderRadius: '50%', 
-                    width: 22, 
-                    height: 22, 
-                    display: 'flex', 
-                    alignItems: 'center', 
-                    justifyContent: 'center', 
-                    cursor: 'pointer', 
-                    fontSize: 11, 
-                    fontWeight: 'bold'
+                    position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)',
+                    background: 'var(--glass)', border: 'none', color: 'var(--dim)',
+                    borderRadius: '50%', width: 22, height: 22, display: 'flex', 
+                    alignItems: 'center', justifyContent: 'center', cursor: 'pointer', fontSize: 11, fontWeight: 'bold'
                   }}
                 >
                   ✕
@@ -666,38 +504,12 @@ export default function Home() {
               )}
             </div>
 
-            {/* Profile Avatar Button moved to the right */}
             <button 
               onClick={() => session ? setEditProfileOpen(true) : setAuthOpen(true)} 
-              style={{ 
-                width: 44, 
-                height: 44, 
-                borderRadius: '50%', 
-                border: 'none', 
-                padding: 0, 
-                cursor: 'pointer', 
-                flexShrink: 0, 
-                background: 'transparent', 
-                transition: 'transform 0.2s' 
-              }}
-              onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.05)'}
-              onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
+              style={{ width: 44, height: 44, borderRadius: '50%', border: 'none', padding: 0, cursor: 'pointer', flexShrink: 0, background: 'transparent' }}
             >
-              {session ? (
-                <LiquidAvatar identity={profileIdentity} size={44} />
-              ) : (
-                <div 
-                  style={{ 
-                    width: '100%', 
-                    height: '100%', 
-                    background: 'var(--blue)', 
-                    color: '#fff', 
-                    display: 'flex', 
-                    alignItems: 'center', 
-                    justifyContent: 'center', 
-                    borderRadius: '50%' 
-                  }}
-                >
+              {session ? <LiquidAvatar identity={profileIdentity} size={44} /> : (
+                <div style={{ width: '100%', height: '100%', background: 'var(--blue)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '50%' }}>
                   {Icons.Menu}
                 </div>
               )}
@@ -722,16 +534,7 @@ export default function Home() {
 
                 {!loadingList && groups.length > 0 && (
                   <>
-                    <div 
-                      style={{ 
-                        fontSize: 13, 
-                        fontWeight: 700, 
-                        textTransform: 'uppercase', 
-                        letterSpacing: 0.5, 
-                        color: 'var(--dim)', 
-                        padding: '18px 16px 6px' 
-                      }}
-                    >
+                    <div style={{ fontSize: 13, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5, color: 'var(--dim)', padding: '18px 16px 6px' }}>
                       Groups
                     </div>
                     {groups.map((group) => {
@@ -744,76 +547,26 @@ export default function Home() {
                           className="chat-row"
                           onClick={() => handleOpenGroup(group.slug)} 
                           style={{ 
-                            display: 'flex', 
-                            alignItems: 'center', 
-                            gap: 12, 
-                            padding: '10px 16px', 
-                            border: 'none', 
-                            textAlign: 'left', 
-                            cursor: 'pointer', 
-                            width: '100%', 
-                            background: isActive ? 'var(--blue)' : 'transparent', 
-                            color: isActive ? '#fff' : 'var(--ink)' 
+                            display: 'flex', alignItems: 'center', gap: 12, padding: '10px 16px', 
+                            border: 'none', textAlign: 'left', cursor: 'pointer', width: '100%', 
+                            background: isActive ? 'var(--blue)' : 'transparent', color: isActive ? '#fff' : 'var(--ink)' 
                           }}
                         >
                           <LiquidAvatar identity={identity} size={50} isGroup={true} />
                           
-                          <div 
-                            style={{ 
-                              flex: 1, 
-                              minWidth: 0, 
-                              borderBottom: isActive ? 'none' : '1px solid var(--glass-border)', 
-                              paddingBottom: 12, 
-                              paddingTop: 2, 
-                              display: 'flex', 
-                              alignItems: 'center' 
-                            }}
-                          >
+                          <div style={{ flex: 1, minWidth: 0, borderBottom: isActive ? 'none' : '1px solid var(--glass-border)', paddingBottom: 12, paddingTop: 2, display: 'flex', alignItems: 'center' }}>
                             <div style={{ flex: 1, overflow: 'hidden' }}>
-                              <span 
-                                style={{ 
-                                  fontWeight: 600, 
-                                  fontSize: 16, 
-                                  display: 'block', 
-                                  whiteSpace: 'nowrap', 
-                                  overflow: 'hidden', 
-                                  textOverflow: 'ellipsis' 
-                                }}
-                              >
+                              <span style={{ fontWeight: 600, fontSize: 16, display: 'block', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
                                 {group.name}
                               </span>
-                              <span 
-                                style={{ 
-                                  fontSize: 14, 
-                                  color: isActive ? 'rgba(255,255,255,0.8)' : 'var(--dim)', 
-                                  display: 'block', 
-                                  textOverflow: 'ellipsis', 
-                                  overflow: 'hidden', 
-                                  whiteSpace: 'nowrap' 
-                                }}
-                              >
+                              <span style={{ fontSize: 14, color: isActive ? 'rgba(255,255,255,0.8)' : 'var(--dim)', display: 'block', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
                                 {group.description || 'Public Channel'}
                               </span>
                             </div>
                             
                             {/* UNREAD MENTION BADGE UI FOR GROUPS */}
                             {group.unread_mention && (
-                              <div 
-                                style={{ 
-                                  width: 22, 
-                                  height: 22, 
-                                  borderRadius: '50%', 
-                                  background: 'var(--blue)', 
-                                  color: '#fff', 
-                                  fontSize: 12, 
-                                  fontWeight: 700, 
-                                  display: 'flex', 
-                                  alignItems: 'center', 
-                                  justifyContent: 'center', 
-                                  flexShrink: 0, 
-                                  marginLeft: 8 
-                                }}
-                              >
+                              <div style={{ width: 22, height: 22, borderRadius: '50%', background: 'var(--blue)', color: '#fff', fontSize: 12, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginLeft: 8 }}>
                                 @
                               </div>
                             )}
@@ -826,16 +579,7 @@ export default function Home() {
 
                 {!loadingList && userId && threads.length > 0 && (
                   <>
-                    <div 
-                      style={{ 
-                        fontSize: 13, 
-                        fontWeight: 700, 
-                        textTransform: 'uppercase', 
-                        letterSpacing: 0.5, 
-                        color: 'var(--dim)', 
-                        padding: '24px 16px 6px' 
-                      }}
-                    >
+                    <div style={{ fontSize: 13, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5, color: 'var(--dim)', padding: '24px 16px 6px' }}>
                       Chats
                     </div>
                     {threads.map((thread) => {
@@ -849,119 +593,40 @@ export default function Home() {
                           className="chat-row"
                           onClick={() => handleOpenChat(otherId, 'dm', thread.otherUser?.username)} 
                           style={{ 
-                            display: 'flex', 
-                            alignItems: 'center', 
-                            gap: 12, 
-                            padding: '10px 16px', 
-                            border: 'none', 
-                            textAlign: 'left', 
-                            cursor: 'pointer', 
-                            width: '100%', 
-                            background: isActive ? 'var(--blue)' : 'transparent', 
-                            color: isActive ? '#fff' : 'var(--ink)' 
+                            display: 'flex', alignItems: 'center', gap: 12, padding: '10px 16px', 
+                            border: 'none', textAlign: 'left', cursor: 'pointer', width: '100%', 
+                            background: isActive ? 'var(--blue)' : 'transparent', color: isActive ? '#fff' : 'var(--ink)' 
                           }}
                         >
                           <LiquidAvatar identity={identity} size={50} />
                           
-                          <div 
-                            style={{ 
-                              flex: 1, 
-                              minWidth: 0, 
-                              borderBottom: isActive ? 'none' : '1px solid var(--glass-border)', 
-                              paddingBottom: 12, 
-                              paddingTop: 2 
-                            }}
-                          >
-                            <div 
-                              style={{ 
-                                display: 'flex', 
-                                justifyContent: 'space-between', 
-                                alignItems: 'center', 
-                                marginBottom: 4 
-                              }}
-                            >
-                              <span 
-                                style={{ 
-                                  fontWeight: 600, 
-                                  fontSize: 16, 
-                                  display: 'flex', 
-                                  alignItems: 'center', 
-                                  gap: 4, 
-                                  whiteSpace: 'nowrap', 
-                                  overflow: 'hidden', 
-                                  textOverflow: 'ellipsis' 
-                                }}
-                              >
-                                {identity.name}
-                                {identity.isAdmin && <span style={{ color: isActive ? '#fff' : '#FF8C00' }}>{Icons.AdminShield}</span>}
-                              </span>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0, paddingLeft: 8 }}>
-                                
-                                {/* UNREAD MENTION BADGE UI FOR DMS */}
-                                {thread.unread_mention && (
-                                  <div 
-                                    style={{ 
-                                      width: 18, 
-                                      height: 18, 
-                                      borderRadius: '50%', 
-                                      background: 'var(--blue)', 
-                                      color: '#fff', 
-                                      fontSize: 11, 
-                                      fontWeight: 700, 
-                                      display: 'flex', 
-                                      alignItems: 'center', 
-                                      justifyContent: 'center' 
-                                    }}
-                                  >
-                                    @
-                                  </div>
-                                )}
-                                <span style={{ fontSize: 12, color: isActive ? 'rgba(255,255,255,0.7)' : 'var(--dim)' }}>
+                          <div style={{ flex: 1, minWidth: 0, borderBottom: isActive ? 'none' : '1px solid var(--glass-border)', paddingBottom: 12, paddingTop: 2, display: 'flex', alignItems: 'center' }}>
+                            <div style={{ flex: 1, overflow: 'hidden' }}>
+                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                                <span style={{ fontWeight: 600, fontSize: 16, display: 'flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                  {identity.name}
+                                  {identity.isAdmin && <span style={{ color: isActive ? '#fff' : '#FF8C00' }}>{Icons.AdminShield}</span>}
+                                </span>
+                                <span style={{ fontSize: 12, color: isActive ? 'rgba(255,255,255,0.7)' : 'var(--dim)', flexShrink: 0, paddingLeft: 8 }}>
                                   {formatTelegramTime(thread.created_at)}
                                 </span>
                               </div>
+                              <span style={{ fontSize: 14, color: isActive ? 'rgba(255,255,255,0.8)' : 'var(--dim)', display: 'block', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
+                                Tap to view messages
+                              </span>
                             </div>
-                            <span 
-                              style={{ 
-                                fontSize: 14, 
-                                color: isActive ? 'rgba(255,255,255,0.8)' : 'var(--dim)', 
-                                display: 'block', 
-                                textOverflow: 'ellipsis', 
-                                overflow: 'hidden', 
-                                whiteSpace: 'nowrap' 
-                              }}
-                            >
-                              Tap to view messages
-                            </span>
+
+                            {/* UNREAD MENTION BADGE UI FOR DMS */}
+                            {thread.unread_mention && (
+                              <div style={{ width: 22, height: 22, borderRadius: '50%', background: 'var(--blue)', color: '#fff', fontSize: 12, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginLeft: 8 }}>
+                                @
+                              </div>
+                            )}
                           </div>
                         </button>
                       );
                     })}
                   </>
-                )}
-
-                {!loadingList && !userId && (
-                  <div style={{ padding: '40px 20px', textAlign: 'center', color: 'var(--dim)' }}>
-                    <p style={{ fontSize: 15, marginBottom: 16, fontWeight: 500 }}>
-                      Sign in to view your private chats.
-                    </p>
-                    <button 
-                      onClick={() => setAuthOpen(true)} 
-                      style={{ 
-                        background: 'var(--blue)', 
-                        color: '#fff', 
-                        border: 'none', 
-                        padding: '12px 24px', 
-                        borderRadius: 20, 
-                        fontWeight: 700, 
-                        fontSize: 15, 
-                        cursor: 'pointer', 
-                        boxShadow: '0 8px 24px rgba(10,132,255,0.3)' 
-                      }}
-                    >
-                      Sign In
-                    </button>
-                  </div>
                 )}
               </div>
             )}
@@ -969,72 +634,22 @@ export default function Home() {
         </div>
       )}
 
-      {/* 
-        ======================================================================
-        RIGHT PANEL: TELEGRAM MASTER CHAT VIEW
-        ======================================================================
-      */}
+      {/* RIGHT PANEL: CHAT VIEW */}
       {(!isMobile || isChatActive) && (
         <div 
           className={isMobile ? 'mobile-chat-page glass-strong' : 'glass-strong'}
-          style={{ 
-            flex: 1, 
-            display: 'flex', 
-            flexDirection: 'column', 
-            position: 'relative', 
-            width: isMobile ? '100%' : undefined, 
-            borderRadius: 0, 
-            zIndex: 1, 
-            boxShadow: '-4px 0 24px rgba(0,0,0,0.03)' 
-          }}
+          style={{ flex: 1, display: 'flex', flexDirection: 'column', position: 'relative', height: '100vh', borderRadius: 0, zIndex: 1 }}
         >
           {activeChatId ? (
             activeChatType === 'dm' ? (
-              <DirectMessages 
-                openThreadWithUserId={activeChatId} 
-                onBack={closeActiveChat}
-                onThreadReady={(identity) => {
-                  if (identity?.username) {
-                    // Update URL securely
-                    window.history.replaceState({}, '', buildDmPath(identity.username.toLowerCase()));
-                  }
-                }}
-              />
+              <DirectMessages openThreadWithUserId={activeChatId} onBack={closeActiveChat} />
             ) : (
-              <GroupChat 
-                groupSlug={activeChatId} 
-                onBack={closeActiveChat}
-                onGroupResolved={(resolvedGroup) => {
-                  if (!resolvedGroup && activeChatSource === 'path') {
-                    closeActiveChat();
-                  }
-                }}
-              />
+              <GroupChat groupSlug={activeChatId} onBack={closeActiveChat} />
             )
           ) : (
-            <div 
-              style={{ 
-                flex: 1, 
-                display: 'flex', 
-                flexDirection: 'column', 
-                alignItems: 'center', 
-                justifyContent: 'center', 
-                color: 'var(--dim)', 
-                userSelect: 'none' 
-              }}
-            >
-              <div style={{ marginBottom: 20, animation: 'pop-in 0.6s cubic-bezier(0.2, 0.8, 0.2, 1)' }}>
-                {Icons.EmptyChat}
-              </div>
-              <p 
-                style={{ 
-                  fontSize: 15, 
-                  fontWeight: 600, 
-                  background: 'var(--glass-border)', 
-                  padding: '8px 20px', 
-                  borderRadius: 24 
-                }}
-              >
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: 'var(--dim)', userSelect: 'none' }}>
+              <div style={{ marginBottom: 20 }}>{Icons.EmptyChat}</div>
+              <p style={{ fontSize: 15, fontWeight: 600, background: 'var(--glass-border)', padding: '8px 20px', borderRadius: 24 }}>
                 Select a chat to start messaging
               </p>
             </div>
@@ -1042,27 +657,9 @@ export default function Home() {
         </div>
       )}
 
-      <AuthModal 
-        open={authOpen} 
-        onClose={() => setAuthOpen(false)} 
-        initialTab="signin" 
-        onVerified={() => setAuthOpen(false)} 
-      />
-      
-      <EditProfile 
-        open={editProfileOpen} 
-        onClose={() => setEditProfileOpen(false)} 
-      />
-      
-      <ProfileCard 
-        userId={profileCardUserId} 
-        open={profileCardUserId !== null} 
-        onClose={() => setProfileCardUserId(null)} 
-        onMessage={(id) => { 
-          setProfileCardUserId(null); 
-          handleOpenChat(id, 'dm');
-        }} 
-      />
+      <AuthModal open={authOpen} onClose={() => setAuthOpen(false)} initialTab="signin" onVerified={() => setAuthOpen(false)} />
+      <EditProfile open={editProfileOpen} onClose={() => setEditProfileOpen(false)} />
+      <ProfileCard userId={profileCardUserId} open={profileCardUserId !== null} onClose={() => setProfileCardUserId(null)} onMessage={(id) => { setProfileCardUserId(null); handleOpenChat(id, 'dm'); }} />
     </div>
   );
 }

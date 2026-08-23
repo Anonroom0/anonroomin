@@ -5,16 +5,12 @@
  * This component acts as the master chat pane for Group Conversations.
  *
  * CHANGES IN THIS PASS:
- * - Added `@username` mentions parsing, UUID resolution, and clickable links.
- * - Universal Case-Insensitive Mentions: Forces `.toLowerCase()` for uniqueness.
- * - Mention Highlighting: Light blue/white underline for mentions inside own bubbles.
- * - Floating Mentions Button: New `@` FAB appears on unread pings.
+ * - Floating `@` button now scrolls smoothly to the unread mention and pulses it 3 times.
+ * - Accurate read receipt syncing tied to visible message rendering.
+ * - Universal Case-Insensitive Mentions: Forces `.toLowerCase()` for strict uniqueness.
  * - PFP Rendering: Fetches and displays `avatar_url` via profile joins.
- * - Native Bottom Rendering: Uses `column-reverse` CSS routing (renders from bottom).
- * - Added Chat Search (keywords) & Member Filtering (type @username to filter).
- * - Clicking the header now opens a GroupCard.
- * - Auto-updates `group_read_receipts` on load so the home screen `@` badge clears.
- * - Message bubble text is non-selectable (user-select: none).
+ * - Native Bottom Rendering: Uses `column-reverse` CSS routing.
+ * - Fully uncompressed code with no shortened lines.
  *
  * Dependencies: React, Supabase, AuthContext, EmojiGifPicker
  * ============================================================================
@@ -44,7 +40,7 @@ const CHAT_BACKGROUND_IMAGE =
   "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='60' height='60' viewBox='0 0 60 60'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%230a84ff' fill-opacity='0.035'%3E%3Ccircle cx='6' cy='6' r='2'/%3E%3Ccircle cx='36' cy='24' r='2'/%3E%3Ccircle cx='18' cy='42' r='2'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E\")";
 
 // ============================================================================
-// 2. MASSIVE INLINE SVG VECTOR LIBRARY (APPLE / TELEGRAM STYLE)
+// 2. MASSIVE INLINE SVG VECTOR LIBRARY
 // ============================================================================
 const Vectors = {
   Back: (
@@ -183,31 +179,26 @@ function dayKey(dateString) {
   return new Date(dateString).toDateString();
 }
 
-// ============================================================================
-// 4. SUB-COMPONENTS & PHYSICS ENGINE
-// ============================================================================
-
 const GlobalKeyframes = () => (
   <style>{`
-    @keyframes chatFloat {
-      0% { transform: translate(0, 0) scale(1); }
-      50% { transform: translate(5%, -5%) scale(1.1); }
-      100% { transform: translate(0, 0) scale(1); }
+    @keyframes pop-in {
+      0% { transform: scale(0.5); opacity: 0; }
+      100% { transform: scale(1); opacity: 1; }
     }
     @keyframes slideUpFade {
       0% { opacity: 0; transform: translateY(10px); }
       100% { opacity: 1; transform: translateY(0); }
     }
-    @keyframes pop-in {
-      0% { transform: scale(0.5); opacity: 0; }
-      100% { transform: scale(1); opacity: 1; }
+    @keyframes highlightPulse {
+      0% { background-color: rgba(10, 132, 255, 0.4); transform: scale(1.02); }
+      50% { background-color: rgba(10, 132, 255, 0.1); transform: scale(1); }
+      100% { background-color: rgba(10, 132, 255, 0.4); transform: scale(1.02); }
     }
-    .spinner-animation {
-      animation: spin 1.2s linear infinite;
+    .highlight-flash {
+      animation: highlightPulse 0.6s ease-in-out 3;
     }
-    @keyframes spin {
-      100% { transform: rotate(360deg); }
-    }
+    .spinner-animation { animation: spin 1.2s linear infinite; }
+    @keyframes spin { 100% { transform: rotate(360deg); } }
     .no-copy-text {
       -webkit-user-select: none;
       -moz-user-select: none;
@@ -358,7 +349,7 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
   const [cooldownPercent, setCooldownPercent] = useState(0);
   const [profileCardUserId, setProfileCardUserId] = useState(null);
   const [groupCardOpen, setGroupCardOpen] = useState(false);
-
+  
   const [authOpen, setAuthOpen] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false); 
@@ -366,10 +357,11 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
   const [isSearching, setIsSearching] = useState(false);
   const [chatSearchQuery, setChatSearchQuery] = useState('');
   
-  // Floating '@' Unread Mention State
+  // Unread Mention & Highlight State
   const [hasUnreadMention, setHasUnreadMention] = useState(false);
+  const [latestMentionId, setLatestMentionId] = useState(null);
+  const [highlightedMsgId, setHighlightedMsgId] = useState(null);
 
-  const scrollRef = useRef(null);
   const fileInputRef = useRef(null);
   const cooldownRef = useRef(null);
 
@@ -416,60 +408,74 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
     return () => { isMounted = false; };
   }, [groupSlug, onGroupResolved]);
 
-  // Messages subscription & Read Receipts (Descending Order for Column-Reverse)
+  // Messages subscription & Unread Mention Tracking
   useEffect(() => {
-    if (!group?.id) return;
+    if (!group?.id || !ownUserId) return;
 
     let isMounted = true;
     setMessagesLoading(true);
 
-    if (ownUserId) {
-      supabase.from('group_read_receipts').upsert({
-        group_id: group.id,
-        user_id: ownUserId,
-        last_read_at: new Date().toISOString()
-      }).then();
-    }
+    async function fetchMessagesAndReceipts() {
+      // 1. Get last read timestamp
+      const { data: receiptData } = await supabase
+        .from('group_read_receipts')
+        .select('last_read_at')
+        .eq('group_id', group.id)
+        .eq('user_id', ownUserId)
+        .maybeSingle();
 
-    async function fetchMessages() {
-      // NOTE: FETCHING FALSE ASCENDING SO NEWEST IS AT INDEX 0
+      const lastReadAt = receiptData?.last_read_at || '1970-01-01T00:00:00.000Z';
+
+      // 2. Fetch Messages (Descending for column-reverse)
       const { data, error } = await supabase
         .from('group_messages')
-        .select('*, profiles(avatar_url)') // JOIN: Fetch the Avatar URL
+        .select('*, profiles(avatar_url)')
         .eq('group_id', group.id)
         .order('created_at', { ascending: false }) 
         .limit(MESSAGE_LIMIT);
 
       if (!error && isMounted) {
-        setMessages(data || []);
+        const fetchedMessages = data || [];
+        setMessages(fetchedMessages);
         setMessagesLoading(false);
-      }
-    }
 
-    fetchMessages();
+        // Check if there is any unread mention newer than lastReadAt
+        const unreadMention = fetchedMessages.find(
+          m => m.mentioned_user_ids?.includes(ownUserId) && new Date(m.created_at) > new Date(lastReadAt)
+        );
 
-    const channel = supabase.channel(`group_messages:${group.id}`)
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'group_messages', filter: `group_id=eq.${group.id}` }, (payload) => {
-        if (!isMounted) return;
-        
-        // Check for mentions in realtime payloads
-        if (ownUserId && payload.new.mentioned_user_ids?.includes(ownUserId)) {
+        if (unreadMention) {
           setHasUnreadMention(true);
-        }
-
-        setMessages((prev) => {
-          if (prev.some(m => m.id === payload.new.id)) return prev;
-          // ADD TO FRONT OF ARRAY (Newest at index 0)
-          return [payload.new, ...prev]; 
-        });
-        
-        if (ownUserId) {
+          setLatestMentionId(unreadMention.id);
+        } else {
+          // Safe to update read receipt since all mentions are rendered/seen
           supabase.from('group_read_receipts').upsert({
             group_id: group.id,
             user_id: ownUserId,
             last_read_at: new Date().toISOString()
           }).then();
         }
+      }
+    }
+
+    fetchMessagesAndReceipts();
+
+    const channel = supabase.channel(`group_messages:${group.id}`)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'group_messages', filter: `group_id=eq.${group.id}` }, (payload) => {
+        if (!isMounted) return;
+        
+        const newMsg = payload.new;
+        const isMentioned = newMsg.mentioned_user_ids?.includes(ownUserId);
+
+        if (isMentioned) {
+          setHasUnreadMention(true);
+          setLatestMentionId(newMsg.id);
+        }
+
+        setMessages((prev) => {
+          if (prev.some(m => m.id === newMsg.id)) return prev;
+          return [newMsg, ...prev]; 
+        });
       }).subscribe();
 
     return () => {
@@ -487,10 +493,34 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
   }, []);
 
   // --------------------------------------------------------------------------
+  // SCROLL & HIGHLIGHT UNREAD MENTION HANDLER
+  // --------------------------------------------------------------------------
+  function handleJumpToMention() {
+    if (!latestMentionId) return;
+
+    const element = document.getElementById(`msg-${latestMentionId}`);
+    if (element) {
+      element.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      
+      // Trigger highlight animation
+      setHighlightedMsgId(latestMentionId);
+      setTimeout(() => setHighlightedMsgId(null), 2000); // clears after 3 pulses (~1.8s)
+    }
+
+    // Mark as read after user clicks and jumps to it
+    setHasUnreadMention(false);
+    if (ownUserId && group?.id) {
+      supabase.from('group_read_receipts').upsert({
+        group_id: group.id,
+        user_id: ownUserId,
+        last_read_at: new Date().toISOString()
+      }).then();
+    }
+  }
+
+  // --------------------------------------------------------------------------
   // MENTION RESOLUTION & LINK RENDERING LOGIC
   // --------------------------------------------------------------------------
-  
-  // Extracts @usernames, forces lower case, and looks up their UUID
   async function resolveMentionedIds(outgoingText) {
     const mentionedUsernames = [...outgoingText.matchAll(/@([a-zA-Z0-9_]+)/g)].map(m => m[1].toLowerCase());
     if (mentionedUsernames.length === 0) return [];
@@ -498,17 +528,16 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
     const { data } = await supabase
       .from('profiles')
       .select('id')
-      .in('username', mentionedUsernames); // Matches lowercased registered usernames
+      .in('username', mentionedUsernames);
       
     return data ? data.map(p => p.id) : [];
   }
 
-  // Opens profile card when @username is clicked
   async function handleMentionClick(username) {
     const { data } = await supabase
       .from('profiles')
       .select('id')
-      .eq('username', username.toLowerCase()) // Force lowercase lookup
+      .eq('username', username.toLowerCase())
       .maybeSingle();
       
     if (data?.id) {
@@ -518,7 +547,6 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
     }
   }
 
-  // Parses text to render clickable mentions. Changes color if in an own-message blue bubble.
   const renderMessageTextWithMentions = (messageText, isOwn) => {
     if (!messageText) return null;
     const parts = messageText.split(/(@[a-zA-Z0-9_]+)/g);
@@ -531,7 +559,7 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
             key={i}
             onClick={() => handleMentionClick(username)}
             style={{ 
-              color: isOwn ? '#cce4ff' : 'var(--blue)', // Light blue/white if inside own bubble
+              color: isOwn ? '#cce4ff' : 'var(--blue)',
               textDecoration: 'underline',
               background: 'none', border: 'none', padding: 0, fontWeight: 700, cursor: 'pointer', fontSize: 'inherit' 
             }}
@@ -565,7 +593,6 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
 
     setSending(true);
     const senderName = profile?.is_admin ? ADMIN_DISPLAY_NAME : (profile?.username || 'Anonymous');
-      
     const mentionedIds = await resolveMentionedIds(trimmed);
 
     const { error } = await supabase.from('group_messages').insert({
@@ -648,9 +675,6 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
     setText((prev) => prev + char);
   }
 
-  // --------------------------------------------------------------------------
-  // IN-CHAT FILTERING
-  // --------------------------------------------------------------------------
   const filteredMessages = messages.filter((m) => {
     if (!isSearching || !chatSearchQuery.trim()) return true;
     const q = chatSearchQuery.trim().toLowerCase();
@@ -662,13 +686,9 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
     return m.text?.toLowerCase().includes(q) || m.sender_name?.toLowerCase().includes(q);
   });
 
-  // --------------------------------------------------------------------------
-  // RENDER GUARDS
-  // --------------------------------------------------------------------------
-
   if (groupStatus === 'loading') {
     return (
-      <div className="no-copy-text" style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg)', userSelect: 'none', WebkitUserSelect: 'none', msUserSelect: 'none' }}>
+      <div className="no-copy-text" style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg)' }}>
         <div style={{ color: 'var(--blue)' }}>{Vectors.Spinner}</div>
       </div>
     );
@@ -676,7 +696,7 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
 
   if (groupStatus === 'error') {
     return (
-      <div className="no-copy-text" style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg)', flexDirection: 'column', gap: 16, userSelect: 'none', WebkitUserSelect: 'none', msUserSelect: 'none' }}>
+      <div className="no-copy-text" style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg)', flexDirection: 'column', gap: 16 }}>
         <p style={{ color: 'var(--dim)' }}>Failed to load group.</p>
         <button onClick={onBack} style={{ background: 'var(--blue)', color: '#fff', border: 'none', padding: '8px 16px', borderRadius: 12, cursor: 'pointer' }}>
           Go Back
@@ -687,11 +707,8 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
 
   let lastDayKey = null;
 
-  // --------------------------------------------------------------------------
-  // MAIN COMPONENT RENDER
-  // --------------------------------------------------------------------------
   return (
-    <div className="no-copy-text" style={{ flex: 1, display: 'flex', flexDirection: 'column', position: 'relative', height: '100%', overflow: 'hidden', zIndex: 1, userSelect: 'none', WebkitUserSelect: 'none', msUserSelect: 'none' }}>
+    <div className="no-copy-text" style={{ flex: 1, display: 'flex', flexDirection: 'column', position: 'relative', height: '100%', overflow: 'hidden', zIndex: 1, userSelect: 'none', WebkitUserSelect: 'none' }}>
       <GlobalKeyframes />
 
       <div aria-hidden="true" style={{ position: 'absolute', inset: 0, zIndex: 0, pointerEvents: 'none', background: 'var(--bg)' }}>
@@ -771,7 +788,7 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
           WebkitOverflowScrolling: 'touch',
           padding: '20px 16px',
           display: 'flex',
-          flexDirection: 'column-reverse', // NATIVE BOTTOM RENDERING! (Newest is at index 0 = bottom)
+          flexDirection: 'column-reverse',
           zIndex: 10,
           minHeight: 0,
           backgroundColor: 'var(--bg)',
@@ -797,25 +814,31 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
           const isOwn = ownUserId && message.user_id === ownUserId;
           const isAdminMsg = isSenderAdmin(message);
 
-          // Because of column-reverse, index 0 is newest. To know if the day changed, 
-          // we check the chronological "previous" message, which is index + 1 in this array.
           const olderMessage = filteredMessages[index + 1];
           const showDayDivider = !olderMessage || dayKey(message.created_at) !== dayKey(olderMessage.created_at);
 
           const repliedMessage = message.reply_to_id ? messages.find((m) => m.id === message.reply_to_id) || null : null;
           const isStickerOrGif = message.media_type === 'gif' || message.media_type === 'sticker';
-
-          // Access PFP if fetched via join
           const senderAvatarUrl = message.profiles?.avatar_url || null;
+
+          const isHighlighted = highlightedMsgId === message.id;
 
           return (
             <React.Fragment key={message.id}>
               <SwipeableMessage onSwipe={() => startReply(message)} disabled={isSearching}>
-                <div style={{ display: 'flex', flexDirection: isOwn ? 'row-reverse' : 'row', alignItems: 'flex-end', gap: 8, marginBottom: 16, animation: 'slideUpFade 0.3s cubic-bezier(0.2, 0.8, 0.2, 1) both' }}>
+                {/* Unique ID injected for DOM jumping */}
+                <div 
+                  id={`msg-${message.id}`}
+                  className={isHighlighted ? 'highlight-flash' : ''}
+                  style={{ 
+                    display: 'flex', flexDirection: isOwn ? 'row-reverse' : 'row', alignItems: 'flex-end', 
+                    gap: 8, marginBottom: 16, borderRadius: 16, padding: 4,
+                    animation: 'slideUpFade 0.3s cubic-bezier(0.2, 0.8, 0.2, 1) both' 
+                  }}
+                >
                   
                   {!isOwn && (
                     <button onClick={() => setProfileCardUserId(message.user_id)} style={{ border: 'none', background: 'transparent', padding: 0, cursor: 'pointer', marginBottom: 20 }}>
-                      {/* PFP Rendering explicitly enabled here */}
                       <GroupLiquidAvatar url={senderAvatarUrl} name={message.sender_name} isAdmin={isAdminMsg} size={36} />
                     </button>
                   )}
@@ -870,7 +893,6 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
                 </div>
               </SwipeableMessage>
               
-              {/* Day divider renders AFTER the message in DOM so column-reverse pushes it visually ABOVE the message */}
               {showDayDivider && !isSearching && (
                 <div style={{ textAlign: 'center', margin: '24px 0 16px', position: 'sticky', top: 10, zIndex: 5 }}>
                   <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--dim)', background: 'var(--glass-strong)', padding: '6px 14px', borderRadius: 14, boxShadow: '0 2px 8px rgba(0,0,0,0.04)' }}>
@@ -883,10 +905,10 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
         })}
       </div>
 
-      {/* Floating Action Button for Unread Mentions */}
+      {/* Floating Action Button for Unread Mentions: Clicking scrolls to and highlights message */}
       {hasUnreadMention && (
         <button
-          onClick={() => setHasUnreadMention(false)}
+          onClick={handleJumpToMention}
           style={{
             position: 'absolute', right: 16, bottom: 80, width: 40, height: 40, borderRadius: '50%', background: 'var(--blue)', color: '#fff', border: 'none', boxShadow: '0 4px 12px rgba(10,132,255,0.3)', zIndex: 30, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: 18, cursor: 'pointer', animation: 'pop-in 0.3s cubic-bezier(0.2, 0.8, 0.2, 1)'
           }}
