@@ -6,14 +6,34 @@
  * It features a unified sidebar (Groups and Chats in one list), Apple-style
  * background blurs, and strict Telegram split-pane routing.
  *
- * CHANGE IN THIS PASS — group-open behavior now differs by viewport:
- * - Desktop: unchanged. Clicking a group does a real browser navigation to
- *   slug.anonroom.in, exactly like typing that subdomain in by hand. That
- *   subdomain deployment is expected to render this same sidebar+chat shell.
- * - Mobile: clicking a group no longer navigates away to the subdomain at
- *   all. It opens in place instead, the same way a DM opens on mobile —
- *   local state swaps in <GroupChat> as a full-screen page with its own
- *   back button, no page reload, no leaving the app shell.
+ * CHANGES IN THIS PASS — real, working URL routing, and groups finally
+ * render the same way DMs do:
+ *
+ * - DMs (desktop AND mobile) now sync the URL to /<username> via
+ *   history.pushState — no reload, same origin, same as today's in-place
+ *   open, just with a real address bar to match. Opening a DM from a place
+ *   that doesn't have the username handy yet (e.g. a ProfileCard "Message"
+ *   tap) still opens immediately; DirectMessages reports the resolved
+ *   username back up once it loads the thread, and the URL is patched in
+ *   with replaceState at that point.
+ *
+ * - Groups on DESKTOP still do a real navigation to slug.anonroom.in (same
+ *   as before — that's the whole point of giving each group its own
+ *   subdomain). What was broken: landing on that subdomain rendered a bare
+ *   page with nothing open. Now, on mount, we check the hostname — if it's
+ *   a group subdomain, we open that group the same way a DM opens: full
+ *   sidebar on the left, group chat on the right. Same shell, just chosen
+ *   by hostname instead of a sidebar click.
+ *
+ * - Groups on MOBILE no longer navigate away at all. They open in place
+ *   (exactly like they already did) and now also sync the URL to
+ *   /g/<slug> via history.pushState, the same same-origin pattern as the
+ *   DM route — just with a /g/ prefix so a group slug can never collide
+ *   with a username.
+ *
+ * - Browser back/forward (popstate) is handled too, so the back button
+ *   does the right thing instead of just changing the address bar underneath
+ *   a stale screen.
  *
  * Dependencies: React, Supabase, AuthContext
  * ============================================================================
@@ -22,7 +42,16 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import supabase from '../lib/supabaseClient';
 import { useAuth } from '../lib/authContext';
-import { getGroupUrl } from '../lib/subdomain';
+import {
+  getGroupSlugFromHost,
+  getRootDomainUrl,
+  getGroupUrl,
+  getDmUsernameFromPath,
+  buildDmPath,
+  getMobileGroupSlugFromPath,
+  buildMobileGroupPath,
+  ROOT_PATH,
+} from '../lib/subdomain';
 
 // Import our newly upgraded Apple-Liquid Modals & Views
 import AuthModal from './AuthModal';
@@ -238,6 +267,13 @@ export default function Home() {
   // --------------------------------------------------------------------------
   const [activeChatId, setActiveChatId] = useState(null); 
   const [activeChatType, setActiveChatType] = useState(null); // 'dm' | 'group'
+  // How the currently-open chat got opened — decides what the back button
+  // should do. 'subdomain': this whole page IS a group's subdomain, so
+  // "back" means leaving to the root domain. 'path': opened in place via a
+  // same-origin pushState (sidebar click, or a /<username> or /g/<slug>
+  // deep link on the root domain), so "back" just clears state + pops the
+  // URL, no reload.
+  const [activeChatSource, setActiveChatSource] = useState(null);
   
   const [searchQuery, setSearchQuery] = useState('');
   const [searchFocused, setSearchFocused] = useState(false);
@@ -323,9 +359,127 @@ export default function Home() {
   }, [fetchData]);
 
   // --------------------------------------------------------------------------
+  // ROUTING: resolve whatever the URL says on first load, and keep it in
+  // sync with the browser's back/forward buttons.
+  // --------------------------------------------------------------------------
+
+  // First load: figure out what should be open purely from the current
+  // hostname + path, the same three routes handleOpenChat/handleOpenGroup
+  // produce below. This is what makes a group's subdomain (or a shared
+  // /<username> or /g/<slug> link) land on the right screen instead of a
+  // bare "select a chat" shell.
+  useEffect(() => {
+    let cancelled = false;
+
+    async function resolveInitialRoute() {
+      // 1. We're ON a group's own subdomain (slug.anonroom.in) — open it
+      //    the same way a DM opens: sidebar on the left, chat on the right.
+      const hostSlug = getGroupSlugFromHost();
+      if (hostSlug) {
+        if (!cancelled) {
+          setActiveChatId(hostSlug);
+          setActiveChatType('group');
+          setActiveChatSource('subdomain');
+        }
+        return;
+      }
+
+      // 2. Root domain, /g/<slug> — the mobile "open group in place" route.
+      const pathGroupSlug = getMobileGroupSlugFromPath();
+      if (pathGroupSlug) {
+        if (!cancelled) {
+          setActiveChatId(pathGroupSlug);
+          setActiveChatType('group');
+          setActiveChatSource('path');
+        }
+        return;
+      }
+
+      // 3. Root domain, /<username> — the DM route. Needs a lookup since
+      //    the URL only has the username, not the id DirectMessages wants.
+      const dmUsername = getDmUsernameFromPath();
+      if (dmUsername) {
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('id, username')
+          .eq('username', dmUsername)
+          .maybeSingle();
+
+        if (cancelled) {
+          return;
+        }
+        if (!error && data) {
+          setActiveChatId(data.id);
+          setActiveChatType('dm');
+          setActiveChatSource('path');
+        } else {
+          // Unknown username — don't leave a broken-looking URL up.
+          window.history.replaceState({}, '', ROOT_PATH);
+        }
+      }
+    }
+
+    resolveInitialRoute();
+    return () => { cancelled = true; };
+    // Intentionally only on mount — this resolves whatever URL the page
+    // was loaded with; everything after that goes through
+    // handleOpenChat/handleOpenGroup/closeActiveChat instead.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Browser back/forward: re-derive state from wherever the URL landed.
+  useEffect(() => {
+    function handlePopState() {
+      // A group subdomain never changes without a real navigation/reload,
+      // so there's nothing to resync here in that case.
+      if (getGroupSlugFromHost()) {
+        return;
+      }
+
+      const pathGroupSlug = getMobileGroupSlugFromPath();
+      if (pathGroupSlug) {
+        setActiveChatId(pathGroupSlug);
+        setActiveChatType('group');
+        setActiveChatSource('path');
+        return;
+      }
+
+      const dmUsername = getDmUsernameFromPath();
+      if (dmUsername) {
+        supabase
+          .from('profiles')
+          .select('id, username')
+          .eq('username', dmUsername)
+          .maybeSingle()
+          .then(({ data, error }) => {
+            if (!error && data) {
+              setActiveChatId(data.id);
+              setActiveChatType('dm');
+              setActiveChatSource('path');
+            }
+          });
+        return;
+      }
+
+      setActiveChatId(null);
+      setActiveChatType(null);
+      setActiveChatSource(null);
+    }
+
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
+  // --------------------------------------------------------------------------
   // ROUTING & INTERACTION LOGIC
   // --------------------------------------------------------------------------
-  function handleOpenChat(id, type) {
+
+  // Opens a DM and syncs the URL to /<username>, same-origin, no reload.
+  // `username` is optional — when the caller only has a user id (e.g. a
+  // ProfileCard "Message" tap), the URL gets patched in afterwards by
+  // DirectMessages' onThreadReady once it resolves the other user's
+  // profile, instead of blocking the chat from opening.
+  function handleOpenChat(id, type, username) {
     // DMs require a signed-in user (they're threads keyed off userId).
     // Route logged-out taps to sign-in instead of opening a broken thread.
     if (type === 'dm' && !userId) {
@@ -334,26 +488,51 @@ export default function Home() {
     }
     setActiveChatId(id);
     setActiveChatType(type);
-    setSearchQuery(''); 
+    setActiveChatSource('path');
+    setSearchQuery('');
+
+    if (type === 'dm') {
+      window.history.pushState({}, '', username ? buildDmPath(username) : ROOT_PATH);
+    }
   }
 
-  // Groups live on their own subdomain (slug.anonroom.in). The two viewports
-  // now behave differently on purpose:
+  // Groups live on their own subdomain (slug.anonroom.in). The two
+  // viewports behave differently on purpose:
   //
   // - Desktop: a real browser navigation to slug.anonroom.in, same
-  //   destination as typing that subdomain in by hand. That subdomain
-  //   deployment renders this same sidebar+chat shell.
+  //   destination as typing that subdomain in by hand. Once that page
+  //   loads, the routing effect above detects the subdomain and opens the
+  //   group in the right-hand pane next to the full sidebar — same shell
+  //   as a DM, not a separate bare page.
   // - Mobile: no navigation at all. It opens in place, exactly like a DM
-  //   opens on mobile — local state swaps in <GroupChat> as its own
-  //   full-screen page with a back button, no reload, no leaving the app.
+  //   opens — local state swaps in <GroupChat> as its own full-screen
+  //   page with a back button, and the URL syncs to /g/<slug> the same
+  //   same-origin way /<username> does for DMs.
   function handleOpenGroup(slug) {
     if (isMobile) {
       setActiveChatId(slug);
       setActiveChatType('group');
+      setActiveChatSource('path');
       setSearchQuery('');
+      window.history.pushState({}, '', buildMobileGroupPath(slug));
       return;
     }
     window.location.href = getGroupUrl(slug);
+  }
+
+  // Single exit path for both DM and group back buttons. A group opened
+  // via its own subdomain has nowhere same-origin to "go back" to, so
+  // that case does a real navigation to the root domain; every other case
+  // is a same-origin pop back to '/'.
+  function closeActiveChat() {
+    if (activeChatType === 'group' && activeChatSource === 'subdomain') {
+      window.location.href = getRootDomainUrl();
+      return;
+    }
+    setActiveChatId(null);
+    setActiveChatType(null);
+    setActiveChatSource(null);
+    window.history.pushState({}, '', ROOT_PATH);
   }
 
   // Resolves the logged-in user's identity for the top-left Avatar
@@ -523,7 +702,7 @@ export default function Home() {
                       <button 
                         key={thread.id} 
                         className="chat-row"
-                        onClick={() => handleOpenChat(otherId, 'dm')} 
+                        onClick={() => handleOpenChat(otherId, 'dm', thread.otherUser?.username)} 
                         style={{ 
                           display: 'flex', alignItems: 'center', gap: 12, padding: '10px 16px', 
                           border: 'none', textAlign: 'left', cursor: 'pointer', width: '100%', 
@@ -576,7 +755,10 @@ export default function Home() {
         On mobile this only mounts once a chat is actually open, so it opens
         as its own dedicated page (with a slide-in transition) instead of
         cramming in next to the sidebar. On desktop it holds the remaining
-        75% (7.5 / 10) of the width.
+        75% (7.5 / 10) of the width. This is now the ONLY place group chats
+        render, too — whether they got here via a sidebar click, a mobile
+        /g/<slug> deep link, or by loading directly on a group's own
+        subdomain.
         ======================================================================
       */}
       {(!isMobile || isChatActive) && (
@@ -595,12 +777,33 @@ export default function Home() {
           activeChatType === 'dm' ? (
             <DirectMessages 
               openThreadWithUserId={activeChatId} 
-              onBack={() => { setActiveChatId(null); setActiveChatType(null); }} 
+              onBack={closeActiveChat}
+              onThreadReady={(identity) => {
+                // Fills in / corrects the URL once the actual username is
+                // known — covers opens that started with only a user id
+                // (e.g. a ProfileCard "Message" tap). replaceState so this
+                // doesn't add a second history entry on top of the one
+                // handleOpenChat may have already pushed.
+                if (identity?.username) {
+                  window.history.replaceState({}, '', buildDmPath(identity.username));
+                }
+              }}
             />
           ) : (
             <GroupChat 
               groupSlug={activeChatId} 
-              onBack={() => { setActiveChatId(null); setActiveChatType(null); }} 
+              onBack={closeActiveChat}
+              onGroupResolved={(resolvedGroup) => {
+                // A /g/<slug> deep link (or a stale sidebar entry) that
+                // doesn't match a real group — bounce back to the list
+                // instead of leaving a broken route sitting in the address
+                // bar. Only applies to the same-origin path route; a bad
+                // subdomain is left alone since there's no same-origin
+                // "back" to fall to.
+                if (!resolvedGroup && activeChatSource === 'path') {
+                  closeActiveChat();
+                }
+              }}
             />
           )
         ) : (
@@ -638,7 +841,7 @@ export default function Home() {
         onClose={() => setProfileCardUserId(null)} 
         onMessage={(id) => { 
           setProfileCardUserId(null); 
-          handleOpenChat(id, 'dm'); 
+          handleOpenChat(id, 'dm');
         }} 
       />
     </div>

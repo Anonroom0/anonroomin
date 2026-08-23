@@ -10,11 +10,16 @@
  * - Chat canvas now renders a subtle background image/pattern layer
  * - Message bubble text is non-selectable (user-select: none + copy blocked)
  * - Send button replaced with a nicer radial cooldown ring
+ * - New: an `onGroupResolved` callback fires once the group-by-slug lookup
+ *   settles (with the row on success, or null on a bad/missing slug), so
+ *   Home can sync/validate whatever route got us here — see the chat reply
+ *   for how Home uses this.
  *
- * NOTE ON "open group chat the same way DM opens, with a sidebar, in their
- * own domain/route": that's a routing/app-shell change (which layout wraps
- * this component, what URL pattern renders it) that lives outside this file.
- * See the chat reply for what's needed to wire that up safely.
+ * NOTE ON ROUTING: this component no longer needs to know or care HOW it
+ * got mounted (sidebar click, a mobile /g/<slug> link, or landing straight
+ * on the group's own subdomain) — Home resolves all three to the same
+ * `groupSlug` prop, and this component just renders whatever group that
+ * resolves to, same as it always has.
  *
  * Dependencies: React, Supabase, AuthContext, EmojiGifPicker
  * ============================================================================
@@ -545,7 +550,7 @@ function SendButton({ canSend, sending, cooldownPercent }) {
 // 5. MAIN GROUP CHAT COMPONENT EXPORT
 // ============================================================================
 
-export default function GroupChat({ groupSlug, onBack }) {
+export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
   const { session, profile } = useAuth();
 
   // --------------------------------------------------------------------------
@@ -600,15 +605,24 @@ export default function GroupChat({ groupSlug, onBack }) {
         if (isMounted) {
           if (!data) {
             setGroupStatus('error');
+            if (onGroupResolved) {
+              onGroupResolved(null);
+            }
           } else {
             setGroup(data);
             setGroupStatus('ready');
+            if (onGroupResolved) {
+              onGroupResolved(data);
+            }
           }
         }
       } catch (err) {
         console.error('Failed to load group:', err);
         if (isMounted) {
           setGroupStatus('error');
+          if (onGroupResolved) {
+            onGroupResolved(null);
+          }
         }
       }
     }
@@ -618,6 +632,10 @@ export default function GroupChat({ groupSlug, onBack }) {
     return () => {
       isMounted = false;
     };
+    // onGroupResolved is a routing callback passed fresh from Home each
+    // render — re-running this fetch off its identity would refetch the
+    // same group for no reason, so it's intentionally left out here.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [groupSlug]);
 
   useEffect(() => {

@@ -10,6 +10,11 @@
  * - Chat canvas now renders a subtle background image/pattern layer
  * - Message bubble text is non-selectable (user-select: none + copy blocked)
  * - Send button replaced with a nicer radial cooldown ring + live countdown
+ * - New: an `onThreadReady` callback fires once the thread + other user's
+ *   profile resolve, reporting `{ id, username }` back up. Home uses this
+ *   to sync the address bar to /<username> — this matters for opens that
+ *   only had a user id to start with (e.g. a ProfileCard "Message" tap),
+ *   where the username isn't known until this component looks it up.
  *
  * Dependencies: React, Supabase, AuthContext, EmojiGifPicker
  * ============================================================================
@@ -577,7 +582,7 @@ function SendButton({ canSend, sending, cooldownPercent, cooldownSecondsLeft }) 
 // 5. MAIN DIRECT MESSAGES COMPONENT EXPORT
 // ============================================================================
 
-export default function DirectMessages({ openThreadWithUserId, onBack }) {
+export default function DirectMessages({ openThreadWithUserId, onBack, onThreadReady }) {
   const { session } = useAuth();
   const userId = session?.user?.id;
 
@@ -658,11 +663,15 @@ export default function DirectMessages({ openThreadWithUserId, onBack }) {
         }
 
         if (isMounted) {
+          const resolvedOtherUser = otherProfile || { id: openThreadWithUserId, username: 'Unknown User' };
           setActiveThread({
             id: threadRow.id,
-            otherUser: otherProfile || { id: openThreadWithUserId, username: 'Unknown User' },
+            otherUser: resolvedOtherUser,
           });
           setThreadStatus('ready');
+          if (onThreadReady) {
+            onThreadReady({ id: resolvedOtherUser.id, username: resolvedOtherUser.username });
+          }
         }
       } catch (err) {
         console.error('Failed to load thread:', err);
@@ -677,59 +686,11 @@ export default function DirectMessages({ openThreadWithUserId, onBack }) {
     return () => {
       isMounted = false;
     };
+    // onThreadReady is a routing callback passed fresh from Home each
+    // render — re-running this fetch off its identity would refetch the
+    // same thread for no reason, so it's intentionally left out here.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId, openThreadWithUserId]);
-
-  useEffect(() => {
-    if (!activeThread?.id) {
-      return;
-    }
-
-    let isMounted = true;
-    setMessagesLoading(true);
-
-    async function fetchMessages() {
-      const { data, error } = await supabase
-        .from('dm_messages')
-        .select('*')
-        .eq('thread_id', activeThread.id)
-        .order('created_at', { ascending: true })
-        .limit(MESSAGE_LIMIT);
-
-      if (!error && isMounted) {
-        setMessages(data || []);
-        setMessagesLoading(false);
-      }
-    }
-
-    fetchMessages();
-
-    const channel = supabase.channel(`dm_messages:${activeThread.id}`)
-      .on(
-        'postgres_changes',
-        {
-          event: 'INSERT',
-          schema: 'public',
-          table: 'dm_messages',
-          filter: `thread_id=eq.${activeThread.id}`,
-        },
-        (payload) => {
-          if (!isMounted) {
-            return;
-          }
-          setMessages((prev) => {
-            if (prev.some(m => m.id === payload.new.id)) {
-              return prev;
-            }
-            return [...prev, payload.new];
-          });
-        }
-      ).subscribe();
-
-    return () => {
-      isMounted = false;
-      supabase.removeChannel(channel);
-    };
-  }, [activeThread?.id]);
 
   useEffect(() => {
     if (scrollRef.current) {
