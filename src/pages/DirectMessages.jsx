@@ -5,16 +5,12 @@
  * This component acts as the master chat pane for Private 1-on-1 Conversations.
  *
  * CHANGES IN THIS PASS:
- * - Emoji / GIF / Sticker picker (see EmojiGifPicker.jsx, powered by Tenor's
- *   free API for GIFs/stickers; emoji is a static local list, no API needed)
- * - Chat canvas now renders a subtle background image/pattern layer
- * - Message bubble text is non-selectable (user-select: none + copy blocked)
- * - Send button replaced with a nicer radial cooldown ring + live countdown
- * - New: an `onThreadReady` callback fires once the thread + other user's
- *   profile resolve, reporting `{ id, username }` back up. Home uses this
- *   to sync the address bar to /<username> — this matters for opens that
- *   only had a user id to start with (e.g. a ProfileCard "Message" tap),
- *   where the username isn't known until this component looks it up.
+ * - Added `@username` mentions parsing, UUID resolution, and clickable links.
+ * - Added `dm_read_receipts` tracking to clear `@` badges on the home screen.
+ * - Retained the `.limit(1)` fix to prevent JSON object duplicate crashes.
+ * - Retained the DB Error Box for graceful failure.
+ * - Message bubble text is non-selectable (user-select: none).
+ * - Fully uncompressed code with no shortened lines.
  *
  * Dependencies: React, Supabase, AuthContext, EmojiGifPicker
  * ============================================================================
@@ -39,9 +35,7 @@ const ADMIN_DISPLAY_NAME = 'ADMIN';
 const BUBBLE_OWN = 'var(--blue)';
 const BUBBLE_THEM = 'var(--glass-strong)';
 
-// Chat canvas background. Swap this for any pattern/image URL you like, or
-// set it to 'none' to fall back to a flat var(--bg). Kept as a constant so
-// it's a one-line change per screen.
+// Chat canvas background.
 const CHAT_BACKGROUND_IMAGE =
   "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='60' height='60' viewBox='0 0 60 60'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%230a84ff' fill-opacity='0.035'%3E%3Ccircle cx='6' cy='6' r='2'/%3E%3Ccircle cx='36' cy='24' r='2'/%3E%3Ccircle cx='18' cy='42' r='2'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E\")";
 
@@ -200,9 +194,6 @@ const Vectors = {
 // 3. UTILITY & FORMATTING FUNCTIONS
 // ============================================================================
 
-/**
- * Ensures strict global admin overrides.
- */
 function resolveIdentity(user) {
   if (user?.is_admin) {
     return { name: ADMIN_DISPLAY_NAME, avatarUrl: null, isAdmin: true };
@@ -210,9 +201,6 @@ function resolveIdentity(user) {
   return { name: user?.username || 'Unknown User', avatarUrl: user?.avatar_url || null, isAdmin: false };
 }
 
-/**
- * Extracts initials from a username for the placeholder avatar.
- */
 function getInitials(name) {
   if (!name) {
     return '?';
@@ -224,9 +212,6 @@ function getInitials(name) {
   return name.slice(0, 2).toUpperCase();
 }
 
-/**
- * Formats a raw date string into a Telegram-style timestamp.
- */
 function formatTime(dateString) {
   if (!dateString) {
     return '';
@@ -237,9 +222,6 @@ function formatTime(dateString) {
   });
 }
 
-/**
- * Identifies the type of media attached to a message.
- */
 function guessMediaType(file) {
   if (!file) {
     return 'file';
@@ -250,9 +232,6 @@ function guessMediaType(file) {
   return 'file';
 }
 
-/**
- * Generates a clean text snippet for the animated reply preview.
- */
 function generateReplySnippet(message) {
   if (!message) {
     return 'Original message';
@@ -275,9 +254,6 @@ function generateReplySnippet(message) {
   return text;
 }
 
-/**
- * Formats date into Apple style sticky pills ("Today", "Yesterday").
- */
 function formatDayLabel(dateString) {
   const date = new Date(dateString);
   const today = new Date();
@@ -303,9 +279,6 @@ function formatDayLabel(dateString) {
   });
 }
 
-/**
- * Generates a unique key for grouping messages by day.
- */
 function dayKey(dateString) {
   return new Date(dateString).toDateString();
 }
@@ -314,9 +287,6 @@ function dayKey(dateString) {
 // 4. SUB-COMPONENTS & PHYSICS ENGINE
 // ============================================================================
 
-/**
- * Injects required CSS animations into the document head.
- */
 const GlobalKeyframes = () => (
   <style>{`
     @keyframes chatFloat {
@@ -348,9 +318,6 @@ const GlobalKeyframes = () => (
         transform: rotate(360deg);
       }
     }
-    /* Bubble text can't be selected/copied via the normal text-selection
-       gesture. Note: this is a UX deterrent, not real DRM — anyone can
-       still read it via devtools, screenshots, or view-source. */
     .no-copy-text {
       -webkit-user-select: none;
       -moz-user-select: none;
@@ -361,9 +328,6 @@ const GlobalKeyframes = () => (
   `}</style>
 );
 
-/**
- * Apple-style Avatar renderer handling Images, Initials, and Admin variants.
- */
 function LiquidAvatar({ identity, size = 42 }) {
   const containerStyle = {
     width: size,
@@ -432,10 +396,6 @@ function LiquidAvatar({ identity, size = 42 }) {
   );
 }
 
-/**
- * SwipeableMessage Component (Telegram Touch Physics)
- * Wraps the message row and handles sliding left to trigger a reply.
- */
 function SwipeableMessage({ children, onSwipe, disabled }) {
   const [translateX, setTranslateX] = useState(0);
   const touchStartX = useRef(null);
@@ -502,12 +462,6 @@ function SwipeableMessage({ children, onSwipe, disabled }) {
   );
 }
 
-/**
- * Redesigned send / cooldown control.
- * - Idle: plain send button
- * - Cooling down: a radial progress ring with a live "Xs" countdown label,
- *   instead of the old plain dot-in-a-conic-gradient.
- */
 function SendButton({ canSend, sending, cooldownPercent, cooldownSecondsLeft }) {
   const isCoolingDown = cooldownPercent > 0;
   const ringSize = 44;
@@ -592,7 +546,7 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
 
   const [activeThread, setActiveThread] = useState(null);
   const [threadStatus, setThreadStatus] = useState('loading');
-  const [dbErrorDetails, setDbErrorDetails] = useState(null); // Temporary error box state
+  const [dbErrorDetails, setDbErrorDetails] = useState(null); 
 
   const [messages, setMessages] = useState([]);
   const [messagesLoading, setMessagesLoading] = useState(true);
@@ -619,7 +573,13 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
   // --------------------------------------------------------------------------
 
   useEffect(() => {
-    if (!userId || !openThreadWithUserId) {
+    if (!openThreadWithUserId) {
+      return;
+    }
+
+    if (!userId) {
+      setThreadStatus('error');
+      setDbErrorDetails("You must be logged in to view private direct messages.");
       return;
     }
 
@@ -629,7 +589,6 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
 
     async function initializeThread() {
       try {
-        // FIXED: Using .limit(1) instead of .maybeSingle() to safely bypass duplicates
         const { data: existingRows, error: findError } = await supabase
           .from('dm_threads')
           .select('id, user_a, user_b')
@@ -702,6 +661,15 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
     let isMounted = true;
     setMessagesLoading(true);
 
+    // Update DM Read Receipt on load
+    if (userId) {
+      supabase.from('dm_read_receipts').upsert({
+        thread_id: activeThread.id,
+        user_id: userId,
+        last_read_at: new Date().toISOString()
+      }).then();
+    }
+
     async function fetchMessages() {
       const { data, error } = await supabase
         .from('dm_messages')
@@ -739,6 +707,15 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
             }
             return [...prev, payload.new];
           });
+          
+          // Update Read Receipt on new message received
+          if (userId) {
+            supabase.from('dm_read_receipts').upsert({
+              thread_id: activeThread.id,
+              user_id: userId,
+              last_read_at: new Date().toISOString()
+            }).then();
+          }
         }
       ).subscribe();
 
@@ -746,7 +723,7 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
       isMounted = false;
       supabase.removeChannel(channel);
     };
-  }, [activeThread?.id]);
+  }, [activeThread?.id, userId]);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -778,6 +755,65 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
   }, []);
 
   // --------------------------------------------------------------------------
+  // MENTION RESOLUTION & RENDERING LOGIC
+  // --------------------------------------------------------------------------
+  
+  async function resolveMentionedIds(outgoingText) {
+    const mentionedUsernames = [...outgoingText.matchAll(/@([a-zA-Z0-9_]+)/g)].map(m => m[1]);
+    if (mentionedUsernames.length === 0) return [];
+    
+    const { data } = await supabase
+      .from('profiles')
+      .select('id')
+      .in('username', mentionedUsernames);
+      
+    return data ? data.map(p => p.id) : [];
+  }
+
+  async function handleMentionClick(username) {
+    const { data } = await supabase
+      .from('profiles')
+      .select('id')
+      .eq('username', username)
+      .maybeSingle();
+      
+    if (data?.id) {
+      setProfileCardUserId(data.id);
+    } else {
+      alert("User not found.");
+    }
+  }
+
+  const renderMessageTextWithMentions = (messageText) => {
+    if (!messageText) return null;
+    const parts = messageText.split(/(@[a-zA-Z0-9_]+)/g);
+    
+    return parts.map((part, i) => {
+      if (part.startsWith('@') && part.length > 1) {
+        const username = part.substring(1);
+        return (
+          <button
+            key={i}
+            onClick={() => handleMentionClick(username)}
+            style={{ 
+              color: 'var(--blue)', 
+              background: 'none', 
+              border: 'none', 
+              padding: 0, 
+              fontWeight: 700, 
+              cursor: 'pointer', 
+              fontSize: 'inherit' 
+            }}
+          >
+            {part}
+          </button>
+        );
+      }
+      return <span key={i}>{part}</span>;
+    });
+  };
+
+  // --------------------------------------------------------------------------
   // INTERACTION HANDLERS
   // --------------------------------------------------------------------------
 
@@ -805,12 +841,15 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
     }
 
     setSending(true);
+    
+    const mentionedIds = await resolveMentionedIds(trimmed);
 
     const { error } = await supabase.from('dm_messages').insert({
       thread_id: activeThread.id,
       sender_id: userId,
       text: trimmed,
       reply_to_id: replyingTo?.id ?? null,
+      mentioned_user_ids: mentionedIds
     });
 
     setSending(false);
@@ -866,7 +905,6 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
     cooldownRef.current?.start();
   }
 
-  /** Sends a GIF or sticker picked from EmojiGifPicker as its own message. */
   async function handleMediaPicked(url, mediaType) {
     if (!userId || !activeThread || cooldownPercent > 0 || sending) {
       return;
@@ -997,11 +1035,6 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
     >
       <GlobalKeyframes />
 
-      {/*
-        =======================================================================
-        BACKGROUND EFFECTS
-        =======================================================================
-      */}
       <div
         aria-hidden="true"
         style={{
@@ -1026,11 +1059,6 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
         />
       </div>
 
-      {/*
-        =======================================================================
-        APPLE GLASS HEADER
-        =======================================================================
-      */}
       <header
         style={{
           flexShrink: 0,
@@ -1111,7 +1139,6 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
         </div>
       </header>
 
-      {/* Temporary DB Error Notification Banner if error occurred post-load */}
       {dbErrorDetails && (
         <div style={{ background: 'rgba(255, 59, 48, 0.12)', borderBottom: '1px solid rgba(255, 59, 48, 0.3)', padding: '8px 16px', color: '#ff3b30', fontSize: 12, fontFamily: 'monospace', zIndex: 25, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <span><strong>DB Error:</strong> {dbErrorDetails}</span>
@@ -1119,11 +1146,6 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
         </div>
       )}
 
-      {/*
-        =======================================================================
-        MESSAGE CANVAS (SCROLLABLE AREA)
-        =======================================================================
-      */}
       <div
         ref={scrollRef}
         className="custom-scrollbar"
@@ -1359,8 +1381,6 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
                       ) : (
                         <span
                           className="no-copy-text"
-                          onCopy={(e) => e.preventDefault()}
-                          onContextMenu={(e) => e.preventDefault()}
                           style={{
                             fontSize: 15,
                             whiteSpace: 'pre-wrap',
@@ -1368,7 +1388,8 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
                             lineHeight: 1.4,
                           }}
                         >
-                          {message.text}
+                          {/* Rendering parsed mentions instead of plain text */}
+                          {renderMessageTextWithMentions(message.text)}
                         </span>
                       )}
                     </div>
@@ -1392,11 +1413,6 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
         })}
       </div>
 
-      {/*
-        =======================================================================
-        COMPOSER MODULE (FIXED TO BOTTOM VIA FLEX-SHRINK: 0)
-        =======================================================================
-      */}
       <div
         className="safe-bottom"
         style={{

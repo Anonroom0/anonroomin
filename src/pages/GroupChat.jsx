@@ -5,10 +5,14 @@
  * This component acts as the master chat pane for Group Conversations.
  *
  * CHANGES IN THIS PASS:
+ * - Added `@username` mentions parsing, UUID resolution, and clickable links.
+ * - Added Chat Search (keywords) & Member Filtering (type @username to filter).
+ * - Clicking the header now opens a GroupCard.
+ * - Auto-updates `group_read_receipts` on load so the home screen `@` badge clears.
+ * - Message bubble text is non-selectable (user-select: none).
  * - Emoji / GIF / Sticker picker (see EmojiGifPicker.jsx, powered by Tenor's
  *   free API for GIFs/stickers; emoji is a static local list, no API needed)
  * - Chat canvas now renders a subtle background image/pattern layer
- * - Message bubble text is non-selectable (user-select: none + copy blocked)
  * - Send button replaced with a nicer radial cooldown ring
  * - New: an `onGroupResolved` callback fires once the group-by-slug lookup
  *   settles (with the row on success, or null on a bad/missing slug), so
@@ -31,6 +35,7 @@ import { useAuth } from '../lib/authContext';
 import { createCooldown } from '../lib/rateLimit';
 import MediaViewer from './MediaViewer';
 import ProfileCard from './ProfileCard';
+import GroupCard from './GroupCard';
 import AuthModal from './AuthModal';
 import EmojiGifPicker from './EmojiGifPicker';
 
@@ -197,19 +202,34 @@ const Vectors = {
     </svg>
   ),
   ThreeDots: (
-    <svg
-      width="20"
-      height="20"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="2.5"
-      strokeLinecap="round"
+    <svg 
+      width="20" 
+      height="20" 
+      viewBox="0 0 24 24" 
+      fill="none" 
+      stroke="currentColor" 
+      strokeWidth="2.5" 
+      strokeLinecap="round" 
       strokeLinejoin="round"
     >
       <circle cx="12" cy="12" r="1" />
       <circle cx="12" cy="5" r="1" />
       <circle cx="12" cy="19" r="1" />
+    </svg>
+  ),
+  SearchSmall: (
+    <svg 
+      width="16" 
+      height="16" 
+      viewBox="0 0 24 24" 
+      fill="none" 
+      stroke="currentColor" 
+      strokeWidth="2.5" 
+      strokeLinecap="round" 
+      strokeLinejoin="round"
+    >
+      <circle cx="11" cy="11" r="8" />
+      <line x1="21" y1="21" x2="16.65" y2="16.65" />
     </svg>
   )
 };
@@ -568,6 +588,7 @@ function SendButton({ canSend, sending, cooldownPercent }) {
 
 export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
   const { session, profile } = useAuth();
+  const ownUserId = session?.user?.id;
 
   // --------------------------------------------------------------------------
   // STATE MANAGEMENT
@@ -589,7 +610,12 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
   const [profileCardUserId, setProfileCardUserId] = useState(null);
   const [authOpen, setAuthOpen] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
-  const [menuOpen, setMenuOpen] = useState(false); // Three-dot dropdown menu state
+  
+  // NEW: Search, Menus, and Group Card
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [isSearching, setIsSearching] = useState(false);
+  const [chatSearchQuery, setChatSearchQuery] = useState('');
+  const [groupCardOpen, setGroupCardOpen] = useState(false);
 
   const scrollRef = useRef(null);
   const fileInputRef = useRef(null);
@@ -662,6 +688,15 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
 
     let isMounted = true;
     setMessagesLoading(true);
+    
+    // NEW: Update read receipt immediately on opening the group
+    if (ownUserId) {
+      supabase.from('group_read_receipts').upsert({
+        group_id: group.id,
+        user_id: ownUserId,
+        last_read_at: new Date().toISOString()
+      }).then();
+    }
 
     async function fetchMessages() {
       const { data, error } = await supabase
@@ -698,6 +733,15 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
             }
             return [...prev, payload.new];
           });
+          
+          // NEW: Update read receipt if we are actively viewing the chat when a message arrives
+          if (ownUserId) {
+            supabase.from('group_read_receipts').upsert({
+              group_id: group.id,
+              user_id: ownUserId,
+              last_read_at: new Date().toISOString()
+            }).then();
+          }
         }
       ).subscribe();
 
@@ -705,16 +749,16 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
       isMounted = false;
       supabase.removeChannel(channel);
     };
-  }, [group?.id]);
+  }, [group?.id, ownUserId]);
 
   useEffect(() => {
-    if (scrollRef.current) {
+    if (scrollRef.current && !isSearching) {
       scrollRef.current.scrollTo({
         top: scrollRef.current.scrollHeight,
         behavior: 'smooth',
       });
     }
-  }, [messages, replyingTo]);
+  }, [messages, replyingTo, isSearching]);
 
   useEffect(() => {
     cooldownRef.current = createCooldown(
@@ -728,6 +772,68 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
       }
     };
   }, []);
+
+  // --------------------------------------------------------------------------
+  // MENTION RESOLUTION & RENDERING LOGIC
+  // --------------------------------------------------------------------------
+  
+  // Scans outgoing text for @usernames and gets their UUIDs to pass to DB
+  async function resolveMentionedIds(outgoingText) {
+    const mentionedUsernames = [...outgoingText.matchAll(/@([a-zA-Z0-9_]+)/g)].map(m => m[1]);
+    if (mentionedUsernames.length === 0) return [];
+    
+    const { data } = await supabase
+      .from('profiles')
+      .select('id')
+      .in('username', mentionedUsernames);
+      
+    return data ? data.map(p => p.id) : [];
+  }
+
+  // Looks up user ID and pops open the profile card when @username is clicked
+  async function handleMentionClick(username) {
+    const { data } = await supabase
+      .from('profiles')
+      .select('id')
+      .eq('username', username)
+      .maybeSingle();
+      
+    if (data?.id) {
+      setProfileCardUserId(data.id);
+    } else {
+      alert("User not found.");
+    }
+  }
+
+  // Intercepts message text mapping to turn @usernames into clickable buttons
+  const renderMessageTextWithMentions = (messageText) => {
+    if (!messageText) return null;
+    const parts = messageText.split(/(@[a-zA-Z0-9_]+)/g);
+    
+    return parts.map((part, i) => {
+      if (part.startsWith('@') && part.length > 1) {
+        const username = part.substring(1);
+        return (
+          <button
+            key={i}
+            onClick={() => handleMentionClick(username)}
+            style={{ 
+              color: 'var(--blue)', 
+              background: 'none', 
+              border: 'none', 
+              padding: 0, 
+              fontWeight: 700, 
+              cursor: 'pointer', 
+              fontSize: 'inherit' 
+            }}
+          >
+            {part}
+          </button>
+        );
+      }
+      return <span key={i}>{part}</span>;
+    });
+  };
 
   // --------------------------------------------------------------------------
   // INTERACTION HANDLERS
@@ -756,6 +862,8 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
     const senderName = profile?.is_admin
       ? ADMIN_DISPLAY_NAME
       : (profile?.username || 'Anonymous');
+      
+    const mentionedIds = await resolveMentionedIds(trimmed);
 
     const { error } = await supabase.from('group_messages').insert({
       group_id: group.id,
@@ -763,6 +871,7 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
       sender_name: senderName,
       text: trimmed,
       reply_to_id: replyingTo?.id ?? null,
+      mentioned_user_ids: mentionedIds // Include array of pings
     });
 
     setSending(false);
@@ -846,6 +955,23 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
   }
 
   // --------------------------------------------------------------------------
+  // IN-CHAT FILTERING (SEARCH KEYWORDS OR @MEMBER)
+  // --------------------------------------------------------------------------
+  const filteredMessages = messages.filter((m) => {
+    if (!isSearching || !chatSearchQuery.trim()) return true;
+    const q = chatSearchQuery.trim().toLowerCase();
+    
+    // If search string starts with @, strict filter to see messages from that sender only
+    if (q.startsWith('@') && q.length > 1) {
+      const targetName = q.substring(1);
+      return m.sender_name?.toLowerCase() === targetName;
+    }
+    
+    // Standard keyword match
+    return m.text?.toLowerCase().includes(q) || m.sender_name?.toLowerCase().includes(q);
+  });
+
+  // --------------------------------------------------------------------------
   // RENDER GUARDS
   // --------------------------------------------------------------------------
 
@@ -859,7 +985,9 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
           alignItems: 'center',
           justifyContent: 'center',
           background: 'var(--bg)',
-          userSelect: 'none'
+          userSelect: 'none',
+          WebkitUserSelect: 'none',
+          msUserSelect: 'none'
         }}
       >
         <div style={{ color: 'var(--blue)' }}>
@@ -881,7 +1009,9 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
           background: 'var(--bg)',
           flexDirection: 'column',
           gap: 16,
-          userSelect: 'none'
+          userSelect: 'none',
+          WebkitUserSelect: 'none',
+          msUserSelect: 'none'
         }}
       >
         <p style={{ color: 'var(--dim)' }}>Failed to load group.</p>
@@ -902,7 +1032,6 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
     );
   }
 
-  const ownUserId = session?.user?.id;
   let lastDayKey = null;
 
   // --------------------------------------------------------------------------
@@ -919,7 +1048,9 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
         height: '100%',
         overflow: 'hidden',
         zIndex: 1,
-        userSelect: 'none'
+        userSelect: 'none',
+        WebkitUserSelect: 'none',
+        msUserSelect: 'none'
       }}
     >
       <GlobalKeyframes />
@@ -975,40 +1106,53 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
           {Vectors.Back}
         </button>
 
-        <GroupLiquidAvatar
-          url={group.cover_url}
-          name={group.name}
-          size={42}
-        />
-
-        <div
+        <button
+          onClick={() => setGroupCardOpen(true)}
           style={{
+            border: 'none',
+            background: 'transparent',
+            padding: 0,
+            cursor: 'pointer',
             display: 'flex',
-            flexDirection: 'column',
-            justifyContent: 'center',
+            alignItems: 'center',
+            gap: 14,
             flex: 1,
+            textAlign: 'left'
           }}
         >
-          <span
+          <GroupLiquidAvatar
+            url={group.cover_url}
+            name={group.name}
+            size={42}
+          />
+          <div
             style={{
-              fontWeight: 700,
-              fontSize: 16,
-              color: 'var(--ink)',
+              display: 'flex',
+              flexDirection: 'column',
+              justifyContent: 'center',
             }}
           >
-            {group.name}
-          </span>
-          <span
-            style={{
-              fontSize: 13,
-              color: 'var(--dim)',
-            }}
-          >
-            {group.description || 'Public Group'}
-          </span>
-        </div>
+            <span
+              style={{
+                fontWeight: 700,
+                fontSize: 16,
+                color: 'var(--ink)',
+              }}
+            >
+              {group.name}
+            </span>
+            <span
+              style={{
+                fontSize: 13,
+                color: 'var(--dim)',
+              }}
+            >
+              {group.description || 'Public Group'}
+            </span>
+          </div>
+        </button>
 
-        {/* Three dot share menu */}
+        {/* Three dot share/search menu */}
         <div style={{ position: 'relative' }}>
           <button
             onClick={() => setMenuOpen((v) => !v)}
@@ -1039,9 +1183,32 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
               borderRadius: 12,
               boxShadow: '0 8px 24px rgba(0,0,0,0.15)',
               zIndex: 30,
-              minWidth: 140,
+              minWidth: 160,
               padding: 6
             }}>
+              <button
+                onClick={() => {
+                  setIsSearching(true);
+                  setMenuOpen(false);
+                }}
+                style={{
+                  width: '100%',
+                  padding: '10px 14px',
+                  border: 'none',
+                  background: 'transparent',
+                  color: 'var(--ink)',
+                  textAlign: 'left',
+                  borderRadius: 8,
+                  cursor: 'pointer',
+                  fontSize: 14,
+                  fontWeight: 600,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8
+                }}
+              >
+                {Vectors.SearchSmall} Search Chat
+              </button>
               <button
                 onClick={() => {
                   navigator.clipboard.writeText(window.location.href);
@@ -1058,15 +1225,65 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
                   borderRadius: 8,
                   cursor: 'pointer',
                   fontSize: 14,
-                  fontWeight: 600
+                  fontWeight: 600,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 8
                 }}
               >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>
                 Share link
               </button>
             </div>
           )}
         </div>
       </header>
+
+      {/* Embedded Search Bar (Only visible when isSearching is true) */}
+      {isSearching && (
+        <div style={{ 
+          background: 'var(--glass-strong)', 
+          borderBottom: '1px solid var(--glass-border)', 
+          padding: '10px 16px', 
+          display: 'flex', 
+          alignItems: 'center', 
+          gap: 10, 
+          zIndex: 19 
+        }}>
+          <div style={{ flex: 1, position: 'relative' }}>
+            <span style={{ 
+              position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--dim)', pointerEvents: 'none' 
+            }}>
+              {Vectors.SearchSmall}
+            </span>
+            <input
+              autoFocus
+              type="text"
+              value={chatSearchQuery}
+              onChange={(e) => setChatSearchQuery(e.target.value)}
+              placeholder="Search or type @username to filter..."
+              style={{ 
+                width: '100%', padding: '8px 12px 8px 36px', borderRadius: 16, border: 'none', 
+                background: 'var(--glass-border)', color: 'var(--ink)', fontSize: 14, outline: 'none', boxSizing: 'border-box' 
+              }}
+            />
+            {chatSearchQuery && (
+              <button 
+                onClick={() => setChatSearchQuery('')} 
+                style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', background: 'var(--glass)', border: 'none', borderRadius: '50%', width: 20, height: 20, fontSize: 10, fontWeight: 'bold', color: 'var(--dim)', cursor: 'pointer' }}
+              >
+                ✕
+              </button>
+            )}
+          </div>
+          <button 
+            onClick={() => { setIsSearching(false); setChatSearchQuery(''); }} 
+            style={{ background: 'none', border: 'none', color: 'var(--blue)', fontWeight: 600, cursor: 'pointer', fontSize: 14 }}
+          >
+            Cancel
+          </button>
+        </div>
+      )}
 
       <div
         ref={scrollRef}
@@ -1101,7 +1318,7 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
           </div>
         )}
 
-        {!messagesLoading && messages.length === 0 && (
+        {!messagesLoading && filteredMessages.length === 0 && (
           <div
             style={{
               flex: 1,
@@ -1119,12 +1336,12 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
                 color: 'var(--dim)',
               }}
             >
-              Say hello to the group 👋
+              {isSearching ? 'No messages found.' : 'Say hello to the group 👋'}
             </div>
           </div>
         )}
 
-        {!messagesLoading && messages.map((message) => {
+        {!messagesLoading && filteredMessages.map((message) => {
           const isOwn = ownUserId && message.user_id === ownUserId;
           const isAdminMsg = isSenderAdmin(message);
 
@@ -1141,7 +1358,7 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
           return (
             <React.Fragment key={message.id}>
 
-              {showDayDivider && (
+              {showDayDivider && !isSearching && (
                 <div
                   style={{
                     textAlign: 'center',
@@ -1169,6 +1386,7 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
 
               <SwipeableMessage
                 onSwipe={() => startReply(message)}
+                disabled={isSearching}
               >
                 <div
                   style={{
@@ -1346,8 +1564,6 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
                       ) : (
                         <span
                           className="no-copy-text"
-                          onCopy={(e) => e.preventDefault()}
-                          onContextMenu={(e) => e.preventDefault()}
                           style={{
                             fontSize: 15,
                             whiteSpace: 'pre-wrap',
@@ -1355,7 +1571,8 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
                             lineHeight: 1.4,
                           }}
                         >
-                          {message.text}
+                          {/* NEW: Render text with blue clickable mentions */}
+                          {renderMessageTextWithMentions(message.text)}
                         </span>
                       )}
                     </div>
@@ -1588,6 +1805,15 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
         open={!!profileCardUserId}
         onClose={() => setProfileCardUserId(null)}
       />
+      
+      {/* NEW: Group Card Integration */}
+      {groupCardOpen && (
+        <GroupCard 
+          groupSlug={groupSlug} 
+          open={groupCardOpen} 
+          onClose={() => setGroupCardOpen(false)} 
+        />
+      )}
 
       <AuthModal
         open={authOpen}
