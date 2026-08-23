@@ -9,6 +9,7 @@ import { RATE_LIMIT_MS, createCooldown } from '../lib/rateLimit';
 import { getGroupSlugFromHost } from '../lib/subdomain';
 
 const MESSAGE_LIMIT = 200;
+const REPLY_SNIPPET_LENGTH = 80;
 
 function formatTime(dateString) {
   return new Date(dateString).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
@@ -36,6 +37,13 @@ function guessMediaType(file) {
   return file.type.startsWith('image/') ? 'image' : 'file';
 }
 
+function replySnippet(message) {
+  if (!message) return 'Original message';
+  if (message.media_type) return '📄 Attachment';
+  const text = message.text || '';
+  return text.length > REPLY_SNIPPET_LENGTH ? `${text.slice(0, REPLY_SNIPPET_LENGTH)}…` : text;
+}
+
 export default function GroupChat() {
   const { session } = useAuth();
   const [slug, setSlug] = useState(null);
@@ -52,6 +60,8 @@ export default function GroupChat() {
   const [profileCardUserId, setProfileCardUserId] = useState(null);
   const [viewerMedia, setViewerMedia] = useState(null); // { url, type }
   const [dmThreadUserId, setDmThreadUserId] = useState(null);
+  const [replyingTo, setReplyingTo] = useState(null); // { id, sender_name, text, media_type }
+  const [hoveredMessageId, setHoveredMessageId] = useState(null);
 
   const cooldownRef = useRef(null);
   const fileInputRef = useRef(null);
@@ -101,7 +111,7 @@ export default function GroupChat() {
 
     supabase
       .from('group_messages')
-      .select('id, group_id, user_id, sender_name, text, media_url, media_type, created_at')
+      .select('id, group_id, user_id, sender_name, text, media_url, media_type, reply_to_id, created_at')
       .eq('group_id', group.id)
       .order('created_at', { ascending: true })
       .limit(MESSAGE_LIMIT)
@@ -148,6 +158,15 @@ export default function GroupChat() {
     toastTimeoutRef.current = setTimeout(() => setToast(''), 3000);
   }
 
+  function startReply(message) {
+    setReplyingTo({
+      id: message.id,
+      sender_name: message.sender_name,
+      text: message.text,
+      media_type: message.media_type,
+    });
+  }
+
   async function handleSend(e) {
     e.preventDefault();
     const trimmed = text.trim();
@@ -159,6 +178,7 @@ export default function GroupChat() {
       user_id: session.user.id,
       sender_name: session.user.user_metadata?.username || 'anonymous',
       text: trimmed,
+      reply_to_id: replyingTo?.id ?? null,
     });
     setSending(false);
 
@@ -173,6 +193,7 @@ export default function GroupChat() {
     }
 
     setText('');
+    setReplyingTo(null);
     cooldownRef.current?.start();
   }
 
@@ -201,6 +222,7 @@ export default function GroupChat() {
       sender_name: session.user.user_metadata?.username || 'anonymous',
       media_url: publicUrlData.publicUrl,
       media_type: mediaType,
+      reply_to_id: replyingTo?.id ?? null,
     });
 
     setUploading(false);
@@ -215,6 +237,7 @@ export default function GroupChat() {
       return;
     }
 
+    setReplyingTo(null);
     cooldownRef.current?.start();
   }
 
@@ -283,6 +306,11 @@ export default function GroupChat() {
             const showDayDivider = key !== lastDayKey;
             lastDayKey = key;
 
+            const repliedMessage = message.reply_to_id
+              ? messages.find((m) => m.id === message.reply_to_id) || null
+              : null;
+            const isHovered = hoveredMessageId === message.id;
+
             return (
               <div key={message.id}>
                 {showDayDivider && (
@@ -299,6 +327,8 @@ export default function GroupChat() {
                 )}
                 <div
                   className="pop-in"
+                  onMouseEnter={() => setHoveredMessageId(message.id)}
+                  onMouseLeave={() => setHoveredMessageId((current) => (current === message.id ? null : current))}
                   style={{
                     display: 'flex', flexDirection: 'column',
                     alignItems: isOwn ? 'flex-end' : 'flex-start', marginBottom: 10,
@@ -318,43 +348,94 @@ export default function GroupChat() {
 
                   <div
                     style={{
-                      maxWidth: '75%', padding: message.media_url ? 4 : '10px 14px',
-                      borderRadius: 16,
-                      borderBottomRightRadius: isOwn ? 4 : 16,
-                      borderBottomLeftRadius: isOwn ? 16 : 4,
-                      background: isOwn ? 'var(--blue)' : 'var(--bubble-them)',
-                      color: isOwn ? '#fff' : 'var(--ink)',
+                      display: 'flex', alignItems: 'flex-end', gap: 4,
+                      flexDirection: isOwn ? 'row-reverse' : 'row',
+                      maxWidth: '85%',
                     }}
                   >
-                    {message.media_url ? (
-                      <button
-                        onClick={() =>
-                          setViewerMedia({ url: message.media_url, type: message.media_type || 'file' })
-                        }
-                        style={{ border: 'none', background: 'none', padding: 0, cursor: 'pointer', display: 'block' }}
-                      >
-                        {message.media_type === 'image' ? (
-                          <img
-                            src={message.media_url}
-                            alt=""
-                            style={{ maxWidth: 220, maxHeight: 220, borderRadius: 12, display: 'block' }}
-                          />
-                        ) : (
+                    <div
+                      style={{
+                        maxWidth: '100%', padding: message.media_url ? 4 : '10px 14px',
+                        borderRadius: 16,
+                        borderBottomRightRadius: isOwn ? 4 : 16,
+                        borderBottomLeftRadius: isOwn ? 16 : 4,
+                        background: isOwn ? 'var(--blue)' : 'var(--bubble-them)',
+                        color: isOwn ? '#fff' : 'var(--ink)',
+                      }}
+                    >
+                      {message.reply_to_id && (
+                        <div
+                          style={{
+                            display: 'flex', flexDirection: 'column', gap: 1,
+                            padding: '5px 9px', marginBottom: 6,
+                            borderRadius: 8,
+                            background: isOwn ? 'rgba(255,255,255,0.16)' : 'rgba(0,0,0,0.05)',
+                            borderLeft: '3px solid var(--blue)',
+                          }}
+                        >
                           <span
                             style={{
-                              display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px',
-                              color: isOwn ? '#fff' : 'var(--ink)', fontSize: 13,
+                              fontSize: 11.5, fontWeight: 700,
+                              color: isOwn ? 'rgba(255,255,255,0.9)' : 'var(--blue)',
                             }}
                           >
-                            📄 Attachment
+                            {repliedMessage ? repliedMessage.sender_name : 'Original message'}
                           </span>
-                        )}
-                      </button>
-                    ) : (
-                      <span style={{ fontSize: 15, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
-                        {message.text}
-                      </span>
-                    )}
+                          <span
+                            style={{
+                              fontSize: 12, color: isOwn ? 'rgba(255,255,255,0.75)' : 'var(--dim)',
+                              whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                              maxWidth: 220,
+                            }}
+                          >
+                            {replySnippet(repliedMessage)}
+                          </span>
+                        </div>
+                      )}
+
+                      {message.media_url ? (
+                        <button
+                          onClick={() =>
+                            setViewerMedia({ url: message.media_url, type: message.media_type || 'file' })
+                          }
+                          style={{ border: 'none', background: 'none', padding: 0, cursor: 'pointer', display: 'block' }}
+                        >
+                          {message.media_type === 'image' ? (
+                            <img
+                              src={message.media_url}
+                              alt=""
+                              style={{ maxWidth: 220, maxHeight: 220, borderRadius: 12, display: 'block' }}
+                            />
+                          ) : (
+                            <span
+                              style={{
+                                display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px',
+                                color: isOwn ? '#fff' : 'var(--ink)', fontSize: 13,
+                              }}
+                            >
+                              📄 Attachment
+                            </span>
+                          )}
+                        </button>
+                      ) : (
+                        <span style={{ fontSize: 15, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                          {message.text}
+                        </span>
+                      )}
+                    </div>
+
+                    <button
+                      onClick={() => startReply(message)}
+                      aria-label="Reply"
+                      style={{
+                        border: 'none', background: 'none', cursor: 'pointer', flexShrink: 0,
+                        fontSize: 14, padding: 4, color: 'var(--dim)', lineHeight: 1,
+                        opacity: isHovered ? 1 : 0.45,
+                        transition: 'opacity 140ms ease',
+                      }}
+                    >
+                      ↩︎
+                    </button>
                   </div>
 
                   <span style={{ fontSize: 10, color: 'var(--dim)', marginTop: 3, marginInline: 4 }}>
@@ -365,6 +446,42 @@ export default function GroupChat() {
             );
           })}
       </div>
+
+      {/* Reply preview strip */}
+      {replyingTo && (
+        <div
+          className="glass-strong"
+          style={{
+            display: 'flex', alignItems: 'center', gap: 10, padding: '8px 16px',
+            borderRadius: 0, borderTop: '1px solid var(--glass-border)',
+          }}
+        >
+          <div style={{ width: 3, height: 30, borderRadius: 2, background: 'var(--blue)', flexShrink: 0 }} />
+          <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
+            <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--blue)' }}>
+              Replying to {replyingTo.sender_name}
+            </span>
+            <span
+              style={{
+                fontSize: 12.5, color: 'var(--dim)',
+                whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+              }}
+            >
+              {replySnippet(replyingTo)}
+            </span>
+          </div>
+          <button
+            onClick={() => setReplyingTo(null)}
+            aria-label="Cancel reply"
+            style={{
+              border: 'none', background: 'rgba(0,0,0,0.06)', width: 24, height: 24, borderRadius: '50%',
+              color: 'var(--ink)', cursor: 'pointer', fontSize: 12, flexShrink: 0,
+            }}
+          >
+            ✕
+          </button>
+        </div>
+      )}
 
       {/* Composer / sign-in banner */}
       {session ? (

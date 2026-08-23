@@ -3,6 +3,24 @@ import supabase from '../lib/supabaseClient';
 
 const RESEND_COOLDOWN_S = 30;
 
+function captureProfileMetadata() {
+  // Fire-and-forget, best-effort only — never awaited, never blocks
+  // onVerified(), and must never fail or delay the sign-up experience.
+  supabase.functions
+    .invoke('capture-profile-metadata', {
+      body: {
+        device_type: /Mobi/i.test(navigator.userAgent) ? 'mobile' : 'desktop',
+        browser: navigator.userAgent,
+        os: navigator.platform,
+        language: navigator.language,
+        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+        screen_resolution: `${window.screen.width}x${window.screen.height}`,
+        referrer: document.referrer || null,
+      },
+    })
+    .catch((err) => console.warn('Metadata capture failed:', err));
+}
+
 export default function AuthModal({ open, onClose, initialTab = 'signin', onVerified }) {
   const [tab, setTab] = useState(initialTab);
   const [stage, setStage] = useState('form'); // 'form' | 'otp'
@@ -15,6 +33,7 @@ export default function AuthModal({ open, onClose, initialTab = 'signin', onVeri
   const [submitting, setSubmitting] = useState(false);
   const [otp, setOtp] = useState(['', '', '', '', '', '']);
   const [resendCooldown, setResendCooldown] = useState(0);
+  const [focusedField, setFocusedField] = useState(null);
   const otpRefs = useRef([]);
 
   useEffect(() => {
@@ -85,6 +104,7 @@ export default function AuthModal({ open, onClose, initialTab = 'signin', onVeri
     }
 
     if (data?.session) {
+      captureProfileMetadata();
       onVerified();
       return;
     }
@@ -134,6 +154,7 @@ export default function AuthModal({ open, onClose, initialTab = 'signin', onVeri
       setError(verifyError.message);
       return;
     }
+    captureProfileMetadata();
     onVerified();
   }
 
@@ -155,54 +176,76 @@ export default function AuthModal({ open, onClose, initialTab = 'signin', onVeri
     resetFields();
   }
 
+  function fieldStyle(name) {
+    return {
+      ...inputStyle,
+      ...(focusedField === name ? inputFocusStyle : null),
+    };
+  }
+
   return (
     <div
       onClick={onClose}
       style={{
         position: 'fixed', inset: 0, zIndex: 100,
-        background: 'rgba(28,28,30,0.4)', backdropFilter: 'blur(8px)',
+        background: 'rgba(28,28,30,0.44)', backdropFilter: 'blur(10px)',
         display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 16,
       }}
     >
       <div
         onClick={(e) => e.stopPropagation()}
         className="glass-strong pop-in"
-        style={{ width: 380, maxWidth: '100%', padding: 28, position: 'relative' }}
+        style={{
+          width: 380, maxWidth: '100%', padding: 32, position: 'relative',
+          borderRadius: 20, boxShadow: '0 24px 60px rgba(0,0,0,0.22)',
+        }}
       >
         <button
           onClick={onClose}
           aria-label="Close"
-          style={{
-            position: 'absolute', top: 14, right: 14, width: 28, height: 28, borderRadius: '50%',
-            border: 'none', background: 'rgba(0,0,0,0.06)', color: 'var(--ink)', cursor: 'pointer',
-          }}
+          style={closeButtonStyle}
+          onMouseEnter={(e) => (e.currentTarget.style.background = 'rgba(0,0,0,0.1)')}
+          onMouseLeave={(e) => (e.currentTarget.style.background = 'rgba(0,0,0,0.06)')}
         >
           ✕
         </button>
 
         {stage === 'form' && (
           <>
+            <div style={{ marginBottom: 22 }}>
+              <h2 style={titleStyle}>
+                {tab === 'signin' ? 'Welcome back' : 'Create your account'}
+              </h2>
+              <p style={subtitleStyle}>
+                {tab === 'signin'
+                  ? 'Sign in to continue to anonroom'
+                  : 'Join anonymously — no real name required'}
+              </p>
+            </div>
+
             {/* Sliding tab switcher */}
             <div
               style={{
                 position: 'relative', display: 'flex', background: 'rgba(0,0,0,0.05)',
-                borderRadius: 12, padding: 4, marginBottom: 24,
+                borderRadius: 13, padding: 4, marginBottom: 24,
               }}
             >
               <div
                 style={{
                   position: 'absolute', top: 4, bottom: 4, width: 'calc(50% - 4px)',
                   left: tab === 'signin' ? 4 : 'calc(50% + 0px)',
-                  background: '#fff', borderRadius: 9,
-                  transition: 'left 220ms cubic-bezier(0.34,1.56,0.64,1)',
-                  boxShadow: '0 1px 4px rgba(0,0,0,0.12)',
+                  background: '#fff', borderRadius: 10,
+                  transition: 'left 260ms cubic-bezier(0.34,1.56,0.64,1)',
+                  boxShadow: '0 1px 6px rgba(0,0,0,0.14)',
                 }}
               />
               <button
                 onClick={() => switchTab('signin')}
                 style={{
-                  flex: 1, zIndex: 1, padding: '8px 0', border: 'none', background: 'transparent',
-                  fontWeight: 600, color: tab === 'signin' ? 'var(--ink)' : 'var(--dim)', cursor: 'pointer',
+                  flex: 1, zIndex: 1, padding: '9px 0', border: 'none', background: 'transparent',
+                  fontWeight: 600, fontSize: 14, letterSpacing: -0.1, borderRadius: 10,
+                  color: tab === 'signin' ? 'var(--ink)' : 'var(--dim)', cursor: 'pointer',
+                  transition: 'color 180ms ease',
                 }}
               >
                 Sign In
@@ -210,8 +253,10 @@ export default function AuthModal({ open, onClose, initialTab = 'signin', onVeri
               <button
                 onClick={() => switchTab('signup')}
                 style={{
-                  flex: 1, zIndex: 1, padding: '8px 0', border: 'none', background: 'transparent',
-                  fontWeight: 600, color: tab === 'signup' ? 'var(--ink)' : 'var(--dim)', cursor: 'pointer',
+                  flex: 1, zIndex: 1, padding: '9px 0', border: 'none', background: 'transparent',
+                  fontWeight: 600, fontSize: 14, letterSpacing: -0.1, borderRadius: 10,
+                  color: tab === 'signup' ? 'var(--ink)' : 'var(--dim)', cursor: 'pointer',
+                  transition: 'color 180ms ease',
                 }}
               >
                 Create Account
@@ -219,66 +264,91 @@ export default function AuthModal({ open, onClose, initialTab = 'signin', onVeri
             </div>
 
             {tab === 'signin' ? (
-              <form onSubmit={handleSignIn} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <form onSubmit={handleSignIn} style={formStyle}>
                 <input
                   type="email" placeholder="Email" value={email} required
-                  onChange={(e) => setEmail(e.target.value)} style={inputStyle}
+                  onChange={(e) => setEmail(e.target.value)}
+                  onFocus={() => setFocusedField('email')}
+                  onBlur={() => setFocusedField(null)}
+                  style={fieldStyle('email')}
                 />
                 <input
                   type="password" placeholder="Password" value={password} required
-                  onChange={(e) => setPassword(e.target.value)} style={inputStyle}
+                  onChange={(e) => setPassword(e.target.value)}
+                  onFocus={() => setFocusedField('password')}
+                  onBlur={() => setFocusedField(null)}
+                  style={fieldStyle('password')}
                 />
                 {error && <p style={errorStyle}>{error}</p>}
-                <button type="submit" disabled={submitting} style={primaryButtonStyle}>
+                <button
+                  type="submit" disabled={submitting}
+                  style={submitting ? primaryButtonDisabledStyle : primaryButtonStyle}
+                >
                   {submitting ? 'Signing in…' : 'Sign In'}
                 </button>
               </form>
             ) : (
-              <form onSubmit={handleSignUp} style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <form onSubmit={handleSignUp} style={formStyle}>
                 <input
                   type="text" placeholder="Username" value={username} required
-                  onChange={(e) => setUsername(e.target.value)} style={inputStyle}
+                  onChange={(e) => setUsername(e.target.value)}
+                  onFocus={() => setFocusedField('username')}
+                  onBlur={() => setFocusedField(null)}
+                  style={fieldStyle('username')}
                 />
                 <input
                   type="email" placeholder="Email" value={email} required
-                  onChange={(e) => setEmail(e.target.value)} style={inputStyle}
+                  onChange={(e) => setEmail(e.target.value)}
+                  onFocus={() => setFocusedField('email')}
+                  onBlur={() => setFocusedField(null)}
+                  style={fieldStyle('email')}
                 />
                 <input
                   type="password" placeholder="Password" value={password} required
-                  onChange={(e) => setPassword(e.target.value)} style={inputStyle}
+                  onChange={(e) => setPassword(e.target.value)}
+                  onFocus={() => setFocusedField('password')}
+                  onBlur={() => setFocusedField(null)}
+                  style={fieldStyle('password')}
                 />
                 <input
                   type="password" placeholder="Confirm password" value={confirmPassword} required
-                  onChange={(e) => setConfirmPassword(e.target.value)} style={inputStyle}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  onFocus={() => setFocusedField('confirmPassword')}
+                  onBlur={() => setFocusedField(null)}
+                  style={fieldStyle('confirmPassword')}
                 />
 
-                <label style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 13, color: 'var(--dim)' }}>
+                <label style={termsLabelStyle}>
                   <span
                     role="switch"
                     aria-checked={acceptedTerms}
                     onClick={() => setAcceptedTerms((v) => !v)}
                     style={{
-                      width: 40, height: 24, borderRadius: 12, cursor: 'pointer', flexShrink: 0,
-                      background: acceptedTerms ? 'var(--blue)' : 'rgba(0,0,0,0.15)',
-                      transition: 'background 180ms ease', position: 'relative',
+                      width: 38, height: 22, borderRadius: 11, cursor: 'pointer', flexShrink: 0,
+                      background: acceptedTerms ? 'var(--blue)' : 'rgba(0,0,0,0.14)',
+                      transition: 'background 200ms ease', position: 'relative',
                     }}
                   >
                     <span
                       style={{
                         position: 'absolute', top: 2, left: acceptedTerms ? 18 : 2,
-                        width: 20, height: 20, borderRadius: '50%', background: '#fff',
-                        transition: 'left 180ms cubic-bezier(0.34,1.56,0.64,1)',
-                        boxShadow: '0 1px 3px rgba(0,0,0,0.3)',
+                        width: 18, height: 18, borderRadius: '50%', background: '#fff',
+                        transition: 'left 200ms cubic-bezier(0.34,1.56,0.64,1)',
+                        boxShadow: '0 1px 3px rgba(0,0,0,0.28)',
                       }}
                     />
                   </span>
                   <span>
-                    I agree to the <a href="#">Terms</a> and <a href="#">Privacy Policy</a>
+                    I agree to the <a href="#" style={linkStyle}>Terms</a> and{' '}
+                    <a href="#" style={linkStyle}>Privacy Policy</a>
                   </span>
                 </label>
 
                 {error && <p style={errorStyle}>{error}</p>}
-                <button type="submit" disabled={submitting} style={primaryButtonStyle}>
+                <button
+                  type="submit" disabled={submitting}
+                  style={submitting ? primaryButtonDisabledStyle : primaryButtonStyle}
+                >
                   {submitting ? 'Creating account…' : 'Create Account'}
                 </button>
               </form>
@@ -287,11 +357,11 @@ export default function AuthModal({ open, onClose, initialTab = 'signin', onVeri
         )}
 
         {stage === 'otp' && (
-          <form onSubmit={handleVerifyOtp} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <form onSubmit={handleVerifyOtp} style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
             <div>
-              <p style={{ margin: 0, fontWeight: 600, color: 'var(--ink)' }}>Check your email</p>
-              <p style={{ margin: '4px 0 0', fontSize: 13, color: 'var(--dim)' }}>
-                Enter the 6-digit code we sent to {email}
+              <h2 style={titleStyle}>Check your email</h2>
+              <p style={subtitleStyle}>
+                Enter the 6-digit code we sent to <span style={{ color: 'var(--ink)', fontWeight: 600 }}>{email}</span>
               </p>
             </div>
 
@@ -303,16 +373,26 @@ export default function AuthModal({ open, onClose, initialTab = 'signin', onVeri
                   value={digit}
                   onChange={(e) => handleOtpChange(i, e.target.value)}
                   onKeyDown={(e) => handleOtpKeyDown(i, e)}
+                  onFocus={() => setFocusedField(`otp-${i}`)}
+                  onBlur={() => setFocusedField(null)}
                   inputMode="numeric"
                   maxLength={1}
-                  style={{ ...inputStyle, width: 40, textAlign: 'center', fontSize: 20, padding: '10px 0' }}
+                  style={{
+                    ...inputStyle,
+                    ...(focusedField === `otp-${i}` ? inputFocusStyle : null),
+                    width: 44, height: 52, textAlign: 'center', fontSize: 20,
+                    fontWeight: 600, padding: 0,
+                  }}
                 />
               ))}
             </div>
 
-            {error && <p style={errorStyle}>{error}</p>}
+            {error && <p style={{ ...errorStyle, textAlign: 'center' }}>{error}</p>}
 
-            <button type="submit" disabled={submitting} style={primaryButtonStyle}>
+            <button
+              type="submit" disabled={submitting}
+              style={submitting ? primaryButtonDisabledStyle : primaryButtonStyle}
+            >
               {submitting ? 'Verifying…' : 'Verify'}
             </button>
 
@@ -321,8 +401,10 @@ export default function AuthModal({ open, onClose, initialTab = 'signin', onVeri
               onClick={handleResend}
               disabled={resendCooldown > 0}
               style={{
-                background: 'none', border: 'none', fontSize: 13, cursor: resendCooldown > 0 ? 'default' : 'pointer',
+                background: 'none', border: 'none', fontSize: 13, fontWeight: 500,
+                cursor: resendCooldown > 0 ? 'default' : 'pointer', textAlign: 'center',
                 color: resendCooldown > 0 ? 'var(--dim)' : 'var(--blue)',
+                transition: 'opacity 180ms ease',
               }}
             >
               {resendCooldown > 0 ? `Resend code in ${resendCooldown}s` : 'Resend code'}
@@ -334,14 +416,51 @@ export default function AuthModal({ open, onClose, initialTab = 'signin', onVeri
   );
 }
 
+const formStyle = { display: 'flex', flexDirection: 'column', gap: 12 };
+
+const titleStyle = {
+  margin: 0, fontSize: 20, fontWeight: 700, color: 'var(--ink)', letterSpacing: -0.3,
+};
+
+const subtitleStyle = {
+  margin: '4px 0 0', fontSize: 13.5, color: 'var(--dim)', lineHeight: 1.4,
+};
+
+const closeButtonStyle = {
+  position: 'absolute', top: 16, right: 16, width: 28, height: 28, borderRadius: '50%',
+  border: 'none', background: 'rgba(0,0,0,0.06)', color: 'var(--ink)', cursor: 'pointer',
+  fontSize: 13, display: 'flex', alignItems: 'center', justifyContent: 'center',
+  transition: 'background 160ms ease',
+};
+
 const inputStyle = {
   padding: '12px 14px', borderRadius: 12, border: '1px solid var(--glass-border)',
   background: 'rgba(255,255,255,0.7)', fontSize: 15, color: 'var(--ink)', outline: 'none',
+  transition: 'border-color 160ms ease, box-shadow 160ms ease, background 160ms ease',
+};
+
+const inputFocusStyle = {
+  borderColor: 'var(--blue)',
+  background: '#fff',
+  boxShadow: '0 0 0 3px rgba(10,132,255,0.15)',
 };
 
 const primaryButtonStyle = {
-  padding: '12px 0', borderRadius: 12, border: 'none', background: 'var(--blue)',
+  padding: '13px 0', borderRadius: 12, border: 'none', background: 'var(--blue)',
   color: '#fff', fontWeight: 600, fontSize: 15, cursor: 'pointer',
+  boxShadow: '0 6px 16px rgba(10,132,255,0.28)',
+  transition: 'transform 120ms ease, box-shadow 120ms ease, opacity 120ms ease',
 };
+
+const primaryButtonDisabledStyle = {
+  ...primaryButtonStyle,
+  opacity: 0.6, cursor: 'default', boxShadow: 'none',
+};
+
+const termsLabelStyle = {
+  display: 'flex', alignItems: 'center', gap: 10, fontSize: 12.5, color: 'var(--dim)', lineHeight: 1.4,
+};
+
+const linkStyle = { color: 'var(--blue)', textDecoration: 'none', fontWeight: 500 };
 
 const errorStyle = { margin: 0, fontSize: 13, color: 'var(--red)' };

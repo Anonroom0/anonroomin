@@ -4,6 +4,9 @@ import { useAuth } from '../lib/authContext';
 import { RATE_LIMIT_MS, createCooldown } from '../lib/rateLimit';
 import MediaViewer from './MediaViewer';
 
+const REPLY_SNIPPET_LENGTH = 80;
+const SUPPORT_LABEL = 'Anonroom Support';
+
 function initials(username) {
   if (!username) return '?';
   return username.slice(0, 2).toUpperCase();
@@ -29,6 +32,57 @@ function guessMediaType(file) {
   return file.type.startsWith('image/') ? 'image' : 'file';
 }
 
+function replySnippet(message) {
+  if (!message) return 'Original message';
+  if (message.media_type) return '📄 Attachment';
+  const text = message.text || '';
+  return text.length > REPLY_SNIPPET_LENGTH ? `${text.slice(0, REPLY_SNIPPET_LENGTH)}…` : text;
+}
+
+// Never exposes a real username/avatar for admin accounts — callers should
+// only ever render the fields returned here, not the raw profile object.
+function displayIdentity(user) {
+  if (user?.is_admin) {
+    return { name: SUPPORT_LABEL, avatarUrl: null, isSupport: true };
+  }
+  return { name: user?.username || 'Unknown user', avatarUrl: user?.avatar_url || null, isSupport: false };
+}
+
+function IdentityAvatar({ identity, size = 32 }) {
+  if (identity.isSupport) {
+    return (
+      <div
+        style={{
+          width: size, height: size, borderRadius: '50%', background: 'var(--ink)', color: '#fff',
+          fontSize: size * 0.44, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
+        }}
+      >
+        🎧
+      </div>
+    );
+  }
+  if (identity.avatarUrl) {
+    return (
+      <img
+        src={identity.avatarUrl}
+        alt=""
+        style={{ width: size, height: size, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }}
+      />
+    );
+  }
+  return (
+    <div
+      style={{
+        width: size, height: size, borderRadius: '50%', background: 'var(--blue)', color: '#fff',
+        fontWeight: 700, fontSize: size * 0.4, display: 'flex', alignItems: 'center', justifyContent: 'center',
+        flexShrink: 0,
+      }}
+    >
+      {initials(identity.name)}
+    </div>
+  );
+}
+
 export default function DirectMessages({ openThreadWithUserId }) {
   const { session } = useAuth();
   const userId = session?.user?.id;
@@ -44,6 +98,8 @@ export default function DirectMessages({ openThreadWithUserId }) {
   const [cooldownPercent, setCooldownPercent] = useState(0);
   const [toast, setToast] = useState('');
   const [viewerMedia, setViewerMedia] = useState(null);
+  const [replyingTo, setReplyingTo] = useState(null); // { id, sender_name, text, media_type }
+  const [hoveredMessageId, setHoveredMessageId] = useState(null);
 
   const cooldownRef = useRef(null);
   const fileInputRef = useRef(null);
@@ -81,7 +137,7 @@ export default function DirectMessages({ openThreadWithUserId }) {
       if (otherIds.length > 0) {
         const { data: profileRows, error: profilesError } = await supabase
           .from('profiles')
-          .select('id, username, avatar_url')
+          .select('id, username, avatar_url, is_admin')
           .in('id', otherIds);
 
         if (profilesError) {
@@ -145,7 +201,7 @@ export default function DirectMessages({ openThreadWithUserId }) {
 
       const { data: otherProfile } = await supabase
         .from('profiles')
-        .select('id, username, avatar_url')
+        .select('id, username, avatar_url, is_admin')
         .eq('id', openThreadWithUserId)
         .maybeSingle();
 
@@ -167,7 +223,7 @@ export default function DirectMessages({ openThreadWithUserId }) {
 
     supabase
       .from('dm_messages')
-      .select('id, thread_id, sender_id, text, media_url, media_type, is_group_request, created_at')
+      .select('id, thread_id, sender_id, text, media_url, media_type, is_group_request, reply_to_id, created_at')
       .eq('thread_id', activeThread.id)
       .order('created_at', { ascending: true })
       .then(({ data, error }) => {
@@ -213,6 +269,18 @@ export default function DirectMessages({ openThreadWithUserId }) {
     toastTimeoutRef.current = setTimeout(() => setToast(''), 3000);
   }
 
+  function startReply(message) {
+    const isOwn = message.sender_id === userId;
+    setReplyingTo({
+      id: message.id,
+      sender_name: isOwn
+        ? (session?.user?.user_metadata?.username || 'You')
+        : displayIdentity(activeThread?.otherUser).name,
+      text: message.text,
+      media_type: message.media_type,
+    });
+  }
+
   async function handleSend(e) {
     e.preventDefault();
     const trimmed = text.trim();
@@ -223,6 +291,7 @@ export default function DirectMessages({ openThreadWithUserId }) {
       thread_id: activeThread.id,
       sender_id: userId,
       text: trimmed,
+      reply_to_id: replyingTo?.id ?? null,
     });
     setSending(false);
 
@@ -237,6 +306,7 @@ export default function DirectMessages({ openThreadWithUserId }) {
     }
 
     setText('');
+    setReplyingTo(null);
     cooldownRef.current?.start();
   }
 
@@ -263,6 +333,7 @@ export default function DirectMessages({ openThreadWithUserId }) {
       sender_id: userId,
       media_url: publicUrlData.publicUrl,
       media_type: guessMediaType(file),
+      reply_to_id: replyingTo?.id ?? null,
     });
 
     setUploading(false);
@@ -277,6 +348,7 @@ export default function DirectMessages({ openThreadWithUserId }) {
       return;
     }
 
+    setReplyingTo(null);
     cooldownRef.current?.start();
   }
 
@@ -284,44 +356,49 @@ export default function DirectMessages({ openThreadWithUserId }) {
 
   if (!session) {
     return (
-      <div style={{ textAlign: 'center', color: 'var(--dim)', fontSize: 14, padding: '40px 0' }}>
-        Sign in to view your messages.
+      <div
+        style={{
+          minHeight: '100vh', background: 'var(--bg)', display: 'flex',
+          alignItems: 'center', justifyContent: 'center',
+        }}
+      >
+        <p style={{ textAlign: 'center', color: 'var(--dim)', fontSize: 14 }}>
+          Sign in to view your messages.
+        </p>
       </div>
     );
   }
 
   if (activeThread) {
+    const otherIdentity = displayIdentity(activeThread.otherUser);
     let lastDayKey = null;
+
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 400 }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '4px 4px 14px' }}>
+      <div style={{ minHeight: '100vh', background: 'var(--bg)', display: 'flex', flexDirection: 'column' }}>
+        {/* Header */}
+        <header
+          className="glass-strong"
+          style={{
+            display: 'flex', alignItems: 'center', gap: 12, padding: '14px 20px',
+            borderRadius: 0, position: 'sticky', top: 0, zIndex: 10,
+          }}
+        >
           <button
             onClick={() => setActiveThread(null)}
-            style={{ border: 'none', background: 'none', color: 'var(--blue)', fontSize: 18, cursor: 'pointer' }}
+            aria-label="Back to conversations"
+            style={{ border: 'none', background: 'none', color: 'var(--blue)', fontSize: 20, cursor: 'pointer', padding: 0 }}
           >
             ←
           </button>
-          {activeThread.otherUser.avatar_url ? (
-            <img
-              src={activeThread.otherUser.avatar_url}
-              alt=""
-              style={{ width: 32, height: 32, borderRadius: '50%', objectFit: 'cover' }}
-            />
-          ) : (
-            <div
-              style={{
-                width: 32, height: 32, borderRadius: '50%', background: 'var(--blue)', color: '#fff',
-                fontSize: 12, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center',
-              }}
-            >
-              {initials(activeThread.otherUser.username)}
-            </div>
-          )}
-          <span style={{ fontWeight: 700, color: 'var(--ink)' }}>{activeThread.otherUser.username}</span>
-        </div>
+          <IdentityAvatar identity={otherIdentity} size={34} />
+          <span style={{ fontWeight: 700, color: 'var(--ink)', fontSize: 16 }}>{otherIdentity.name}</span>
+        </header>
 
-        <div ref={scrollRef} style={{ flex: 1, overflowY: 'auto', padding: '4px 4px 8px' }}>
-          {messagesLoading && <p style={{ textAlign: 'center', color: 'var(--dim)', fontSize: 14 }}>Loading…</p>}
+        {/* Messages */}
+        <div ref={scrollRef} style={{ flex: 1, overflowY: 'auto', padding: '16px 16px 8px' }}>
+          {messagesLoading && (
+            <p style={{ textAlign: 'center', color: 'var(--dim)', fontSize: 14, padding: '24px 0' }}>Loading…</p>
+          )}
           {!messagesLoading && messages.length === 0 && (
             <p style={{ textAlign: 'center', color: 'var(--dim)', fontSize: 14, padding: '24px 0' }}>
               No messages yet. Say hello 👋
@@ -334,6 +411,11 @@ export default function DirectMessages({ openThreadWithUserId }) {
               const key = new Date(message.created_at).toDateString();
               const showDayDivider = key !== lastDayKey;
               lastDayKey = key;
+
+              const repliedMessage = message.reply_to_id
+                ? messages.find((m) => m.id === message.reply_to_id) || null
+                : null;
+              const isHovered = hoveredMessageId === message.id;
 
               return (
                 <div key={message.id}>
@@ -353,6 +435,8 @@ export default function DirectMessages({ openThreadWithUserId }) {
                   )}
                   <div
                     className="pop-in"
+                    onMouseEnter={() => setHoveredMessageId(message.id)}
+                    onMouseLeave={() => setHoveredMessageId((current) => (current === message.id ? null : current))}
                     style={{
                       display: 'flex', flexDirection: 'column',
                       alignItems: isOwn ? 'flex-end' : 'flex-start', marginBottom: 10,
@@ -360,43 +444,99 @@ export default function DirectMessages({ openThreadWithUserId }) {
                   >
                     <div
                       style={{
-                        maxWidth: '75%', padding: message.media_url ? 4 : '10px 14px', borderRadius: 16,
-                        borderBottomRightRadius: isOwn ? 4 : 16,
-                        borderBottomLeftRadius: isOwn ? 16 : 4,
-                        background: isOwn ? 'var(--blue)' : 'var(--bubble-them)',
-                        color: isOwn ? '#fff' : 'var(--ink)',
+                        display: 'flex', alignItems: 'flex-end', gap: 4,
+                        flexDirection: isOwn ? 'row-reverse' : 'row',
+                        maxWidth: '85%',
                       }}
                     >
-                      {message.media_url ? (
-                        <button
-                          onClick={() =>
-                            setViewerMedia({ url: message.media_url, type: message.media_type || 'file' })
-                          }
-                          style={{ border: 'none', background: 'none', padding: 0, cursor: 'pointer', display: 'block' }}
-                        >
-                          {message.media_type === 'image' ? (
-                            <img
-                              src={message.media_url}
-                              alt=""
-                              style={{ maxWidth: 220, maxHeight: 220, borderRadius: 12, display: 'block' }}
-                            />
-                          ) : (
+                      <div
+                        style={{
+                          maxWidth: '100%', padding: message.media_url ? 4 : '10px 14px', borderRadius: 16,
+                          borderBottomRightRadius: isOwn ? 4 : 16,
+                          borderBottomLeftRadius: isOwn ? 16 : 4,
+                          background: isOwn ? 'var(--blue)' : 'var(--bubble-them)',
+                          color: isOwn ? '#fff' : 'var(--ink)',
+                        }}
+                      >
+                        {message.reply_to_id && (
+                          <div
+                            style={{
+                              display: 'flex', flexDirection: 'column', gap: 1,
+                              padding: '5px 9px', marginBottom: 6,
+                              borderRadius: 8,
+                              background: isOwn ? 'rgba(255,255,255,0.16)' : 'rgba(0,0,0,0.05)',
+                              borderLeft: '3px solid var(--blue)',
+                            }}
+                          >
                             <span
                               style={{
-                                display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px',
-                                color: isOwn ? '#fff' : 'var(--ink)', fontSize: 13,
+                                fontSize: 11.5, fontWeight: 700,
+                                color: isOwn ? 'rgba(255,255,255,0.9)' : 'var(--blue)',
                               }}
                             >
-                              📄 Attachment
+                              {repliedMessage
+                                ? (repliedMessage.sender_id === userId
+                                    ? (session?.user?.user_metadata?.username || 'You')
+                                    : otherIdentity.name)
+                                : 'Original message'}
                             </span>
-                          )}
-                        </button>
-                      ) : (
-                        <span style={{ fontSize: 15, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
-                          {message.text}
-                        </span>
-                      )}
+                            <span
+                              style={{
+                                fontSize: 12, color: isOwn ? 'rgba(255,255,255,0.75)' : 'var(--dim)',
+                                whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                                maxWidth: 220,
+                              }}
+                            >
+                              {replySnippet(repliedMessage)}
+                            </span>
+                          </div>
+                        )}
+
+                        {message.media_url ? (
+                          <button
+                            onClick={() =>
+                              setViewerMedia({ url: message.media_url, type: message.media_type || 'file' })
+                            }
+                            style={{ border: 'none', background: 'none', padding: 0, cursor: 'pointer', display: 'block' }}
+                          >
+                            {message.media_type === 'image' ? (
+                              <img
+                                src={message.media_url}
+                                alt=""
+                                style={{ maxWidth: 220, maxHeight: 220, borderRadius: 12, display: 'block' }}
+                              />
+                            ) : (
+                              <span
+                                style={{
+                                  display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px',
+                                  color: isOwn ? '#fff' : 'var(--ink)', fontSize: 13,
+                                }}
+                              >
+                                📄 Attachment
+                              </span>
+                            )}
+                          </button>
+                        ) : (
+                          <span style={{ fontSize: 15, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                            {message.text}
+                          </span>
+                        )}
+                      </div>
+
+                      <button
+                        onClick={() => startReply(message)}
+                        aria-label="Reply"
+                        style={{
+                          border: 'none', background: 'none', cursor: 'pointer', flexShrink: 0,
+                          fontSize: 14, padding: 4, color: 'var(--dim)', lineHeight: 1,
+                          opacity: isHovered ? 1 : 0.45,
+                          transition: 'opacity 140ms ease',
+                        }}
+                      >
+                        ↩︎
+                      </button>
                     </div>
+
                     <span style={{ fontSize: 10, color: 'var(--dim)', marginTop: 3, marginInline: 4 }}>
                       {formatTime(message.created_at)}
                     </span>
@@ -406,7 +546,51 @@ export default function DirectMessages({ openThreadWithUserId }) {
             })}
         </div>
 
-        <form onSubmit={handleSend} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '8px 4px' }}>
+        {/* Reply preview strip */}
+        {replyingTo && (
+          <div
+            className="glass-strong"
+            style={{
+              display: 'flex', alignItems: 'center', gap: 10, padding: '8px 16px',
+              borderRadius: 0, borderTop: '1px solid var(--glass-border)',
+            }}
+          >
+            <div style={{ width: 3, height: 30, borderRadius: 2, background: 'var(--blue)', flexShrink: 0 }} />
+            <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
+              <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--blue)' }}>
+                Replying to {replyingTo.sender_name}
+              </span>
+              <span
+                style={{
+                  fontSize: 12.5, color: 'var(--dim)',
+                  whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis',
+                }}
+              >
+                {replySnippet(replyingTo)}
+              </span>
+            </div>
+            <button
+              onClick={() => setReplyingTo(null)}
+              aria-label="Cancel reply"
+              style={{
+                border: 'none', background: 'rgba(0,0,0,0.06)', width: 24, height: 24, borderRadius: '50%',
+                color: 'var(--ink)', cursor: 'pointer', fontSize: 12, flexShrink: 0,
+              }}
+            >
+              ✕
+            </button>
+          </div>
+        )}
+
+        {/* Composer */}
+        <form
+          onSubmit={handleSend}
+          className="glass-strong"
+          style={{
+            display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px',
+            borderRadius: 0, position: 'sticky', bottom: 0,
+          }}
+        >
           <button
             type="button"
             onClick={() => fileInputRef.current?.click()}
@@ -475,46 +659,51 @@ export default function DirectMessages({ openThreadWithUserId }) {
 
   // ---- Inbox --------------------------------------------------------------
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
-      {threadsLoading && <p style={{ textAlign: 'center', color: 'var(--dim)', fontSize: 14 }}>Loading…</p>}
+    <div style={{ minHeight: '100vh', background: 'var(--bg)', display: 'flex', flexDirection: 'column' }}>
+      <header
+        className="glass-strong"
+        style={{
+          display: 'flex', alignItems: 'center', padding: '14px 20px',
+          borderRadius: 0, position: 'sticky', top: 0, zIndex: 10,
+        }}
+      >
+        <span style={{ fontWeight: 700, color: 'var(--ink)', fontSize: 17, letterSpacing: -0.2 }}>Messages</span>
+      </header>
 
-      {!threadsLoading && threads.length === 0 && (
-        <p style={{ textAlign: 'center', color: 'var(--dim)', fontSize: 14, padding: '24px 0' }}>
-          No conversations yet.
-        </p>
-      )}
+      <div style={{ flex: 1, overflowY: 'auto', padding: '16px 16px 24px' }}>
+        {threadsLoading && (
+          <p style={{ textAlign: 'center', color: 'var(--dim)', fontSize: 14 }}>Loading…</p>
+        )}
 
-      {!threadsLoading &&
-        threads.map((thread) => (
-          <button
-            key={thread.id}
-            onClick={() => setActiveThread({ id: thread.id, otherUser: thread.otherUser })}
-            className="glass-panel"
-            style={{
-              display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px',
-              border: 'none', textAlign: 'left', cursor: 'pointer', width: '100%',
-            }}
-          >
-            {thread.otherUser.avatar_url ? (
-              <img
-                src={thread.otherUser.avatar_url}
-                alt=""
-                style={{ width: 40, height: 40, borderRadius: '50%', objectFit: 'cover' }}
-              />
-            ) : (
-              <div
-                style={{
-                  width: 40, height: 40, borderRadius: '50%', background: 'var(--blue)', color: '#fff',
-                  fontWeight: 700, fontSize: 14, display: 'flex', alignItems: 'center', justifyContent: 'center',
-                }}
-              >
-                {initials(thread.otherUser.username)}
-              </div>
-            )}
-            <span style={{ fontWeight: 600, color: 'var(--ink)', flex: 1 }}>{thread.otherUser.username}</span>
-            <span style={{ fontSize: 12, color: 'var(--dim)' }}>{relativeTime(thread.created_at)}</span>
-          </button>
-        ))}
+        {!threadsLoading && threads.length === 0 && (
+          <p style={{ textAlign: 'center', color: 'var(--dim)', fontSize: 14, padding: '24px 0' }}>
+            No conversations yet.
+          </p>
+        )}
+
+        {!threadsLoading && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+            {threads.map((thread) => {
+              const identity = displayIdentity(thread.otherUser);
+              return (
+                <button
+                  key={thread.id}
+                  onClick={() => setActiveThread({ id: thread.id, otherUser: thread.otherUser })}
+                  className="glass-panel"
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px',
+                    border: 'none', textAlign: 'left', cursor: 'pointer', width: '100%',
+                  }}
+                >
+                  <IdentityAvatar identity={identity} size={40} />
+                  <span style={{ fontWeight: 600, color: 'var(--ink)', flex: 1 }}>{identity.name}</span>
+                  <span style={{ fontSize: 12, color: 'var(--dim)' }}>{relativeTime(thread.created_at)}</span>
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
