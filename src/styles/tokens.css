@@ -1,0 +1,86 @@
+/* =============================================================================
+   anonroom.in — shared design tokens
+   Simple Apple-style palette: white/gray glass surfaces, near-black text,
+   single blue accent. No other accent colors — --green/--red are reserved
+   for status only (online dots, error text), never decorative.
+   ============================================================================= */
+
+:root {
+  /* Text */
+  --ink: #1c1c1e;   /* primary text */
+  --dim: #6e6e73;   /* secondary/muted text */
+
+  /* Accent (the only accent color in the app) */
+  --blue: #0a84ff;
+
+  /* Status colors — functional use only */
+  --green: #34c759;
+  --red: #ff3b30;
+
+  /* Surfaces */
+  --bg: #f2f2f7;
+
+  /* Glass */
+  --glass: rgba(255, 255, 255, 0.55);
+  --glass-strong: rgba(255, 255, 255, 0.75);
+  --glass-border: rgba(255, 255, 255, 0.4);
+
+  /* Chat bubbles */
+  --bubble-them: #e9e9eb;
+}
+
+/* -----------------------------------------------------------------------
+   Glass surfaces
+   ----------------------------------------------------------------------- */
+
+.glass-panel {
+  background: var(--glass);
+  border: 1px solid var(--glass-border);
+  border-radius: 20px;
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08);
+}
+
+.glass-strong {
+  background: var(--glass-strong);
+  border: 1px solid var(--glass-border);
+  border-radius: 20px;
+  backdrop-filter: blur(32px) saturate(180%);
+  -webkit-backdrop-filter: blur(32px) saturate(180%);
+  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.12);
+}
+
+/* -----------------------------------------------------------------------
+   Motion
+   ----------------------------------------------------------------------- */
+
+/* New message bubbles / cards pop in on arrival */
+@keyframes pop-in {
+  from {
+    opacity: 0;
+    transform: scale(0.92) translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.pop-in {
+  animation: pop-in 220ms cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+/* Slow-drifting background gradient blobs, used behind content on
+   Home.jsx and GroupChat.jsx */
+@keyframes float {
+  0% {
+    transform: translate(0, 0) scale(1);
+  }
+  50% {
+    transform: translate(-4%, 6%) scale(1.08);
+  }
+  100% {
+    transform: translate(0, 0) scale(1);
+  }
+}
