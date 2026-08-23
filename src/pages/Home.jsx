@@ -20,6 +20,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import supabase from '../lib/supabaseClient';
 import { useAuth } from '../lib/authContext';
+import { getGroupUrl } from '../lib/subdomain';
 
 // Import our newly upgraded Apple-Liquid Modals & Views
 import AuthModal from './AuthModal';
@@ -333,6 +334,15 @@ export default function Home() {
     setSearchQuery(''); 
   }
 
+  // Groups actually live on their own subdomain (slug.anonroom.in). Clicking
+  // one in the sidebar now navigates the browser there for real — same
+  // destination you'd land on typing the subdomain in by hand — instead of
+  // only swapping local React state, which is what made the in-app click
+  // behave differently from a manual subdomain visit.
+  function handleOpenGroup(slug) {
+    window.location.href = getGroupUrl(slug);
+  }
+
   // Resolves the logged-in user's identity for the top-left Avatar
   const profileIdentity = session 
     ? { name: profile?.username || 'You', avatarUrl: profile?.avatar_url || null, isAdmin: false } 
@@ -345,7 +355,7 @@ export default function Home() {
   // MAIN RENDER
   // --------------------------------------------------------------------------
   return (
-    <div style={{ display: 'flex', height: '100vh', width: '100vw', position: 'relative' }}>
+    <div className="app-viewport" style={{ display: 'flex', width: '100vw', position: 'relative' }}>
       <LiquidBackgroundEffects />
 
       {/* 
@@ -456,7 +466,7 @@ export default function Home() {
                       <button 
                         key={group.id} 
                         className="chat-row"
-                        onClick={() => handleOpenChat(group.slug, 'group')} 
+                        onClick={() => handleOpenGroup(group.slug)} 
                         style={{ 
                           display: 'flex', alignItems: 'center', gap: 12, padding: '10px 16px', 
                           border: 'none', textAlign: 'left', cursor: 'pointer', width: '100%', 

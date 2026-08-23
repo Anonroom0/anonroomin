@@ -49,3 +49,33 @@ export function getRootDomainUrl() {
   const rootHost = parts.slice(1).join('.'); // drop the group segment
   return `${protocol}//${rootHost}${portSuffix}/`;
 }
+
+// Builds the URL for actually opening a group on its own subdomain
+// (slug.anonroom.in) — this is what a click on a group in the sidebar
+// should navigate the browser to, on both desktop and mobile, instead of
+// only rendering GroupChat in local React state (which is what made
+// clicking a group behave differently from typing the subdomain in by
+// hand). On local/dev hosts, where wildcard subdomains don't resolve,
+// this falls back to the ?group= query param on the current host instead.
+export function getGroupUrl(slug) {
+  const { protocol, hostname, port } = window.location;
+  const parts = hostname.split('.');
+
+  const isLocalOrDev =
+    hostname === 'localhost' ||
+    /^\d{1,3}(\.\d{1,3}){3}$/.test(hostname) ||
+    parts.length < 3;
+
+  const portSuffix = port ? `:${port}` : '';
+
+  if (isLocalOrDev) {
+    return `${protocol}//${hostname}${portSuffix}/?group=${encodeURIComponent(slug)}`;
+  }
+
+  // If we're already on some-group.anonroom.in or www.anonroom.in, strip
+  // that leading segment; if we're on the bare 2-part root domain
+  // (anonroom.in), there's no segment to strip.
+  const rootHost = parts.length <= 2 ? hostname : parts.slice(1).join('.');
+
+  return `${protocol}//${encodeURIComponent(slug)}.${rootHost}${portSuffix}/`;
+}

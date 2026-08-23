@@ -438,7 +438,13 @@ function SwipeableMessage({ children, onSwipe, disabled }) {
         transform: `translateX(${translateX}px)`,
         transition: translateX === 0 ? 'transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1)' : 'none',
         width: '100%',
-        position: 'relative'
+        position: 'relative',
+        // Tell the browser this row only handles horizontal gestures itself;
+        // vertical drags pass straight through to the message list's native
+        // scroll instead of the two fighting each other mid-swipe (that
+        // fight was the "everything moves a little" jitter).
+        touchAction: 'pan-y',
+        willChange: 'transform',
       }}
     >
       {/* Hidden Reply Icon revealed by swipe action */}
@@ -891,6 +897,7 @@ export default function GroupChat({ groupSlug, onBack }) {
         style={{ 
           flex: 1, 
           overflowY: 'auto', 
+          overflowX: 'hidden', 
           overscrollBehavior: 'contain', 
           WebkitOverflowScrolling: 'touch',
           padding: '20px 16px', 
@@ -1190,10 +1197,12 @@ export default function GroupChat({ groupSlug, onBack }) {
         =======================================================================
       */}
       <div 
+        className="safe-bottom"
         style={{ 
           flexShrink: 0, 
           zIndex: 20, 
-          position: 'relative' 
+          position: 'sticky',
+          bottom: 0,
         }}
       >
         {!session ? (

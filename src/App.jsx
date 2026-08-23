@@ -20,8 +20,8 @@ export default function App() {
     <AuthProvider>
       {groupSlug ? (
         <div
+          className="app-viewport"
           style={{
-            height: '100vh',
             width: '100vw',
             display: 'flex',
             flexDirection: 'column',
