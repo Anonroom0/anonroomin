@@ -1,9 +1,9 @@
 const RESERVED_SEGMENTS = ['www', 'anonroom', 'localhost'];
 
 // Reserved as the FIRST path segment on the root domain, so they never get
-// mistaken for a username in the /<username> DM route. 'g' is reserved for
-// the mobile-style group route (/g/<slug>) below.
-const RESERVED_PATH_SEGMENTS = ['g', 'api', 'assets', 'static', 'favicon.ico'];
+// mistaken for a username in the /<username> DM route. (Note: 'g' has been
+// removed since mobile groups now use the subdomain route).
+const RESERVED_PATH_SEGMENTS = ['api', 'assets', 'static', 'favicon.ico'];
 
 export const ROOT_PATH = '/';
 
@@ -59,7 +59,7 @@ export function getRootDomainUrl() {
 
 // Builds the URL for actually opening a group on its own subdomain
 // (slug.anonroom.in) — this is what a click on a group in the sidebar
-// should navigate the browser to on DESKTOP, exactly like typing that
+// should navigate the browser to on DESKTOP and MOBILE, exactly like typing that
 // subdomain in by hand. On local/dev hosts, where wildcard subdomains
 // don't resolve, this falls back to the ?group= query param on the
 // current host instead.
@@ -89,17 +89,14 @@ export function getGroupUrl(slug) {
 // ----------------------------------------------------------------------------
 // PATH-BASED ROUTING (root domain only)
 // ----------------------------------------------------------------------------
-// Desktop groups live on their own subdomain (see getGroupUrl above) and
-// therefore need a real cross-origin navigation. DMs and — on mobile —
-// groups instead open in place on the SAME origin, so they get plain
-// same-origin paths that can be pushed/replaced with history.pushState
-// without a reload:
+// Desktop and mobile groups now BOTH live on their own subdomain (see getGroupUrl above)
+// and therefore need a real cross-origin navigation. DMs instead open in place
+// on the SAME origin, so they get plain same-origin paths that can be pushed/replaced
+// with history.pushState without a reload:
 //   DM:    anonroom.in/<username>
-//   Group: anonroom.in/g/<slug>       (mobile "open in place" route)
 //
 // A single leading segment is reserved for usernames, matching how the DM
-// pane opens; groups use an explicit /g/ prefix so a group slug can never
-// collide with — or be mistaken for — a username.
+// pane opens.
 
 function normalizedPathSegments() {
   return window.location.pathname
@@ -124,18 +121,4 @@ export function getDmUsernameFromPath() {
 
 export function buildDmPath(username) {
   return `/${encodeURIComponent(username)}`;
-}
-
-// Returns the slug for the mobile "open group in place" route
-// (anonroom.in/g/<slug>), or null if the current path doesn't match.
-export function getMobileGroupSlugFromPath() {
-  const segments = normalizedPathSegments();
-  if (segments.length !== 2 || segments[0] !== 'g') {
-    return null;
-  }
-  return decodeURIComponent(segments[1]);
-}
-
-export function buildMobileGroupPath(slug) {
-  return `/g/${encodeURIComponent(slug)}`;
 }

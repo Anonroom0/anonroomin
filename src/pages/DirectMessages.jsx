@@ -592,6 +592,7 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
 
   const [activeThread, setActiveThread] = useState(null);
   const [threadStatus, setThreadStatus] = useState('loading');
+  const [dbErrorDetails, setDbErrorDetails] = useState(null); // Temporary error box state
 
   const [messages, setMessages] = useState([]);
   const [messagesLoading, setMessagesLoading] = useState(true);
@@ -624,6 +625,7 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
 
     let isMounted = true;
     setThreadStatus('loading');
+    setDbErrorDetails(null);
 
     async function initializeThread() {
       try {
@@ -677,6 +679,7 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
         console.error('Failed to load thread:', err);
         if (isMounted) {
           setThreadStatus('error');
+          setDbErrorDetails(err.message || JSON.stringify(err, null, 2));
         }
       }
     }
@@ -839,12 +842,14 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
   if (threadStatus === 'loading') {
     return (
       <div
+        className="no-copy-text"
         style={{
           flex: 1,
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
           background: 'var(--bg)',
+          userSelect: 'none'
         }}
       >
         <div style={{ color: 'var(--blue)' }}>
@@ -857,6 +862,7 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
   if (threadStatus === 'error' || !activeThread) {
     return (
       <div
+        className="no-copy-text"
         style={{
           flex: 1,
           display: 'flex',
@@ -865,18 +871,39 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
           background: 'var(--bg)',
           flexDirection: 'column',
           gap: 16,
+          userSelect: 'none',
+          padding: 24
         }}
       >
-        <p style={{ color: 'var(--dim)' }}>Failed to load chat.</p>
+        <p style={{ color: 'var(--dim)', fontWeight: 600 }}>Failed to load chat.</p>
+        
+        {dbErrorDetails && (
+          <div style={{ 
+            background: 'rgba(255, 59, 48, 0.1)', 
+            border: '1px solid rgba(255, 59, 48, 0.3)', 
+            padding: 14, 
+            borderRadius: 12, 
+            maxWidth: 450, 
+            width: '100%', 
+            color: '#ff3b30', 
+            fontSize: 13, 
+            fontFamily: 'monospace', 
+            wordBreak: 'break-all' 
+          }}>
+            <strong>Database Error:</strong> {dbErrorDetails}
+          </div>
+        )}
+
         <button
           onClick={onBack}
           style={{
             background: 'var(--blue)',
             color: '#fff',
             border: 'none',
-            padding: '8px 16px',
+            padding: '10px 20px',
             borderRadius: 12,
             cursor: 'pointer',
+            fontWeight: 700
           }}
         >
           Go Back
@@ -893,6 +920,7 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
   // --------------------------------------------------------------------------
   return (
     <div
+      className="no-copy-text"
       style={{
         flex: 1,
         display: 'flex',
@@ -901,6 +929,7 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
         height: '100%',
         overflow: 'hidden',
         zIndex: 1,
+        userSelect: 'none'
       }}
     >
       <GlobalKeyframes />

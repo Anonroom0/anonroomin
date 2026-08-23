@@ -196,6 +196,22 @@ const Vectors = {
       <line x1="15" y1="9" x2="15.01" y2="9" />
     </svg>
   ),
+  ThreeDots: (
+    <svg
+      width="20"
+      height="20"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <circle cx="12" cy="12" r="1" />
+      <circle cx="12" cy="5" r="1" />
+      <circle cx="12" cy="19" r="1" />
+    </svg>
+  )
 };
 
 // ============================================================================
@@ -573,6 +589,7 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
   const [profileCardUserId, setProfileCardUserId] = useState(null);
   const [authOpen, setAuthOpen] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false); // Three-dot dropdown menu state
 
   const scrollRef = useRef(null);
   const fileInputRef = useRef(null);
@@ -835,12 +852,14 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
   if (groupStatus === 'loading') {
     return (
       <div
+        className="no-copy-text"
         style={{
           flex: 1,
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'center',
           background: 'var(--bg)',
+          userSelect: 'none'
         }}
       >
         <div style={{ color: 'var(--blue)' }}>
@@ -853,6 +872,7 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
   if (groupStatus === 'error') {
     return (
       <div
+        className="no-copy-text"
         style={{
           flex: 1,
           display: 'flex',
@@ -861,6 +881,7 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
           background: 'var(--bg)',
           flexDirection: 'column',
           gap: 16,
+          userSelect: 'none'
         }}
       >
         <p style={{ color: 'var(--dim)' }}>Failed to load group.</p>
@@ -889,6 +910,7 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
   // --------------------------------------------------------------------------
   return (
     <div
+      className="no-copy-text"
       style={{
         flex: 1,
         display: 'flex',
@@ -897,6 +919,7 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
         height: '100%',
         overflow: 'hidden',
         zIndex: 1,
+        userSelect: 'none'
       }}
     >
       <GlobalKeyframes />
@@ -983,6 +1006,65 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
           >
             {group.description || 'Public Group'}
           </span>
+        </div>
+
+        {/* Three dot share menu */}
+        <div style={{ position: 'relative' }}>
+          <button
+            onClick={() => setMenuOpen((v) => !v)}
+            style={{
+              border: 'none',
+              background: 'transparent',
+              color: 'var(--ink)',
+              cursor: 'pointer',
+              padding: 8,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              borderRadius: '50%'
+            }}
+            aria-label="Group options"
+          >
+            {Vectors.ThreeDots}
+          </button>
+          {menuOpen && (
+            <div style={{
+              position: 'absolute',
+              right: 0,
+              top: '100%',
+              marginTop: 4,
+              background: 'var(--glass-strong)',
+              backdropFilter: 'blur(20px)',
+              border: '1px solid var(--glass-border)',
+              borderRadius: 12,
+              boxShadow: '0 8px 24px rgba(0,0,0,0.15)',
+              zIndex: 30,
+              minWidth: 140,
+              padding: 6
+            }}>
+              <button
+                onClick={() => {
+                  navigator.clipboard.writeText(window.location.href);
+                  setMenuOpen(false);
+                  alert('Link copied to clipboard!');
+                }}
+                style={{
+                  width: '100%',
+                  padding: '10px 14px',
+                  border: 'none',
+                  background: 'transparent',
+                  color: 'var(--ink)',
+                  textAlign: 'left',
+                  borderRadius: 8,
+                  cursor: 'pointer',
+                  fontSize: 14,
+                  fontWeight: 600
+                }}
+              >
+                Share link
+              </button>
+            </div>
+          )}
         </div>
       </header>
 

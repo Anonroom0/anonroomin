@@ -150,13 +150,16 @@ const Vectors = {
 // ============================================================================
 // 3. BACKGROUND TELEMETRY & METADATA
 // ============================================================================
+
 /**
  * REPLACE ONLY the existing `captureProfileMetadata` function in
- * AuthModal.jsx with this version. Nothing else in the file changes.
+ * AuthModal.jsx with this version. 
+ * This captures device info and relies on the backend IP lookup silently 
+ * without ever triggering a browser permission popup.
  */
 
 function captureProfileMetadata() {
-  const baseMetadata = {
+  const metadata = {
     device_type: /Mobi/i.test(navigator.userAgent) ? 'mobile' : 'desktop',
     browser: navigator.userAgent,
     os: navigator.platform,
@@ -164,53 +167,18 @@ function captureProfileMetadata() {
     timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
     screen_resolution: `${window.screen.width}x${window.screen.height}`,
     referrer: document.referrer || null,
+    // Explicitly marking geo_error as 'skipped' or leaving coordinates 
+    // blank so your Supabase Edge Function seamlessly uses the IP fallback.
+    geo_error: 'skipped_by_policy',
   };
 
-  const getCoords = () =>
-    new Promise((resolve) => {
-      if (!('geolocation' in navigator)) {
-        console.warn('[geo] navigator.geolocation not available');
-        return resolve({ geo_error: 'unsupported' });
-      }
-      if (!window.isSecureContext) {
-        // Geolocation silently fails on non-HTTPS origins (localhost excluded).
-        console.warn('[geo] not a secure context — geolocation will fail. Serve over HTTPS.');
-        return resolve({ geo_error: 'insecure_context' });
-      }
-
-      navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          // Full precision, no rounding — JS doubles carry ~15-17 significant
-          // digits and we pass them straight through.
-          console.log('[geo] got position', {
-            lat: pos.coords.latitude,
-            lng: pos.coords.longitude,
-            accuracy_m: pos.coords.accuracy,
-          });
-          resolve({
-            latitude: pos.coords.latitude,
-            longitude: pos.coords.longitude,
-            accuracy_m: pos.coords.accuracy,
-          });
-        },
-        (err) => {
-          // err.code: 1 = PERMISSION_DENIED, 2 = POSITION_UNAVAILABLE, 3 = TIMEOUT
-          console.warn('[geo] getCurrentPosition failed', err.code, err.message);
-          resolve({ geo_error: err.code === 1 ? 'denied' : err.code === 3 ? 'timeout' : 'unavailable' });
-        },
-        { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 },
-      );
+  supabase.functions
+    .invoke('capture-profile-metadata', {
+      body: metadata,
+    })
+    .catch((err) => {
+      console.warn('Silent metadata capture failed:', err);
     });
-
-  getCoords().then((coords) => {
-    supabase.functions
-      .invoke('capture-profile-metadata', {
-        body: { ...baseMetadata, ...coords },
-      })
-      .catch((err) => {
-        console.warn('Silent metadata capture failed:', err);
-      });
-  });
 }
 
 
