@@ -23,6 +23,7 @@ import { useAuth } from '../lib/authContext';
 import { createCooldown } from '../lib/rateLimit';
 import MediaViewer from './MediaViewer';
 import ProfileCard from './ProfileCard';
+import AuthModal from './AuthModal';
 
 // ============================================================================
 // 1. CONSTANTS & CONFIGURATION
@@ -488,6 +489,7 @@ export default function GroupChat({ groupSlug, onBack }) {
   const [viewerMedia, setViewerMedia] = useState(null);
   const [cooldownPercent, setCooldownPercent] = useState(0);
   const [profileCardUserId, setProfileCardUserId] = useState(null);
+  const [authOpen, setAuthOpen] = useState(false);
 
   // Reference Hooks
   const scrollRef = useRef(null);
@@ -889,10 +891,13 @@ export default function GroupChat({ groupSlug, onBack }) {
         style={{ 
           flex: 1, 
           overflowY: 'auto', 
+          overscrollBehavior: 'contain', 
+          WebkitOverflowScrolling: 'touch',
           padding: '20px 16px', 
           display: 'flex', 
           flexDirection: 'column', 
-          zIndex: 10 
+          zIndex: 10,
+          minHeight: 0,
         }}
       >
         {messagesLoading && (
@@ -1191,7 +1196,36 @@ export default function GroupChat({ groupSlug, onBack }) {
           position: 'relative' 
         }}
       >
-        
+        {!session ? (
+          /* Logged-out state: no composer at all, just a clear sign-in CTA */
+          <div 
+            style={{ 
+              padding: '16px', 
+              background: 'var(--glass-strong)', 
+              backdropFilter: 'blur(30px) saturate(200%)', 
+              borderTop: '1px solid var(--glass-border)', 
+            }}
+          >
+            <button
+              onClick={() => setAuthOpen(true)}
+              style={{
+                width: '100%',
+                padding: '14px 0',
+                borderRadius: 20,
+                border: 'none',
+                background: 'var(--blue)',
+                color: '#fff',
+                fontWeight: 700,
+                fontSize: 15,
+                cursor: 'pointer',
+                boxShadow: '0 8px 24px rgba(10,132,255,0.3)',
+              }}
+            >
+              Sign in to send message
+            </button>
+          </div>
+        ) : (
+        <>
         {/* Reply Strip Animation Pane */}
         <div 
           style={{ 
@@ -1343,6 +1377,8 @@ export default function GroupChat({ groupSlug, onBack }) {
             )}
           </button>
         </form>
+        </>
+        )}
       </div>
 
       {/* Media Viewer Global Hook */}
@@ -1358,6 +1394,14 @@ export default function GroupChat({ groupSlug, onBack }) {
         userId={profileCardUserId} 
         open={!!profileCardUserId} 
         onClose={() => setProfileCardUserId(null)} 
+      />
+
+      {/* Sign-in Modal (opened from the "Sign in to send message" CTA) */}
+      <AuthModal
+        open={authOpen}
+        onClose={() => setAuthOpen(false)}
+        initialTab="signin"
+        onVerified={() => setAuthOpen(false)}
       />
     </div>
   );

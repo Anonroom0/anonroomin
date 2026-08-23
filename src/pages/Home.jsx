@@ -322,6 +322,12 @@ export default function Home() {
   // ROUTING & INTERACTION LOGIC
   // --------------------------------------------------------------------------
   function handleOpenChat(id, type) {
+    // DMs require a signed-in user (they're threads keyed off userId).
+    // Route logged-out taps to sign-in instead of opening a broken thread.
+    if (type === 'dm' && !userId) {
+      setAuthOpen(true);
+      return;
+    }
     setActiveChatId(id);
     setActiveChatType(type);
     setSearchQuery(''); 
@@ -345,13 +351,20 @@ export default function Home() {
       {/* 
         ======================================================================
         LEFT PANEL: TELEGRAM SIDEBAR
+        On mobile this pane IS the page when no chat is open — it isn't
+        squeezed side-by-side with the chat pane, it's simply the only
+        thing mounted. On desktop it holds a strict 25% (2.5 / 10) share
+        of the width, with the chat pane taking the remaining 75%.
         ======================================================================
       */}
+      {(!isMobile || !isChatActive) && (
       <div 
-        className={`glass-panel flex-col ${isChatActive && isMobile ? 'hidden' : 'flex'}`} 
+        className="glass-panel"
         style={{ 
-          width: isMobile ? '100%' : '380px', 
-          minWidth: isMobile ? '100%' : '380px', 
+          display: 'flex',
+          flexDirection: 'column',
+          width: isMobile ? '100%' : '25%', 
+          minWidth: isMobile ? '100%' : 280, 
           height: '100%', 
           borderRight: '1px solid var(--glass-border)', 
           zIndex: 10,
@@ -532,16 +545,26 @@ export default function Home() {
           )}
         </div>
       </div>
+      )}
 
       {/* 
         ======================================================================
         RIGHT PANEL: TELEGRAM MASTER CHAT VIEW
+        On mobile this only mounts once a chat is actually open, so it opens
+        as its own dedicated page (with a slide-in transition) instead of
+        cramming in next to the sidebar. On desktop it holds the remaining
+        75% (7.5 / 10) of the width.
         ======================================================================
       */}
+      {(!isMobile || isChatActive) && (
       <div 
-        className={`glass-strong ${!isChatActive && isMobile ? 'hidden' : 'flex'}`} 
+        className={isMobile ? 'mobile-chat-page glass-strong' : 'glass-strong'}
         style={{ 
-          flex: 1, flexDirection: 'column', position: 'relative', 
+          flex: 1,
+          display: 'flex',
+          flexDirection: 'column', 
+          position: 'relative', 
+          width: isMobile ? '100%' : undefined,
           borderRadius: 0, zIndex: 1, boxShadow: '-4px 0 24px rgba(0,0,0,0.03)' 
         }}
       >
@@ -569,6 +592,7 @@ export default function Home() {
           </div>
         )}
       </div>
+      )}
 
       {/* 
         ======================================================================
