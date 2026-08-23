@@ -1,65 +1,168 @@
-/* =============================================================================
-   anonroom.in — shared design tokens
-   Simple Apple-style palette: white/gray glass surfaces, near-black text,
-   single blue accent. No other accent colors — --green/--red are reserved
-   for status only (online dots, error text), never decorative.
-   ============================================================================= */
+/**
+ * ============================================================================
+ * ANONROOM - CORE APPLE LIQUID DESIGN TOKENS
+ * ============================================================================
+ * This file serves as the absolute foundation for the Apple Liquid UI.
+ * It strictly defines color palettes, fluid glassmorphism rules, and 
+ * responsive dark-mode transitions using pure CSS variables.
+ * 
+ * Features:
+ * - Native Light/Dark Mode auto-switching via media queries
+ * - Telegram iOS custom scrollbars
+ * - Base Typography resets (SF Pro Display / Apple System)
+ * - Standardized glass panel rendering
+ * ============================================================================
+ */
 
+/* 
+  =============================================================================
+  1. LIGHT MODE (DEFAULT) COLOR TOKENS
+  =============================================================================
+*/
 :root {
-  /* Text */
-  --ink: #1c1c1e;   /* primary text */
-  --dim: #6e6e73;   /* secondary/muted text */
+  /* Core Text */
+  --ink: #000000;         /* Primary high-contrast text */
+  --dim: #8e8e93;         /* Secondary muted text */
+  
+  /* Primary Accents */
+  --blue: #007aff;        /* Apple iOS Blue - Only accent color */
+  --admin-gold: #ff9500;  /* Strict Admin Override Color */
 
-  /* Accent (the only accent color in the app) */
-  --blue: #0a84ff;
-
-  /* Status colors — functional use only */
+  /* Status Colors */
   --green: #34c759;
   --red: #ff3b30;
 
-  /* Surfaces */
-  --bg: #f2f2f7;
+  /* Surfaces & Backgrounds */
+  --bg: #f2f2f7;          /* Standard Apple hardware background */
+  
+  /* Liquid Glass Base */
+  --glass: rgba(255, 255, 255, 0.65);
+  --glass-strong: rgba(255, 255, 255, 0.85);
+  --glass-border: rgba(0, 0, 0, 0.08);
 
-  /* Glass */
-  --glass: rgba(255, 255, 255, 0.55);
-  --glass-strong: rgba(255, 255, 255, 0.75);
-  --glass-border: rgba(255, 255, 255, 0.4);
-
-  /* Chat bubbles */
-  --bubble-them: #e9e9eb;
+  /* Message Bubbles */
+  --bubble-own: #007aff;
+  --bubble-them: #e5e5ea;
 }
 
-/* -----------------------------------------------------------------------
-   Glass surfaces
-   ----------------------------------------------------------------------- */
+/* 
+  =============================================================================
+  2. DARK MODE COLOR TOKENS (AUTOMATIC SWITCHING)
+  =============================================================================
+*/
+@media (prefers-color-scheme: dark) {
+  :root {
+    /* Core Text */
+    --ink: #ffffff;
+    --dim: #ebebf5;
+    
+    /* Primary Accents (Adjusted for Dark Mode contrast) */
+    --blue: #0a84ff;
+    --admin-gold: #ffd60a;
+
+    /* Surfaces & Backgrounds */
+    --bg: #000000;
+    
+    /* Liquid Glass Base (Inverted for dark mode) */
+    --glass: rgba(28, 28, 30, 0.55);
+    --glass-strong: rgba(28, 28, 30, 0.75);
+    --glass-border: rgba(255, 255, 255, 0.12);
+
+    /* Message Bubbles */
+    --bubble-own: #0a84ff;
+    --bubble-them: #2c2c2e;
+  }
+}
+
+/* 
+  =============================================================================
+  3. GLOBAL TYPOGRAPHY & BODY RESETS
+  =============================================================================
+*/
+body {
+  margin: 0;
+  padding: 0;
+  /* Enforce native Apple typography, falling back to standard sans-serifs */
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  background-color: var(--bg);
+  color: var(--ink);
+  
+  /* Prevent bounce-scrolling on iOS to maintain the native app feel */
+  overflow: hidden; 
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* 
+  =============================================================================
+  4. UTILITY CLASSES (BASE GLASSMORPHISM)
+  =============================================================================
+  These are used as fallback wrappers. Most components in this architecture 
+  now use inline styling for highly specific dynamic blurring, but these 
+  are retained for `Home.jsx` sidebars and list containers.
+*/
 
 .glass-panel {
   background: var(--glass);
   border: 1px solid var(--glass-border);
-  border-radius: 20px;
-  backdrop-filter: blur(20px) saturate(180%);
-  -webkit-backdrop-filter: blur(20px) saturate(180%);
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08);
+  border-radius: 16px;
+  backdrop-filter: blur(24px) saturate(200%);
+  -webkit-backdrop-filter: blur(24px) saturate(200%);
+  /* Soft shadow for depth */
+  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.04);
 }
 
 .glass-strong {
   background: var(--glass-strong);
   border: 1px solid var(--glass-border);
-  border-radius: 20px;
-  backdrop-filter: blur(32px) saturate(180%);
-  -webkit-backdrop-filter: blur(32px) saturate(180%);
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.12);
+  backdrop-filter: blur(40px) saturate(200%);
+  -webkit-backdrop-filter: blur(40px) saturate(200%);
+  /* Deeper shadow for modal/pane elevation */
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08);
 }
 
-/* -----------------------------------------------------------------------
-   Motion
-   ----------------------------------------------------------------------- */
+/* 
+  =============================================================================
+  5. TELEGRAM iOS CUSTOM SCROLLBARS
+  =============================================================================
+  Standard browser scrollbars ruin the native app illusion. 
+  This overrides them to look like sleek, disappearing iOS scroll indicators.
+*/
 
-/* New message bubbles / cards pop in on arrival */
+.custom-scrollbar {
+  /* For Firefox */
+  scrollbar-width: thin;
+  scrollbar-color: rgba(142, 142, 147, 0.3) transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(142, 142, 147, 0.3);
+  border-radius: 10px;
+}
+
+.custom-scrollbar:hover::-webkit-scrollbar-thumb {
+  background: rgba(142, 142, 147, 0.5);
+}
+
+/* 
+  =============================================================================
+  6. GLOBAL ANIMATION PRIMITIVES
+  =============================================================================
+*/
+
 @keyframes pop-in {
   from {
     opacity: 0;
-    transform: scale(0.92) translateY(6px);
+    transform: scale(0.96) translateY(4px);
   }
   to {
     opacity: 1;
@@ -68,19 +171,10 @@
 }
 
 .pop-in {
-  animation: pop-in 220ms cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  animation: pop-in 300ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
 }
 
-/* Slow-drifting background gradient blobs, used behind content on
-   Home.jsx and GroupChat.jsx */
-@keyframes float {
-  0% {
-    transform: translate(0, 0) scale(1);
-  }
-  50% {
-    transform: translate(-4%, 6%) scale(1.08);
-  }
-  100% {
-    transform: translate(0, 0) scale(1);
-  }
+/* Remove default focus outlines to maintain Apple aesthetic */
+input:focus, textarea:focus, button:focus {
+  outline: none;
 }

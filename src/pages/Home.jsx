@@ -1,592 +1,599 @@
-import { useEffect, useRef, useState } from 'react';
+/**
+ * ============================================================================
+ * MASTER LAYOUT (APPLE LIQUID UI & TELEGRAM PHYSICS)
+ * ============================================================================
+ * This component handles the core desktop/mobile master-detail routing.
+ * It features a unified sidebar (Groups and Chats in one list), Apple-style
+ * background blurs, and strict Telegram split-pane routing.
+ * 
+ * Corrected Features Included Inline:
+ * - Unified List Architecture (No Tabs)
+ * - Profile Avatar Top-Left (Opens Settings)
+ * - Removed Admin Group Builder & Logout (Moved to Edit Profile)
+ * - Liquid Glassmorphism Sidebars
+ * - Realtime Window Resizing Hooks for Mobile/Desktop Switching
+ * 
+ * Dependencies: React, Supabase, AuthContext
+ * ============================================================================
+ */
+
+import React, { useEffect, useState, useCallback } from 'react';
 import supabase from '../lib/supabaseClient';
 import { useAuth } from '../lib/authContext';
+
+// Import our newly upgraded Apple-Liquid Modals & Views
 import AuthModal from './AuthModal';
 import SearchUsers from './SearchUsers';
 import ProfileCard from './ProfileCard';
 import DirectMessages from './DirectMessages';
-import AdminInbox from './AdminInbox';
+import GroupChat from './GroupChat'; 
 import EditProfile from './EditProfile';
+
 import '../styles/tokens.css';
 
-const SUPPORT_LABEL = 'Anonroom Support';
+// ============================================================================
+// 1. CONSTANTS & CONFIGURATION
+// ============================================================================
+const ADMIN_DISPLAY_NAME = 'ADMIN';
 
-function initials(username) {
-  if (!username) return '?';
-  return username.slice(0, 2).toUpperCase();
+// ============================================================================
+// 2. MASSIVE INLINE SVG VECTOR LIBRARY (APPLE / TELEGRAM STYLE)
+// ============================================================================
+const Icons = {
+  Menu: (
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+      <line x1="3" y1="12" x2="21" y2="12" />
+      <line x1="3" y1="6" x2="21" y2="6" />
+      <line x1="3" y1="18" x2="21" y2="18" />
+    </svg>
+  ),
+  Search: (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="11" cy="11" r="8" />
+      <line x1="21" y1="21" x2="16.65" y2="16.65" />
+    </svg>
+  ),
+  EmptyChat: (
+    <svg width="80" height="80" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round" style={{ opacity: 0.5 }}>
+      <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" />
+    </svg>
+  ),
+  AdminShield: (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
+    </svg>
+  )
+};
+
+// ============================================================================
+// 3. UTILITY & FORMATTING FUNCTIONS
+// ============================================================================
+
+/**
+ * Gets capitalized initials for avatar generation.
+ */
+function getInitials(name) {
+  if (!name) return '?';
+  const parts = name.trim().split(' ');
+  if (parts.length >= 2) {
+    return (parts[0][0] + parts[1][0]).toUpperCase();
+  }
+  return name.slice(0, 2).toUpperCase();
 }
 
-function relativeTime(dateString) {
+/**
+ * Formats timestamps into Telegram-style relative time.
+ */
+function formatTelegramTime(dateString) {
   if (!dateString) return '';
-  const diffMs = Date.now() - new Date(dateString).getTime();
-  const diffMins = Math.floor(diffMs / (1000 * 60));
-  if (diffMins < 1) return 'just now';
-  if (diffMins < 60) return `${diffMins}m`;
-  const diffHours = Math.floor(diffMins / 60);
-  if (diffHours < 24) return `${diffHours}h`;
-  const diffDays = Math.floor(diffHours / 24);
-  return `${diffDays}d`;
+  const date = new Date(dateString);
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+  if (diffDays === 0 && now.getDate() === date.getDate()) {
+    return date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  } else if (diffDays < 7) {
+    return date.toLocaleDateString([], { weekday: 'short' });
+  } else {
+    return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
+  }
 }
 
-function groupUrl(slug) {
-  // Reconstructs the site's own protocol/root while swapping in the group
-  // slug as the subdomain, e.g. https://general.anonroom.in
-  const { protocol, hostname } = window.location;
-  const parts = hostname.split('.');
-  const root = parts.length >= 2 ? parts.slice(-2).join('.') : hostname;
-  return `${protocol}//${slug}.${root}`;
-}
-
-// Never exposes a real username/avatar for admin accounts — mirrors the
-// same rule enforced inside DirectMessages.jsx (TASK 6).
+/**
+ * Global Admin Override for UI mapping.
+ */
 function displayIdentity(user) {
   if (user?.is_admin) {
-    return { name: SUPPORT_LABEL, avatarUrl: null, isSupport: true };
+    return { name: ADMIN_DISPLAY_NAME, avatarUrl: null, isAdmin: true };
   }
-  return { name: user?.username || 'Unknown user', avatarUrl: user?.avatar_url || null, isSupport: false };
+  return { name: user?.username || 'Deleted User', avatarUrl: user?.avatar_url || null, isAdmin: false };
 }
 
-function IdentityAvatar({ identity, size = 40 }) {
-  if (identity.isSupport) {
-    return (
-      <div
-        style={{
-          width: size, height: size, borderRadius: '50%', background: 'var(--ink)', color: '#fff',
-          fontSize: size * 0.44, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0,
-        }}
-      >
-        🎧
-      </div>
-    );
-  }
-  if (identity.avatarUrl) {
-    return (
-      <img
-        src={identity.avatarUrl}
-        alt=""
-        style={{ width: size, height: size, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }}
-      />
-    );
-  }
+// ============================================================================
+// 4. UI SUB-COMPONENTS
+// ============================================================================
+
+/**
+ * Background effects rendering soft glowing orbs matching Apple UI.
+ */
+function LiquidBackgroundEffects() {
   return (
-    <div
-      style={{
-        width: size, height: size, borderRadius: '50%', background: 'var(--blue)', color: '#fff',
-        fontWeight: 700, fontSize: size * 0.4, display: 'flex', alignItems: 'center', justifyContent: 'center',
-        flexShrink: 0,
-      }}
-    >
-      {initials(identity.name)}
-    </div>
-  );
-}
-
-// -----------------------------------------------------------------------
-// Floating background blobs — purely decorative, sits behind all content.
-// -----------------------------------------------------------------------
-function BackgroundBlobs() {
-  return (
-    <div
-      aria-hidden="true"
-      style={{ position: 'fixed', inset: 0, overflow: 'hidden', zIndex: -1, pointerEvents: 'none' }}
-    >
-      <div
-        style={{
-          position: 'absolute', top: '-10%', left: '-10%', width: 420, height: 420,
-          borderRadius: '50%', background: 'radial-gradient(circle, rgba(10,132,255,0.16), transparent 70%)',
-          animation: 'float 18s ease-in-out infinite',
-        }}
-      />
-      <div
-        style={{
-          position: 'absolute', bottom: '-15%', right: '-10%', width: 480, height: 480,
-          borderRadius: '50%', background: 'radial-gradient(circle, rgba(10,132,255,0.10), transparent 70%)',
-          animation: 'float 22s ease-in-out infinite reverse',
-        }}
-      />
-    </div>
-  );
-}
-
-// -----------------------------------------------------------------------
-// Groups tab
-// -----------------------------------------------------------------------
-function GroupsTab() {
-  const [groups, setGroups] = useState([]);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    let isMounted = true;
-    supabase
-      .from('groups')
-      .select('id, slug, name, description, cover_url, created_at')
-      .order('created_at', { ascending: false })
-      .then(({ data, error }) => {
-        if (!isMounted) return;
-        if (error) console.warn('Failed to load groups:', error.message);
-        setGroups(data || []);
-        setLoading(false);
-      });
-    return () => {
-      isMounted = false;
-    };
-  }, []);
-
-  if (loading) {
-    return <p style={{ color: 'var(--dim)', fontSize: 14, textAlign: 'center', padding: '24px 0' }}>Loading…</p>;
-  }
-
-  if (groups.length === 0) {
-    return (
-      <p style={{ color: 'var(--dim)', fontSize: 14, textAlign: 'center', padding: '24px 0' }}>
-        No groups yet — request one with the + button.
-      </p>
-    );
-  }
-
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-      {groups.map((group) => (
-        <a
-          key={group.id}
-          href={groupUrl(group.slug)}
-          className="glass-panel pop-in"
-          style={{
-            display: 'flex', flexDirection: 'column', gap: 8, padding: 16,
-            textDecoration: 'none', overflow: 'hidden',
-          }}
-        >
-          {group.cover_url && (
-            <img
-              src={group.cover_url}
-              alt=""
-              style={{ width: '100%', height: 120, objectFit: 'cover', borderRadius: 12 }}
-            />
-          )}
-          <span style={{ fontSize: 17, fontWeight: 700, color: 'var(--ink)' }}>{group.name}</span>
-          {group.description && (
-            <span style={{ fontSize: 13, color: 'var(--dim)' }}>{group.description}</span>
-          )}
-          <span style={{ fontSize: 12, color: 'var(--blue)' }}>{group.slug}.anonroom.in</span>
-        </a>
-      ))}
-    </div>
-  );
-}
-
-// -----------------------------------------------------------------------
-// DMs tab
-// -----------------------------------------------------------------------
-function DmsTab({ session, isAdmin, onOpenThread, onOpenAdminInbox, onOpenAuth }) {
-  const [threads, setThreads] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const userId = session?.user?.id;
-
-  useEffect(() => {
-    if (!userId) {
-      setLoading(false);
-      return;
-    }
-    let isMounted = true;
-    setLoading(true);
-
-    async function load() {
-      const { data: threadRows, error: threadsError } = await supabase
-        .from('dm_threads')
-        .select('id, user_a, user_b, created_at')
-        .or(`user_a.eq.${userId},user_b.eq.${userId}`)
-        .order('created_at', { ascending: false });
-
-      if (!isMounted) return;
-
-      if (threadsError) {
-        console.warn('Failed to load dm threads:', threadsError.message);
-        setThreads([]);
-        setLoading(false);
-        return;
-      }
-
-      const otherIds = (threadRows || []).map((t) => (t.user_a === userId ? t.user_b : t.user_a));
-      let profilesById = {};
-
-      if (otherIds.length > 0) {
-        const { data: profileRows, error: profilesError } = await supabase
-          .from('profiles')
-          .select('id, username, avatar_url, is_admin')
-          .in('id', otherIds);
-
-        if (profilesError) {
-          console.warn('Failed to load participant profiles:', profilesError.message);
-        } else {
-          profilesById = Object.fromEntries((profileRows || []).map((p) => [p.id, p]));
+    <div aria-hidden="true" style={{ position: 'fixed', inset: 0, overflow: 'hidden', zIndex: -1, pointerEvents: 'none', background: 'var(--bg)' }}>
+      <div style={{
+        position: 'absolute', top: '-15%', left: '-10%', width: '60vw', height: '60vw',
+        borderRadius: '50%', background: 'radial-gradient(circle, rgba(10,132,255,0.18), transparent 60%)',
+        animation: 'floatApple 22s ease-in-out infinite', filter: 'blur(40px)'
+      }} />
+      <div style={{
+        position: 'absolute', bottom: '-20%', right: '-10%', width: '70vw', height: '70vw',
+        borderRadius: '50%', background: 'radial-gradient(circle, rgba(94,92,230,0.15), transparent 60%)',
+        animation: 'floatApple 28s ease-in-out infinite reverse', filter: 'blur(50px)'
+      }} />
+      <style>{`
+        @keyframes floatApple {
+          0% { transform: translate(0, 0) scale(1) rotate(0deg); }
+          33% { transform: translate(4%, -6%) scale(1.05) rotate(4deg); }
+          66% { transform: translate(-3%, 4%) scale(0.95) rotate(-3deg); }
+          100% { transform: translate(0, 0) scale(1) rotate(0deg); }
         }
-      }
-
-      if (!isMounted) return;
-
-      const enriched = (threadRows || []).map((t) => {
-        const otherId = t.user_a === userId ? t.user_b : t.user_a;
-        return { ...t, otherUser: profilesById[otherId] || { id: otherId, username: 'Unknown user' } };
-      });
-
-      setThreads(enriched);
-      setLoading(false);
-    }
-
-    load();
-    return () => {
-      isMounted = false;
-    };
-  }, [userId]);
-
-  if (!session) {
-    return (
-      <div style={{ textAlign: 'center', padding: '40px 0' }}>
-        <p style={{ color: 'var(--dim)', marginBottom: 16 }}>Sign in to view your messages</p>
-        <button onClick={onOpenAuth} style={primaryButtonStyle}>
-          Sign In
-        </button>
-      </div>
-    );
-  }
-
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-      {isAdmin && (
-        <button
-          onClick={onOpenAdminInbox}
-          className="glass-panel pop-in"
-          style={{ ...rowButtonStyle, background: 'rgba(10,132,255,0.08)' }}
-        >
-          <span
-            style={{
-              width: 40, height: 40, borderRadius: '50%', background: 'var(--blue)', color: '#fff',
-              display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 18, flexShrink: 0,
-            }}
-          >
-            🛠️
-          </span>
-          <span style={{ fontWeight: 700, color: 'var(--ink)' }}>Admin Inbox</span>
-        </button>
-      )}
-
-      {loading && <p style={{ color: 'var(--dim)', fontSize: 14, textAlign: 'center', padding: '24px 0' }}>Loading…</p>}
-
-      {!loading && threads.length === 0 && (
-        <p style={{ color: 'var(--dim)', fontSize: 14, textAlign: 'center', padding: '24px 0' }}>
-          No conversations yet.
-        </p>
-      )}
-
-      {!loading &&
-        threads.map((thread) => {
-          const identity = displayIdentity(thread.otherUser);
-          const otherId = thread.user_a === userId ? thread.user_b : thread.user_a;
-          return (
-            <button
-              key={thread.id}
-              onClick={() => onOpenThread(otherId)}
-              className="glass-panel pop-in"
-              style={rowButtonStyle}
-            >
-              <IdentityAvatar identity={identity} size={40} />
-              <span style={{ fontWeight: 600, color: 'var(--ink)', flex: 1 }}>{identity.name}</span>
-              <span style={{ fontSize: 12, color: 'var(--dim)' }}>{relativeTime(thread.created_at)}</span>
-            </button>
-          );
-        })}
+        .chat-row {
+          transition: background 0.15s ease-in-out, transform 0.1s ease-in-out;
+        }
+        .chat-row:active {
+          transform: scale(0.98);
+        }
+      `}</style>
     </div>
   );
 }
 
-// -----------------------------------------------------------------------
-// Home
-// -----------------------------------------------------------------------
-export default function Home() {
-  const { session, profile, isAdmin } = useAuth();
-
-  const [tab, setTab] = useState('groups'); // 'groups' | 'dms'
-  const [authOpen, setAuthOpen] = useState(false);
-  const [authInitialTab, setAuthInitialTab] = useState('signin');
-  const [editProfileOpen, setEditProfileOpen] = useState(false);
-
-  const [searchQuery, setSearchQuery] = useState('');
-  const [searchFocused, setSearchFocused] = useState(false);
-
-  const [profileCardUserId, setProfileCardUserId] = useState(null);
-  const [activeDmUserId, setActiveDmUserId] = useState(null);
-  const [adminInboxOpen, setAdminInboxOpen] = useState(false);
-  const [requestingGroup, setRequestingGroup] = useState(false);
-
-  const searchInputRef = useRef(null);
-
-  const showSearch = searchFocused || searchQuery.trim().length > 0;
-
-  function openAuth(initialTab = 'signin') {
-    setAuthInitialTab(initialTab);
-    setAuthOpen(true);
-  }
-
-  function handleProfileButtonClick() {
-    if (session) {
-      setEditProfileOpen(true);
-    } else {
-      openAuth('signin');
-    }
-  }
-
-  function handleOpenThread(userId) {
-    setActiveDmUserId(userId);
-  }
-
-  function handleSelectSearchUser(userId) {
-    setProfileCardUserId(userId);
-  }
-
-  function handleMessageFromProfileCard(userId) {
-    if (!session) {
-      openAuth('signin');
-      return;
-    }
-    setProfileCardUserId(null);
-    setActiveDmUserId(userId);
-  }
-
-  async function handleRequestGroup() {
-    if (!session) {
-      openAuth('signin');
-      return;
-    }
-    setRequestingGroup(true);
-    const { data: admin, error } = await supabase
-      .from('profiles')
-      .select('id')
-      .eq('is_admin', true)
-      .limit(1)
-      .maybeSingle();
-    setRequestingGroup(false);
-
-    if (error || !admin) {
-      console.warn('Could not find admin account:', error?.message);
-      return;
-    }
-    setActiveDmUserId(admin.id);
-  }
-
-  const profileIdentity = session
-    ? { name: profile?.username || 'You', avatarUrl: profile?.avatar_url || null, isSupport: false }
-    : null;
-
+/**
+ * Highly detailed skeleton loader for Telegram list rendering
+ */
+function ListSkeletonLoader() {
+  const skeletons = Array(8).fill(0);
   return (
-    <div style={{ minHeight: '100vh', background: 'var(--bg)', position: 'relative' }}>
-      <BackgroundBlobs />
-
-      {/* Header */}
-      <header
-        className="glass-strong"
-        style={{
-          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-          padding: '14px 20px', borderRadius: 0, position: 'sticky', top: 0, zIndex: 20,
-        }}
-      >
-        <span style={{ fontSize: 19, fontWeight: 800, color: 'var(--ink)', letterSpacing: -0.4 }}>
-          anonroom
-        </span>
-
-        <button
-          onClick={handleProfileButtonClick}
-          aria-label={session ? 'Edit profile' : 'Sign in'}
-          style={{
-            width: 36, height: 36, borderRadius: '50%', border: 'none', padding: 0, cursor: 'pointer',
-            overflow: 'hidden', flexShrink: 0, boxShadow: '0 2px 8px rgba(0,0,0,0.12)',
-          }}
-        >
-          {session ? (
-            <IdentityAvatar identity={profileIdentity} size={36} />
-          ) : (
-            <div
-              style={{
-                width: 36, height: 36, borderRadius: '50%', background: 'rgba(0,0,0,0.1)',
-                display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 17,
-                color: 'var(--dim)',
-              }}
-            >
-              👤
-            </div>
-          )}
-        </button>
-      </header>
-
-      <main style={{ maxWidth: 560, width: '100%', margin: '0 auto', padding: '16px 20px 100px' }}>
-        {/* Search bar */}
-        <div style={{ position: 'relative', marginBottom: 16 }}>
-          <span
-            style={{
-              position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)',
-              fontSize: 15, color: 'var(--dim)', pointerEvents: 'none',
-            }}
-          >
-            🔍
-          </span>
-          <input
-            ref={searchInputRef}
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            onFocus={() => setSearchFocused(true)}
-            onBlur={() => setSearchFocused(false)}
-            placeholder="Search people"
-            className="glass-panel"
-            style={{
-              width: '100%', boxSizing: 'border-box', border: 'none', outline: 'none',
-              background: 'transparent', padding: '12px 14px 12px 40px', fontSize: 15,
-              color: 'var(--ink)', borderRadius: 14,
-            }}
-          />
-        </div>
-
-        {showSearch ? (
-          <SearchUsers onSelectUser={handleSelectSearchUser} />
-        ) : (
-          <>
-            {/* Segmented tab switcher */}
-            <div
-              style={{
-                position: 'relative', display: 'flex', background: 'rgba(0,0,0,0.05)',
-                borderRadius: 13, padding: 4, marginBottom: 20,
-              }}
-            >
-              <div
-                style={{
-                  position: 'absolute', top: 4, bottom: 4, width: 'calc(50% - 4px)',
-                  left: tab === 'groups' ? 4 : 'calc(50% + 0px)',
-                  background: '#fff', borderRadius: 10,
-                  transition: 'left 260ms cubic-bezier(0.34,1.56,0.64,1)',
-                  boxShadow: '0 1px 6px rgba(0,0,0,0.14)',
-                }}
-              />
-              <button
-                onClick={() => setTab('groups')}
-                style={{
-                  flex: 1, zIndex: 1, padding: '9px 0', border: 'none', background: 'transparent',
-                  fontWeight: 600, fontSize: 14, letterSpacing: -0.1, borderRadius: 10,
-                  color: tab === 'groups' ? 'var(--ink)' : 'var(--dim)', cursor: 'pointer',
-                  transition: 'color 180ms ease',
-                }}
-              >
-                Groups
-              </button>
-              <button
-                onClick={() => setTab('dms')}
-                style={{
-                  flex: 1, zIndex: 1, padding: '9px 0', border: 'none', background: 'transparent',
-                  fontWeight: 600, fontSize: 14, letterSpacing: -0.1, borderRadius: 10,
-                  color: tab === 'dms' ? 'var(--ink)' : 'var(--dim)', cursor: 'pointer',
-                  transition: 'color 180ms ease',
-                }}
-              >
-                DMs
-              </button>
-            </div>
-
-            {tab === 'groups' && <GroupsTab />}
-            {tab === 'dms' && (
-              <DmsTab
-                session={session}
-                isAdmin={isAdmin}
-                onOpenThread={handleOpenThread}
-                onOpenAdminInbox={() => setAdminInboxOpen(true)}
-                onOpenAuth={() => openAuth('signin')}
-              />
-            )}
-          </>
-        )}
-      </main>
-
-      {/* Floating "Request a group" button */}
-      <button
-        onClick={handleRequestGroup}
-        disabled={requestingGroup}
-        aria-label="Request a group"
-        style={{
-          position: 'fixed', bottom: 28, right: 24, width: 56, height: 56, borderRadius: '50%',
-          border: 'none', background: 'var(--blue)', color: '#fff', fontSize: 26, fontWeight: 400,
-          cursor: requestingGroup ? 'default' : 'pointer', opacity: requestingGroup ? 0.7 : 1,
-          boxShadow: '0 10px 24px rgba(10,132,255,0.38)', display: 'flex', alignItems: 'center',
-          justifyContent: 'center', zIndex: 30, lineHeight: 1,
-        }}
-      >
-        +
-      </button>
-
-      <AuthModal
-        open={authOpen}
-        onClose={() => setAuthOpen(false)}
-        initialTab={authInitialTab}
-        onVerified={() => setAuthOpen(false)}
-      />
-
-      <EditProfile open={editProfileOpen} onClose={() => setEditProfileOpen(false)} />
-
-      <ProfileCard
-        userId={profileCardUserId}
-        open={profileCardUserId !== null}
-        onClose={() => setProfileCardUserId(null)}
-        onMessage={handleMessageFromProfileCard}
-      />
-
-      {/* DM thread — full-page takeover, own back button */}
-      {activeDmUserId && (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 90 }}>
-          <button
-            onClick={() => setActiveDmUserId(null)}
-            aria-label="Back"
-            style={{
-              position: 'fixed', top: 14, left: 16, zIndex: 95, width: 32, height: 32, borderRadius: '50%',
-              border: 'none', background: 'rgba(0,0,0,0.06)', color: 'var(--blue)', cursor: 'pointer',
-              fontSize: 18, display: 'flex', alignItems: 'center', justifyContent: 'center',
-            }}
-          >
-            ←
-          </button>
-          <DirectMessages openThreadWithUserId={activeDmUserId} />
-        </div>
-      )}
-
-      {/* Admin Inbox — full-page takeover, same pattern as DMs */}
-      {adminInboxOpen && (
-        <div style={{ position: 'fixed', inset: 0, zIndex: 90, background: 'var(--bg)', overflowY: 'auto' }}>
-          <header
-            className="glass-strong"
-            style={{
-              display: 'flex', alignItems: 'center', gap: 12, padding: '14px 20px',
-              borderRadius: 0, position: 'sticky', top: 0, zIndex: 10,
-            }}
-          >
-            <button
-              onClick={() => setAdminInboxOpen(false)}
-              aria-label="Back"
-              style={{ border: 'none', background: 'none', color: 'var(--blue)', fontSize: 20, cursor: 'pointer', padding: 0 }}
-            >
-              ←
-            </button>
-            <span style={{ fontWeight: 700, color: 'var(--ink)', fontSize: 16 }}>Admin Inbox</span>
-          </header>
-          <div style={{ padding: 20, maxWidth: 560, width: '100%', margin: '0 auto' }}>
-            <AdminInbox />
+    <div style={{ padding: '0 8px' }}>
+      {skeletons.map((_, i) => (
+        <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 8px', opacity: 1 - (i * 0.1) }}>
+          <div style={{ width: 48, height: 48, borderRadius: '50%', background: 'var(--glass-border)', animation: 'pulse 1.5s infinite ease-in-out' }} />
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 8 }}>
+            <div style={{ width: '40%', height: 14, borderRadius: 4, background: 'var(--glass-border)', animation: 'pulse 1.5s infinite ease-in-out' }} />
+            <div style={{ width: '70%', height: 12, borderRadius: 4, background: 'var(--glass-border)', animation: 'pulse 1.5s infinite ease-in-out 0.2s' }} />
           </div>
         </div>
-      )}
+      ))}
+      <style>{`
+        @keyframes pulse {
+          0%, 100% { opacity: 0.5; }
+          50% { opacity: 0.2; }
+        }
+      `}</style>
     </div>
   );
 }
 
-const rowButtonStyle = {
-  display: 'flex', alignItems: 'center', gap: 12, padding: '12px 14px',
-  border: 'none', textAlign: 'left', cursor: 'pointer', width: '100%',
-};
+/**
+ * Apple-style Avatar renderer handling Images, Initials, and Admin Gold variants
+ */
+function LiquidAvatar({ identity, size = 48, isGroup = false }) {
+  const containerStyle = {
+    width: size, height: size, borderRadius: '50%', flexShrink: 0,
+    display: 'flex', alignItems: 'center', justifyContent: 'center',
+    overflow: 'hidden', boxShadow: 'inset 0 0 0 1px var(--glass-border)'
+  };
 
-const primaryButtonStyle = {
-  padding: '12px 24px', borderRadius: 12, border: 'none', background: 'var(--blue)',
-  color: '#fff', fontWeight: 600, fontSize: 15, cursor: 'pointer',
-};
+  if (identity.isAdmin && !isGroup) {
+    return (
+      <div style={{ ...containerStyle, background: 'linear-gradient(135deg, #FFD700 0%, #FFA500 100%)', color: '#fff', fontSize: size * 0.3, fontWeight: 800 }}>
+        ADM
+      </div>
+    );
+  }
+
+  if (identity.avatarUrl) {
+    return (
+      <div style={containerStyle}>
+        <img src={identity.avatarUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+      </div>
+    );
+  }
+
+  const colors = ['#ff5e62', '#4facfe', '#43e97b', '#fa709a', '#a18cd1'];
+  const colorIndex = (identity.name || '').length % colors.length;
+
+  return (
+    <div style={{ ...containerStyle, background: colors[colorIndex], color: '#ffffff', fontWeight: 700, fontSize: size * 0.4 }}>
+      {isGroup ? '#' : getInitials(identity.name)}
+    </div>
+  );
+}
+
+// ============================================================================
+// 5. MAIN HOME COMPONENT (MASTER/DETAIL)
+// ============================================================================
+
+export default function Home() {
+  const { session, profile } = useAuth();
+  const userId = session?.user?.id;
+  
+  // --------------------------------------------------------------------------
+  // WINDOW RESIZE / LAYOUT HOOK
+  // --------------------------------------------------------------------------
+  const [windowWidth, setWindowWidth] = useState(window.innerWidth);
+  useEffect(() => {
+    const handleResize = () => setWindowWidth(window.innerWidth);
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
+  const isMobile = windowWidth < 768;
+
+  // --------------------------------------------------------------------------
+  // APPLICATION STATE
+  // --------------------------------------------------------------------------
+  const [activeChatId, setActiveChatId] = useState(null); 
+  const [activeChatType, setActiveChatType] = useState(null); // 'dm' | 'group'
+  
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchFocused, setSearchFocused] = useState(false);
+  const showSearch = searchFocused || searchQuery.trim().length > 0;
+
+  // Modals
+  const [authOpen, setAuthOpen] = useState(false);
+  const [editProfileOpen, setEditProfileOpen] = useState(false);
+  const [profileCardUserId, setProfileCardUserId] = useState(null);
+
+  // Data Stores
+  const [threads, setThreads] = useState([]);
+  const [groups, setGroups] = useState([]);
+  const [loadingList, setLoadingList] = useState(true);
+
+  // --------------------------------------------------------------------------
+  // UNIFIED DATA FETCHING (GROUPS & DMS)
+  // --------------------------------------------------------------------------
+  const fetchData = useCallback(async () => {
+    let isMounted = true;
+    setLoadingList(true);
+
+    try {
+      // 1. Fetch All Public Groups
+      const { data: groupsData, error: groupsError } = await supabase
+        .from('groups')
+        .select('id, slug, name, description, cover_url, created_at')
+        .order('created_at', { ascending: false });
+
+      if (groupsError) throw groupsError;
+      let finalGroups = groupsData || [];
+
+      // 2. Fetch User DMs (If logged in)
+      let finalThreads = [];
+      if (userId) {
+        const { data: threadRows, error: threadsError } = await supabase
+          .from('dm_threads')
+          .select('id, user_a, user_b, created_at')
+          .or(`user_a.eq.${userId},user_b.eq.${userId}`)
+          .order('created_at', { ascending: false });
+
+        if (threadsError) throw threadsError;
+
+        // Resolve profiles for other users in the DMs
+        const otherIds = (threadRows || []).map((t) => (t.user_a === userId ? t.user_b : t.user_a));
+        let profilesById = {};
+        
+        if (otherIds.length > 0) {
+          const { data: profileRows, error: profilesError } = await supabase
+            .from('profiles')
+            .select('id, username, avatar_url, is_admin')
+            .in('id', otherIds);
+            
+          if (profilesError) throw profilesError;
+          profilesById = Object.fromEntries((profileRows || []).map((p) => [p.id, p]));
+        }
+        
+        finalThreads = (threadRows || []).map((t) => {
+          const otherId = t.user_a === userId ? t.user_b : t.user_a;
+          return {
+            ...t,
+            otherUser: profilesById[otherId] || { id: otherId, username: 'Unknown User' }
+          };
+        });
+      }
+
+      if (isMounted) {
+        setGroups(finalGroups);
+        setThreads(finalThreads);
+      }
+    } catch (err) {
+      console.error("Data fetching error:", err.message);
+    } finally {
+      if (isMounted) setLoadingList(false);
+    }
+    
+    return () => { isMounted = false; };
+  }, [userId]);
+
+  // Initial Fetch
+  useEffect(() => {
+    fetchData();
+  }, [fetchData]);
+
+  // --------------------------------------------------------------------------
+  // ROUTING & INTERACTION LOGIC
+  // --------------------------------------------------------------------------
+  function handleOpenChat(id, type) {
+    setActiveChatId(id);
+    setActiveChatType(type);
+    setSearchQuery(''); 
+  }
+
+  // Resolves the logged-in user's identity for the top-left Avatar
+  const profileIdentity = session 
+    ? { name: profile?.username || 'You', avatarUrl: profile?.avatar_url || null, isAdmin: false } 
+    : null;
+
+  // Layout check for mobile
+  const isChatActive = activeChatId !== null;
+
+  // --------------------------------------------------------------------------
+  // MAIN RENDER
+  // --------------------------------------------------------------------------
+  return (
+    <div style={{ display: 'flex', height: '100vh', width: '100vw', position: 'relative' }}>
+      <LiquidBackgroundEffects />
+
+      {/* 
+        ======================================================================
+        LEFT PANEL: TELEGRAM SIDEBAR
+        ======================================================================
+      */}
+      <div 
+        className={`glass-panel flex-col ${isChatActive && isMobile ? 'hidden' : 'flex'}`} 
+        style={{ 
+          width: isMobile ? '100%' : '380px', 
+          minWidth: isMobile ? '100%' : '380px', 
+          height: '100%', 
+          borderRight: '1px solid var(--glass-border)', 
+          zIndex: 10,
+          borderRadius: 0 // Snaps to edges of the window
+        }}
+      >
+        
+        {/* SIDEBAR HEADER */}
+        <div 
+          style={{ 
+            padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 12, 
+            background: 'var(--glass-strong)', 
+            borderBottom: '1px solid var(--glass-border)' 
+          }}
+        >
+          {/* Main User Avatar Button (Opens Profile/Settings) */}
+          <button 
+            onClick={() => session ? setEditProfileOpen(true) : setAuthOpen(true)} 
+            style={{ 
+              width: 44, height: 44, borderRadius: '50%', border: 'none', padding: 0, 
+              cursor: 'pointer', flexShrink: 0, background: 'transparent',
+              transition: 'transform 0.2s'
+            }}
+            onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.05)'}
+            onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
+          >
+            {session ? (
+              <LiquidAvatar identity={profileIdentity} size={44} />
+            ) : (
+              <div style={{ width: '100%', height: '100%', background: 'var(--blue)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '50%' }}>
+                {Icons.Menu}
+              </div>
+            )}
+          </button>
+
+          {/* Unified Global Search Bar */}
+          <div style={{ position: 'relative', flex: 1 }}>
+            <span style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--dim)', pointerEvents: 'none' }}>
+              {Icons.Search}
+            </span>
+            <input 
+              type="text" 
+              value={searchQuery} 
+              onChange={(e) => setSearchQuery(e.target.value)} 
+              onFocus={() => setSearchFocused(true)} 
+              onBlur={() => setTimeout(() => setSearchFocused(false), 200)} 
+              placeholder="Search..." 
+              style={{ 
+                width: '100%', border: 'none', background: 'var(--glass-border)', 
+                padding: '10px 14px 10px 42px', borderRadius: 14, fontSize: 16, 
+                color: 'var(--ink)', outline: 'none', transition: 'background 0.2s',
+                boxSizing: 'border-box'
+              }} 
+            />
+          </div>
+        </div>
+
+        {/* SIDEBAR SCROLLING LIST */}
+        <div className="custom-scrollbar" style={{ flex: 1, overflowY: 'auto', paddingBottom: 24 }}>
+          
+          {showSearch ? (
+            /* Render Search Module if user is typing */
+            <div className="pop-in">
+              <SearchUsers externalTerm={searchQuery} onSelectUser={(id) => { setProfileCardUserId(id); setSearchQuery(''); }} />
+            </div>
+          ) : (
+            /* Render Standard Unified List */
+            <div style={{ display: 'flex', flexDirection: 'column' }}>
+              
+              {loadingList && <ListSkeletonLoader />}
+
+              {/* 
+                1. GROUPS SECTION 
+              */}
+              {!loadingList && groups.length > 0 && (
+                <>
+                  <div style={{ 
+                    fontSize: 13, fontWeight: 700, textTransform: 'uppercase', 
+                    letterSpacing: 0.5, color: 'var(--dim)', padding: '18px 16px 6px' 
+                  }}>
+                    Groups
+                  </div>
+                  
+                  {groups.map((group) => {
+                    const isActive = activeChatId === group.slug && activeChatType === 'group';
+                    const identity = { name: group.name, avatarUrl: group.cover_url, isAdmin: false };
+                    
+                    return (
+                      <button 
+                        key={group.id} 
+                        className="chat-row"
+                        onClick={() => handleOpenChat(group.slug, 'group')} 
+                        style={{ 
+                          display: 'flex', alignItems: 'center', gap: 12, padding: '10px 16px', 
+                          border: 'none', textAlign: 'left', cursor: 'pointer', width: '100%', 
+                          background: isActive ? 'var(--blue)' : 'transparent', 
+                          color: isActive ? '#fff' : 'var(--ink)'
+                        }}
+                      >
+                        <LiquidAvatar identity={identity} size={50} isGroup={true} />
+                        <div style={{ flex: 1, minWidth: 0, borderBottom: isActive ? 'none' : '1px solid var(--glass-border)', paddingBottom: 12, paddingTop: 2 }}>
+                          <span style={{ fontWeight: 600, fontSize: 16, display: 'block', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                            {group.name}
+                          </span>
+                          <span style={{ fontSize: 14, color: isActive ? 'rgba(255,255,255,0.8)' : 'var(--dim)', display: 'block', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
+                            {group.description || 'Public Channel'}
+                          </span>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </>
+              )}
+
+              {/* 
+                2. CHATS SECTION 
+              */}
+              {!loadingList && userId && threads.length > 0 && (
+                <>
+                  <div style={{ 
+                    fontSize: 13, fontWeight: 700, textTransform: 'uppercase', 
+                    letterSpacing: 0.5, color: 'var(--dim)', padding: '24px 16px 6px' 
+                  }}>
+                    Chats
+                  </div>
+                  
+                  {threads.map((thread) => {
+                    const otherId = thread.user_a === userId ? thread.user_b : thread.user_a;
+                    const isActive = activeChatId === otherId && activeChatType === 'dm';
+                    const identity = displayIdentity(thread.otherUser); 
+                    
+                    return (
+                      <button 
+                        key={thread.id} 
+                        className="chat-row"
+                        onClick={() => handleOpenChat(otherId, 'dm')} 
+                        style={{ 
+                          display: 'flex', alignItems: 'center', gap: 12, padding: '10px 16px', 
+                          border: 'none', textAlign: 'left', cursor: 'pointer', width: '100%', 
+                          background: isActive ? 'var(--blue)' : 'transparent', 
+                          color: isActive ? '#fff' : 'var(--ink)'
+                        }}
+                      >
+                        <LiquidAvatar identity={identity} size={50} />
+                        <div style={{ flex: 1, minWidth: 0, borderBottom: isActive ? 'none' : '1px solid var(--glass-border)', paddingBottom: 12, paddingTop: 2 }}>
+                          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                            <span style={{ fontWeight: 600, fontSize: 16, display: 'flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                              {identity.name}
+                              {identity.isAdmin && <span style={{ color: isActive ? '#fff' : '#FF8C00' }}>{Icons.AdminShield}</span>}
+                            </span>
+                            <span style={{ fontSize: 12, color: isActive ? 'rgba(255,255,255,0.7)' : 'var(--dim)', flexShrink: 0, paddingLeft: 8 }}>
+                              {formatTelegramTime(thread.created_at)}
+                            </span>
+                          </div>
+                          <span style={{ fontSize: 14, color: isActive ? 'rgba(255,255,255,0.8)' : 'var(--dim)', display: 'block', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
+                            Tap to view messages
+                          </span>
+                        </div>
+                      </button>
+                    );
+                  })}
+                </>
+              )}
+
+              {/* Login Call to Action if logged out */}
+              {!loadingList && !userId && (
+                <div style={{ padding: '40px 20px', textAlign: 'center', color: 'var(--dim)' }}>
+                  <p style={{ fontSize: 15, marginBottom: 16, fontWeight: 500 }}>Sign in to view your private chats.</p>
+                  <button 
+                    onClick={() => setAuthOpen(true)} 
+                    style={{ background: 'var(--blue)', color: '#fff', border: 'none', padding: '12px 24px', borderRadius: 20, fontWeight: 700, fontSize: 15, cursor: 'pointer', boxShadow: '0 8px 24px rgba(10,132,255,0.3)' }}
+                  >
+                    Sign In
+                  </button>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* 
+        ======================================================================
+        RIGHT PANEL: TELEGRAM MASTER CHAT VIEW
+        ======================================================================
+      */}
+      <div 
+        className={`glass-strong ${!isChatActive && isMobile ? 'hidden' : 'flex'}`} 
+        style={{ 
+          flex: 1, flexDirection: 'column', position: 'relative', 
+          borderRadius: 0, zIndex: 1, boxShadow: '-4px 0 24px rgba(0,0,0,0.03)' 
+        }}
+      >
+        {activeChatId ? (
+          activeChatType === 'dm' ? (
+            <DirectMessages 
+              openThreadWithUserId={activeChatId} 
+              onBack={() => { setActiveChatId(null); setActiveChatType(null); }} 
+            />
+          ) : (
+            <GroupChat 
+              groupSlug={activeChatId} 
+              onBack={() => { setActiveChatId(null); setActiveChatType(null); }} 
+            />
+          )
+        ) : (
+          /* Telegram "No Chat Selected" Empty State */
+          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: 'var(--dim)', userSelect: 'none' }}>
+            <div style={{ marginBottom: 20, animation: 'pop-in 0.6s cubic-bezier(0.2, 0.8, 0.2, 1)' }}>
+              {Icons.EmptyChat}
+            </div>
+            <p style={{ fontSize: 15, fontWeight: 600, background: 'var(--glass-border)', padding: '8px 20px', borderRadius: 24 }}>
+              Select a chat to start messaging
+            </p>
+          </div>
+        )}
+      </div>
+
+      {/* 
+        ======================================================================
+        GLOBAL MODALS
+        ======================================================================
+      */}
+      <AuthModal 
+        open={authOpen} 
+        onClose={() => setAuthOpen(false)} 
+        initialTab="signin" 
+        onVerified={() => setAuthOpen(false)} 
+      />
+      <EditProfile 
+        open={editProfileOpen} 
+        onClose={() => setEditProfileOpen(false)} 
+      />
+      <ProfileCard 
+        userId={profileCardUserId} 
+        open={profileCardUserId !== null} 
+        onClose={() => setProfileCardUserId(null)} 
+        onMessage={(id) => { 
+          setProfileCardUserId(null); 
+          handleOpenChat(id, 'dm'); 
+        }} 
+      />
+    </div>
+  );
+}
