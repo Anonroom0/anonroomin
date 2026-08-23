@@ -1363,4 +1363,3 @@ export default function DirectMessages({ openThreadWithUserId, onBack }) {
       />
     </div>
   );
-}
