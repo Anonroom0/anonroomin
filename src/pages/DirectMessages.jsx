@@ -629,17 +629,18 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
 
     async function initializeThread() {
       try {
-        const { data: existing, error: findError } = await supabase
+        // FIXED: Using .limit(1) instead of .maybeSingle() to safely bypass duplicates
+        const { data: existingRows, error: findError } = await supabase
           .from('dm_threads')
           .select('id, user_a, user_b')
           .or(`and(user_a.eq.${userId},user_b.eq.${openThreadWithUserId}),and(user_a.eq.${openThreadWithUserId},user_b.eq.${userId})`)
-          .maybeSingle();
+          .limit(1);
 
         if (findError) {
           throw findError;
         }
 
-        let threadRow = existing;
+        let threadRow = existingRows?.[0] || null;
 
         if (!threadRow) {
           const { data: created, error: createError } = await supabase
@@ -671,6 +672,7 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
             otherUser: resolvedOtherUser,
           });
           setThreadStatus('ready');
+          
           if (onThreadReady) {
             onThreadReady({ id: resolvedOtherUser.id, username: resolvedOtherUser.username });
           }
@@ -689,11 +691,62 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
     return () => {
       isMounted = false;
     };
-    // onThreadReady is a routing callback passed fresh from Home each
-    // render — re-running this fetch off its identity would refetch the
-    // same thread for no reason, so it's intentionally left out here.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [userId, openThreadWithUserId]);
+
+  useEffect(() => {
+    if (!activeThread?.id) {
+      return;
+    }
+
+    let isMounted = true;
+    setMessagesLoading(true);
+
+    async function fetchMessages() {
+      const { data, error } = await supabase
+        .from('dm_messages')
+        .select('*')
+        .eq('thread_id', activeThread.id)
+        .order('created_at', { ascending: true })
+        .limit(MESSAGE_LIMIT);
+
+      if (error) {
+        setDbErrorDetails(error.message || JSON.stringify(error));
+      } else if (isMounted) {
+        setMessages(data || []);
+      }
+      setMessagesLoading(false);
+    }
+
+    fetchMessages();
+
+    const channel = supabase.channel(`dm_messages:${activeThread.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'dm_messages',
+          filter: `thread_id=eq.${activeThread.id}`,
+        },
+        (payload) => {
+          if (!isMounted) {
+            return;
+          }
+          setMessages((prev) => {
+            if (prev.some(m => m.id === payload.new.id)) {
+              return prev;
+            }
+            return [...prev, payload.new];
+          });
+        }
+      ).subscribe();
+
+    return () => {
+      isMounted = false;
+      supabase.removeChannel(channel);
+    };
+  }, [activeThread?.id]);
 
   useEffect(() => {
     if (scrollRef.current) {
@@ -763,6 +816,7 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
     setSending(false);
 
     if (error) {
+      setDbErrorDetails(error.message);
       alert(error.message);
       return;
     }
@@ -788,19 +842,24 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
 
     if (uploadError) {
       setUploading(false);
+      setDbErrorDetails(uploadError.message);
       alert('Upload failed.');
       return;
     }
 
     const publicUrl = supabase.storage.from('media').getPublicUrl(path).data.publicUrl;
 
-    await supabase.from('dm_messages').insert({
+    const { error: insertError } = await supabase.from('dm_messages').insert({
       thread_id: activeThread.id,
       sender_id: userId,
       media_url: publicUrl,
       media_type: guessMediaType(file),
       reply_to_id: replyingTo?.id ?? null,
     });
+
+    if (insertError) {
+      setDbErrorDetails(insertError.message);
+    }
 
     setUploading(false);
     setReplyingTo(null);
@@ -823,6 +882,7 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
     });
 
     if (error) {
+      setDbErrorDetails(error.message);
       alert(error.message);
       return;
     }
@@ -849,7 +909,8 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
           alignItems: 'center',
           justifyContent: 'center',
           background: 'var(--bg)',
-          userSelect: 'none'
+          userSelect: 'none',
+          WebkitUserSelect: 'none'
         }}
       >
         <div style={{ color: 'var(--blue)' }}>
@@ -871,8 +932,9 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
           background: 'var(--bg)',
           flexDirection: 'column',
           gap: 16,
+          padding: 24,
           userSelect: 'none',
-          padding: 24
+          WebkitUserSelect: 'none'
         }}
       >
         <p style={{ color: 'var(--dim)', fontWeight: 600 }}>Failed to load chat.</p>
@@ -929,7 +991,8 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
         height: '100%',
         overflow: 'hidden',
         zIndex: 1,
-        userSelect: 'none'
+        userSelect: 'none',
+        WebkitUserSelect: 'none'
       }}
     >
       <GlobalKeyframes />
@@ -1047,6 +1110,14 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
           </span>
         </div>
       </header>
+
+      {/* Temporary DB Error Notification Banner if error occurred post-load */}
+      {dbErrorDetails && (
+        <div style={{ background: 'rgba(255, 59, 48, 0.12)', borderBottom: '1px solid rgba(255, 59, 48, 0.3)', padding: '8px 16px', color: '#ff3b30', fontSize: 12, fontFamily: 'monospace', zIndex: 25, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <span><strong>DB Error:</strong> {dbErrorDetails}</span>
+          <button onClick={() => setDbErrorDetails(null)} style={{ background: 'transparent', border: 'none', color: '#ff3b30', cursor: 'pointer', fontWeight: 700 }}>✕</button>
+        </div>
+      )}
 
       {/*
         =======================================================================
