@@ -3,17 +3,20 @@
  * GROUP CHAT MASTER VIEW (APPLE LIQUID UI & TELEGRAM PHYSICS)
  * ============================================================================
  * This component acts as the master chat pane for Group Conversations.
- * 
- * Corrected Features Included Inline:
- * - Touch-Physics Swipe-to-Reply (Telegram Style)
- * - Left/Right Message Alignment with Avatar (DP) display
- * - Clickable Avatar/Name to open Profile Card
- * - Fixed Bottom Input constraint (No more hiding/cut-off inputs)
- * - Liquid Glassmorphism Backgrounds
- * - Realtime Supabase Subscriptions
- * - Fully unminified, enterprise-grade formatting
- * 
- * Dependencies: React, Supabase, AuthContext
+ *
+ * CHANGES IN THIS PASS:
+ * - Emoji / GIF / Sticker picker (see EmojiGifPicker.jsx, powered by Tenor's
+ *   free API for GIFs/stickers; emoji is a static local list, no API needed)
+ * - Chat canvas now renders a subtle background image/pattern layer
+ * - Message bubble text is non-selectable (user-select: none + copy blocked)
+ * - Send button replaced with a nicer radial cooldown ring
+ *
+ * NOTE ON "open group chat the same way DM opens, with a sidebar, in their
+ * own domain/route": that's a routing/app-shell change (which layout wraps
+ * this component, what URL pattern renders it) that lives outside this file.
+ * See the chat reply for what's needed to wire that up safely.
+ *
+ * Dependencies: React, Supabase, AuthContext, EmojiGifPicker
  * ============================================================================
  */
 
@@ -24,6 +27,7 @@ import { createCooldown } from '../lib/rateLimit';
 import MediaViewer from './MediaViewer';
 import ProfileCard from './ProfileCard';
 import AuthModal from './AuthModal';
+import EmojiGifPicker from './EmojiGifPicker';
 
 // ============================================================================
 // 1. CONSTANTS & CONFIGURATION
@@ -35,19 +39,22 @@ const ADMIN_DISPLAY_NAME = 'ADMIN';
 const BUBBLE_OWN = 'var(--blue, #0a84ff)';
 const BUBBLE_THEM = 'var(--glass-strong, rgba(255, 255, 255, 0.85))';
 
+const CHAT_BACKGROUND_IMAGE =
+  "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='60' height='60' viewBox='0 0 60 60'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%230a84ff' fill-opacity='0.035'%3E%3Ccircle cx='6' cy='6' r='2'/%3E%3Ccircle cx='36' cy='24' r='2'/%3E%3Ccircle cx='18' cy='42' r='2'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E\")";
+
 // ============================================================================
 // 2. MASSIVE INLINE SVG VECTOR LIBRARY (APPLE / TELEGRAM STYLE)
 // ============================================================================
 const Vectors = {
   Back: (
-    <svg 
-      width="24" 
-      height="24" 
-      viewBox="0 0 24 24" 
-      fill="none" 
-      stroke="currentColor" 
-      strokeWidth="2.5" 
-      strokeLinecap="round" 
+    <svg
+      width="24"
+      height="24"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.5"
+      strokeLinecap="round"
       strokeLinejoin="round"
     >
       <path d="M19 12H5" />
@@ -55,28 +62,28 @@ const Vectors = {
     </svg>
   ),
   Attach: (
-    <svg 
-      width="22" 
-      height="22" 
-      viewBox="0 0 24 24" 
-      fill="none" 
-      stroke="currentColor" 
-      strokeWidth="2" 
-      strokeLinecap="round" 
+    <svg
+      width="22"
+      height="22"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
       strokeLinejoin="round"
     >
       <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
     </svg>
   ),
   Send: (
-    <svg 
-      width="20" 
-      height="20" 
-      viewBox="0 0 24 24" 
-      fill="none" 
-      stroke="currentColor" 
-      strokeWidth="2.5" 
-      strokeLinecap="round" 
+    <svg
+      width="20"
+      height="20"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.5"
+      strokeLinecap="round"
       strokeLinejoin="round"
     >
       <line x1="22" y1="2" x2="11" y2="13" />
@@ -84,14 +91,14 @@ const Vectors = {
     </svg>
   ),
   ReplyAction: (
-    <svg 
-      width="24" 
-      height="24" 
-      viewBox="0 0 24 24" 
-      fill="none" 
-      stroke="currentColor" 
-      strokeWidth="2.5" 
-      strokeLinecap="round" 
+    <svg
+      width="24"
+      height="24"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.5"
+      strokeLinecap="round"
       strokeLinejoin="round"
     >
       <polyline points="9 17 4 12 9 7" />
@@ -99,14 +106,14 @@ const Vectors = {
     </svg>
   ),
   Close: (
-    <svg 
-      width="16" 
-      height="16" 
-      viewBox="0 0 24 24" 
-      fill="none" 
-      stroke="currentColor" 
-      strokeWidth="3" 
-      strokeLinecap="round" 
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="3"
+      strokeLinecap="round"
       strokeLinejoin="round"
     >
       <line x1="18" y1="6" x2="6" y2="18" />
@@ -114,14 +121,14 @@ const Vectors = {
     </svg>
   ),
   FileText: (
-    <svg 
-      width="24" 
-      height="24" 
-      viewBox="0 0 24 24" 
-      fill="none" 
-      stroke="currentColor" 
-      strokeWidth="2" 
-      strokeLinecap="round" 
+    <svg
+      width="24"
+      height="24"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
       strokeLinejoin="round"
     >
       <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
@@ -132,29 +139,29 @@ const Vectors = {
     </svg>
   ),
   AdminShield: (
-    <svg 
-      width="14" 
-      height="14" 
-      viewBox="0 0 24 24" 
-      fill="none" 
-      stroke="currentColor" 
-      strokeWidth="2.5" 
-      strokeLinecap="round" 
+    <svg
+      width="14"
+      height="14"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.5"
+      strokeLinecap="round"
       strokeLinejoin="round"
     >
       <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
     </svg>
   ),
   Spinner: (
-    <svg 
-      width="24" 
-      height="24" 
-      viewBox="0 0 24 24" 
-      fill="none" 
-      stroke="currentColor" 
-      strokeWidth="2.5" 
-      strokeLinecap="round" 
-      strokeLinejoin="round" 
+    <svg
+      width="24"
+      height="24"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2.5"
+      strokeLinecap="round"
+      strokeLinejoin="round"
       className="spinner-animation"
     >
       <line x1="12" y1="2" x2="12" y2="6" />
@@ -166,23 +173,34 @@ const Vectors = {
       <line x1="4.93" y1="19.07" x2="7.76" y2="16.24" />
       <line x1="16.24" y1="7.76" x2="19.07" y2="4.93" />
     </svg>
-  )
+  ),
+  Smiley: (
+    <svg
+      width="22"
+      height="22"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+    >
+      <circle cx="12" cy="12" r="10" />
+      <path d="M8 14s1.5 2 4 2 4-2 4-2" />
+      <line x1="9" y1="9" x2="9.01" y2="9" />
+      <line x1="15" y1="9" x2="15.01" y2="9" />
+    </svg>
+  ),
 };
 
 // ============================================================================
 // 3. UTILITY & FORMATTING FUNCTIONS
 // ============================================================================
 
-/**
- * Validates if the message was sent by an administrator.
- */
 function isSenderAdmin(message) {
   return message.sender_name === ADMIN_DISPLAY_NAME || message.is_admin === true;
 }
 
-/**
- * Extracts initials from a username for the placeholder avatar.
- */
 function getInitials(name) {
   if (!name) {
     return '?';
@@ -194,22 +212,16 @@ function getInitials(name) {
   return name.slice(0, 2).toUpperCase();
 }
 
-/**
- * Formats a raw date string into a Telegram-style timestamp.
- */
 function formatTime(dateString) {
   if (!dateString) {
     return '';
   }
-  return new Date(dateString).toLocaleTimeString([], { 
-    hour: 'numeric', 
-    minute: '2-digit' 
+  return new Date(dateString).toLocaleTimeString([], {
+    hour: 'numeric',
+    minute: '2-digit',
   });
 }
 
-/**
- * Identifies the type of media attached to a message.
- */
 function guessMediaType(file) {
   if (!file) {
     return 'file';
@@ -220,9 +232,6 @@ function guessMediaType(file) {
   return 'file';
 }
 
-/**
- * Generates a clean text snippet for the animated reply preview.
- */
 function generateReplySnippet(message) {
   if (!message) {
     return 'Original message';
@@ -230,6 +239,10 @@ function generateReplySnippet(message) {
   if (message.media_url) {
     if (message.media_type === 'image') {
       return '📸 Photo';
+    } else if (message.media_type === 'gif') {
+      return '🎞️ GIF';
+    } else if (message.media_type === 'sticker') {
+      return '🏷️ Sticker';
     } else {
       return '📄 Attachment';
     }
@@ -241,9 +254,6 @@ function generateReplySnippet(message) {
   return text;
 }
 
-/**
- * Formats date into Apple style sticky pills ("Today", "Yesterday").
- */
 function formatDayLabel(dateString) {
   const date = new Date(dateString);
   const today = new Date();
@@ -251,8 +261,8 @@ function formatDayLabel(dateString) {
   yesterday.setDate(today.getDate() - 1);
 
   const isSameDay = (a, b) => {
-    return a.getFullYear() === b.getFullYear() && 
-           a.getMonth() === b.getMonth() && 
+    return a.getFullYear() === b.getFullYear() &&
+           a.getMonth() === b.getMonth() &&
            a.getDate() === b.getDate();
   };
 
@@ -262,16 +272,13 @@ function formatDayLabel(dateString) {
   if (isSameDay(date, yesterday)) {
     return 'Yesterday';
   }
-  return date.toLocaleDateString([], { 
-    month: 'long', 
-    day: 'numeric', 
-    year: 'numeric' 
+  return date.toLocaleDateString([], {
+    month: 'long',
+    day: 'numeric',
+    year: 'numeric',
   });
 }
 
-/**
- * Generates a unique key for grouping messages by day.
- */
 function dayKey(dateString) {
   return new Date(dateString).toDateString();
 }
@@ -280,68 +287,69 @@ function dayKey(dateString) {
 // 4. SUB-COMPONENTS & PHYSICS ENGINE
 // ============================================================================
 
-/**
- * Injects required CSS animations into the document head.
- */
 const GlobalKeyframes = () => (
   <style>{`
     @keyframes chatFloat {
-      0% { 
-        transform: translate(0, 0) scale(1); 
+      0% {
+        transform: translate(0, 0) scale(1);
       }
-      50% { 
-        transform: translate(5%, -5%) scale(1.1); 
+      50% {
+        transform: translate(5%, -5%) scale(1.1);
       }
-      100% { 
-        transform: translate(0, 0) scale(1); 
+      100% {
+        transform: translate(0, 0) scale(1);
       }
     }
     @keyframes slideUpFade {
-      0% { 
-        opacity: 0; 
-        transform: translateY(10px); 
+      0% {
+        opacity: 0;
+        transform: translateY(10px);
       }
-      100% { 
-        opacity: 1; 
-        transform: translateY(0); 
+      100% {
+        opacity: 1;
+        transform: translateY(0);
       }
     }
-    .spinner-animation { 
-      animation: spin 1.2s linear infinite; 
+    .spinner-animation {
+      animation: spin 1.2s linear infinite;
     }
-    @keyframes spin { 
-      100% { 
-        transform: rotate(360deg); 
-      } 
+    @keyframes spin {
+      100% {
+        transform: rotate(360deg);
+      }
+    }
+    .no-copy-text {
+      -webkit-user-select: none;
+      -moz-user-select: none;
+      -ms-user-select: none;
+      user-select: none;
+      -webkit-touch-callout: none;
     }
   `}</style>
 );
 
-/**
- * Apple-style Avatar renderer handling Images, Initials, and Admin variants.
- */
 function GroupLiquidAvatar({ url, name, size = 42, isAdmin = false }) {
   const containerStyle = {
-    width: size, 
-    height: size, 
-    borderRadius: '50%', 
+    width: size,
+    height: size,
+    borderRadius: '50%',
     flexShrink: 0,
-    display: 'flex', 
-    alignItems: 'center', 
+    display: 'flex',
+    alignItems: 'center',
     justifyContent: 'center',
-    overflow: 'hidden', 
+    overflow: 'hidden',
     boxShadow: 'inset 0 0 0 1px var(--glass-border)',
   };
 
   if (isAdmin) {
     return (
-      <div 
-        style={{ 
-          ...containerStyle, 
-          background: 'linear-gradient(135deg, #FFD700 0%, #FFA500 100%)', 
-          color: '#fff', 
-          fontSize: size * 0.35, 
-          fontWeight: 800 
+      <div
+        style={{
+          ...containerStyle,
+          background: 'linear-gradient(135deg, #FFD700 0%, #FFA500 100%)',
+          color: '#fff',
+          fontSize: size * 0.35,
+          fontWeight: 800,
         }}
       >
         ADM
@@ -352,35 +360,35 @@ function GroupLiquidAvatar({ url, name, size = 42, isAdmin = false }) {
   if (url) {
     return (
       <div style={containerStyle}>
-        <img 
-          src={url} 
-          alt={name} 
-          style={{ 
-            width: '100%', 
-            height: '100%', 
-            objectFit: 'cover' 
-          }} 
+        <img
+          src={url}
+          alt={name}
+          style={{
+            width: '100%',
+            height: '100%',
+            objectFit: 'cover',
+          }}
         />
       </div>
     );
   }
 
   const colors = [
-    'linear-gradient(135deg, #ff5e62 0%, #ff9966 100%)', 
-    'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)', 
-    'linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)', 
-    'linear-gradient(135deg, #fa709a 0%, #fee140 100%)'
+    'linear-gradient(135deg, #ff5e62 0%, #ff9966 100%)',
+    'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
+    'linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)',
+    'linear-gradient(135deg, #fa709a 0%, #fee140 100%)',
   ];
   const colorIndex = (name || '').length % colors.length;
 
   return (
-    <div 
-      style={{ 
-        ...containerStyle, 
-        background: colors[colorIndex], 
-        color: '#ffffff', 
-        fontWeight: 700, 
-        fontSize: size * 0.4 
+    <div
+      style={{
+        ...containerStyle,
+        background: colors[colorIndex],
+        color: '#ffffff',
+        fontWeight: 700,
+        fontSize: size * 0.4,
       }}
     >
       {getInitials(name)}
@@ -388,10 +396,6 @@ function GroupLiquidAvatar({ url, name, size = 42, isAdmin = false }) {
   );
 }
 
-/**
- * SwipeableMessage Component (Telegram Touch Physics)
- * Wraps the message row and handles sliding left to trigger a reply.
- */
 function SwipeableMessage({ children, onSwipe, disabled }) {
   const [translateX, setTranslateX] = useState(0);
   const touchStartX = useRef(null);
@@ -409,8 +413,7 @@ function SwipeableMessage({ children, onSwipe, disabled }) {
     }
     const currentX = e.touches[0].clientX;
     const diff = currentX - touchStartX.current;
-    
-    // Allow swipe left only (negative diff) up to -70px constraint
+
     if (diff < 0 && diff > -70) {
       setTranslateX(diff);
     }
@@ -420,11 +423,9 @@ function SwipeableMessage({ children, onSwipe, disabled }) {
     if (disabled) {
       return;
     }
-    // If swiped far enough left, trigger the callback
     if (translateX <= -40) {
       onSwipe();
     }
-    // Spring physics bounce back
     setTranslateX(0);
     touchStartX.current = null;
   };
@@ -439,24 +440,19 @@ function SwipeableMessage({ children, onSwipe, disabled }) {
         transition: translateX === 0 ? 'transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1)' : 'none',
         width: '100%',
         position: 'relative',
-        // Tell the browser this row only handles horizontal gestures itself;
-        // vertical drags pass straight through to the message list's native
-        // scroll instead of the two fighting each other mid-swipe (that
-        // fight was the "everything moves a little" jitter).
         touchAction: 'pan-y',
         willChange: 'transform',
       }}
     >
-      {/* Hidden Reply Icon revealed by swipe action */}
-      <div 
+      <div
         style={{
-          position: 'absolute', 
-          top: '50%', 
-          right: -40, 
+          position: 'absolute',
+          top: '50%',
+          right: -40,
           transform: 'translateY(-50%)',
-          opacity: translateX < -20 ? 1 : 0, 
-          transition: 'opacity 0.2s', 
-          color: 'var(--dim)'
+          opacity: translateX < -20 ? 1 : 0,
+          transition: 'opacity 0.2s',
+          color: 'var(--dim)',
         }}
       >
         {Vectors.ReplyAction}
@@ -466,38 +462,113 @@ function SwipeableMessage({ children, onSwipe, disabled }) {
   );
 }
 
+/**
+ * Redesigned send / cooldown control — a radial progress ring instead of the
+ * old dot-in-a-conic-gradient.
+ */
+function SendButton({ canSend, sending, cooldownPercent }) {
+  const isCoolingDown = cooldownPercent > 0;
+  const ringSize = 44;
+  const strokeWidth = 3;
+  const radius = (ringSize - strokeWidth) / 2;
+  const circumference = 2 * Math.PI * radius;
+  const dashOffset = circumference * (1 - cooldownPercent / 100);
+
+  return (
+    <button
+      type="submit"
+      disabled={!canSend || sending || isCoolingDown}
+      aria-label={isCoolingDown ? 'Please wait before sending again' : 'Send message'}
+      style={{
+        position: 'relative',
+        width: ringSize,
+        height: ringSize,
+        borderRadius: '50%',
+        border: 'none',
+        flexShrink: 0,
+        background: isCoolingDown
+          ? 'var(--glass)'
+          : (canSend ? 'var(--blue)' : 'var(--glass-border)'),
+        color: canSend ? '#fff' : 'var(--dim)',
+        cursor: canSend && !isCoolingDown ? 'pointer' : 'default',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        transition: 'background 0.2s',
+      }}
+    >
+      {isCoolingDown ? (
+        <>
+          <svg
+            width={ringSize}
+            height={ringSize}
+            style={{ position: 'absolute', top: 0, left: 0, transform: 'rotate(-90deg)' }}
+          >
+            <circle
+              cx={ringSize / 2}
+              cy={ringSize / 2}
+              r={radius}
+              fill="none"
+              stroke="var(--glass-border)"
+              strokeWidth={strokeWidth}
+            />
+            <circle
+              cx={ringSize / 2}
+              cy={ringSize / 2}
+              r={radius}
+              fill="none"
+              stroke="var(--blue)"
+              strokeWidth={strokeWidth}
+              strokeLinecap="round"
+              strokeDasharray={circumference}
+              strokeDashoffset={dashOffset}
+              style={{ transition: 'stroke-dashoffset 0.2s linear' }}
+            />
+          </svg>
+          <span
+            style={{
+              width: 8,
+              height: 8,
+              borderRadius: '50%',
+              background: 'var(--blue)',
+            }}
+          />
+        </>
+      ) : (
+        Vectors.Send
+      )}
+    </button>
+  );
+}
+
 // ============================================================================
 // 5. MAIN GROUP CHAT COMPONENT EXPORT
 // ============================================================================
 
 export default function GroupChat({ groupSlug, onBack }) {
   const { session, profile } = useAuth();
-  
+
   // --------------------------------------------------------------------------
   // STATE MANAGEMENT
   // --------------------------------------------------------------------------
-  
-  // Group Data State
+
   const [group, setGroup] = useState(null);
-  const [groupStatus, setGroupStatus] = useState('loading'); 
-  
-  // Messages Array State
+  const [groupStatus, setGroupStatus] = useState('loading');
+
   const [messages, setMessages] = useState([]);
   const [messagesLoading, setMessagesLoading] = useState(true);
-  
-  // Composer & Input State
+
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
   const [uploading, setUploading] = useState(false);
-  const [replyingTo, setReplyingTo] = useState(null); 
-  
-  // Modals & UI States
+  const [replyingTo, setReplyingTo] = useState(null);
+
   const [viewerMedia, setViewerMedia] = useState(null);
   const [cooldownPercent, setCooldownPercent] = useState(0);
   const [profileCardUserId, setProfileCardUserId] = useState(null);
   const [authOpen, setAuthOpen] = useState(false);
+  const [pickerOpen, setPickerOpen] = useState(false);
 
-  // Reference Hooks
   const scrollRef = useRef(null);
   const fileInputRef = useRef(null);
   const cooldownRef = useRef(null);
@@ -505,13 +576,12 @@ export default function GroupChat({ groupSlug, onBack }) {
   // --------------------------------------------------------------------------
   // INITIALIZATION EFFECTS
   // --------------------------------------------------------------------------
-  
-  // 1. Fetch Group Information based on Slug
+
   useEffect(() => {
     if (!groupSlug) {
       return;
     }
-    
+
     let isMounted = true;
     setGroupStatus('loading');
 
@@ -522,11 +592,11 @@ export default function GroupChat({ groupSlug, onBack }) {
           .select('*')
           .eq('slug', groupSlug)
           .maybeSingle();
-          
+
         if (error) {
           throw error;
         }
-        
+
         if (isMounted) {
           if (!data) {
             setGroupStatus('error');
@@ -536,26 +606,25 @@ export default function GroupChat({ groupSlug, onBack }) {
           }
         }
       } catch (err) {
-        console.error("Failed to load group:", err);
+        console.error('Failed to load group:', err);
         if (isMounted) {
           setGroupStatus('error');
         }
       }
     }
-    
+
     initializeGroup();
-    
-    return () => { 
-      isMounted = false; 
+
+    return () => {
+      isMounted = false;
     };
   }, [groupSlug]);
 
-  // 2. Fetch Messages and setup Realtime Subscription
   useEffect(() => {
     if (!group?.id) {
       return;
     }
-    
+
     let isMounted = true;
     setMessagesLoading(true);
 
@@ -566,31 +635,29 @@ export default function GroupChat({ groupSlug, onBack }) {
         .eq('group_id', group.id)
         .order('created_at', { ascending: true })
         .limit(MESSAGE_LIMIT);
-        
+
       if (!error && isMounted) {
         setMessages(data || []);
         setMessagesLoading(false);
       }
     }
-    
+
     fetchMessages();
 
-    // Supabase Postgres Realtime Subscription for instant delivery
     const channel = supabase.channel(`group_messages:${group.id}`)
       .on(
-        'postgres_changes', 
-        { 
-          event: 'INSERT', 
-          schema: 'public', 
-          table: 'group_messages', 
-          filter: `group_id=eq.${group.id}` 
+        'postgres_changes',
+        {
+          event: 'INSERT',
+          schema: 'public',
+          table: 'group_messages',
+          filter: `group_id=eq.${group.id}`,
         },
         (payload) => {
           if (!isMounted) {
             return;
           }
           setMessages((prev) => {
-            // Prevent duplicate message rendering
             if (prev.some(m => m.id === payload.new.id)) {
               return prev;
             }
@@ -599,29 +666,27 @@ export default function GroupChat({ groupSlug, onBack }) {
         }
       ).subscribe();
 
-    return () => { 
-      isMounted = false; 
-      supabase.removeChannel(channel); 
+    return () => {
+      isMounted = false;
+      supabase.removeChannel(channel);
     };
   }, [group?.id]);
 
-  // 3. Scroll Physics Engine
   useEffect(() => {
     if (scrollRef.current) {
-      scrollRef.current.scrollTo({ 
-        top: scrollRef.current.scrollHeight, 
-        behavior: 'smooth' 
+      scrollRef.current.scrollTo({
+        top: scrollRef.current.scrollHeight,
+        behavior: 'smooth',
       });
     }
   }, [messages, replyingTo]);
 
-  // 4. Rate Limiter Cooldown
   useEffect(() => {
     cooldownRef.current = createCooldown(
-      (percent) => setCooldownPercent(percent), 
+      (percent) => setCooldownPercent(percent),
       () => setCooldownPercent(0)
     );
-    
+
     return () => {
       if (cooldownRef.current) {
         cooldownRef.current.cancel();
@@ -632,83 +697,80 @@ export default function GroupChat({ groupSlug, onBack }) {
   // --------------------------------------------------------------------------
   // INTERACTION HANDLERS
   // --------------------------------------------------------------------------
-  
+
   const startReply = useCallback((message) => {
-    setReplyingTo({ 
-      id: message.id, 
-      sender_name: message.sender_name, 
-      text: message.text, 
-      media_url: message.media_url, 
-      media_type: message.media_type 
+    setReplyingTo({
+      id: message.id,
+      sender_name: message.sender_name,
+      text: message.text,
+      media_url: message.media_url,
+      media_type: message.media_type,
     });
   }, []);
 
   async function handleSend(e) {
     e.preventDefault();
     const trimmed = text.trim();
-    
-    // Pre-flight checks
+
     if (!trimmed || !session?.user || !group || cooldownPercent > 0 || sending) {
       return;
     }
 
     setSending(true);
-    
-    // Inject correct display name context
-    const senderName = profile?.is_admin 
-      ? ADMIN_DISPLAY_NAME 
+
+    const senderName = profile?.is_admin
+      ? ADMIN_DISPLAY_NAME
       : (profile?.username || 'Anonymous');
 
     const { error } = await supabase.from('group_messages').insert({
-      group_id: group.id, 
-      user_id: session.user.id, 
-      sender_name: senderName, 
-      text: trimmed, 
+      group_id: group.id,
+      user_id: session.user.id,
+      sender_name: senderName,
+      text: trimmed,
       reply_to_id: replyingTo?.id ?? null,
     });
-    
+
     setSending(false);
-    
-    if (error) { 
-      alert(error.message); 
-      return; 
+
+    if (error) {
+      alert(error.message);
+      return;
     }
 
-    // Reset Composer state
     setText('');
     setReplyingTo(null);
+    setPickerOpen(false);
     cooldownRef.current?.start();
   }
 
   async function handleAttachmentSelected(e) {
     const file = e.target.files?.[0];
     e.target.value = '';
-    
+
     if (!file || !session?.user || !group || cooldownPercent > 0 || uploading) {
       return;
     }
 
     setUploading(true);
-    
-    // Direct upload to Supabase bucket
+
     const path = `${session.user.id}/group-${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.\-_]/g, '_')}`;
     const { error: uploadError } = await supabase.storage.from('media').upload(path, file);
 
-    if (uploadError) { 
-      setUploading(false); 
-      alert('Upload failed.'); 
-      return; 
+    if (uploadError) {
+      setUploading(false);
+      alert('Upload failed.');
+      return;
     }
 
     const publicUrl = supabase.storage.from('media').getPublicUrl(path).data.publicUrl;
     const senderName = profile?.is_admin ? ADMIN_DISPLAY_NAME : (profile?.username || 'Anonymous');
 
     await supabase.from('group_messages').insert({
-      group_id: group.id, 
-      user_id: session.user.id, 
-      sender_name: senderName, 
-      media_url: publicUrl, 
-      media_type: guessMediaType(file), 
+      group_id: group.id,
+      user_id: session.user.id,
+      sender_name: senderName,
+      media_url: publicUrl,
+      media_type: guessMediaType(file),
       reply_to_id: replyingTo?.id ?? null,
     });
 
@@ -717,19 +779,50 @@ export default function GroupChat({ groupSlug, onBack }) {
     cooldownRef.current?.start();
   }
 
+  /** Sends a GIF or sticker picked from EmojiGifPicker as its own message. */
+  async function handleMediaPicked(url, mediaType) {
+    if (!session?.user || !group || cooldownPercent > 0 || sending) {
+      return;
+    }
+    setPickerOpen(false);
+
+    const senderName = profile?.is_admin ? ADMIN_DISPLAY_NAME : (profile?.username || 'Anonymous');
+
+    const { error } = await supabase.from('group_messages').insert({
+      group_id: group.id,
+      user_id: session.user.id,
+      sender_name: senderName,
+      media_url: url,
+      media_type: mediaType, // 'gif' | 'sticker'
+      reply_to_id: replyingTo?.id ?? null,
+    });
+
+    if (error) {
+      alert(error.message);
+      return;
+    }
+
+    setReplyingTo(null);
+    cooldownRef.current?.start();
+  }
+
+  function handleEmojiPicked(char) {
+    setText((prev) => prev + char);
+  }
+
   // --------------------------------------------------------------------------
   // RENDER GUARDS
   // --------------------------------------------------------------------------
-  
+
   if (groupStatus === 'loading') {
     return (
-      <div 
-        style={{ 
-          flex: 1, 
-          display: 'flex', 
-          alignItems: 'center', 
-          justifyContent: 'center', 
-          background: 'var(--bg)' 
+      <div
+        style={{
+          flex: 1,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          background: 'var(--bg)',
         }}
       >
         <div style={{ color: 'var(--blue)' }}>
@@ -738,30 +831,30 @@ export default function GroupChat({ groupSlug, onBack }) {
       </div>
     );
   }
-  
+
   if (groupStatus === 'error') {
     return (
-      <div 
-        style={{ 
-          flex: 1, 
-          display: 'flex', 
-          alignItems: 'center', 
-          justifyContent: 'center', 
-          background: 'var(--bg)', 
-          flexDirection: 'column', 
-          gap: 16 
+      <div
+        style={{
+          flex: 1,
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          background: 'var(--bg)',
+          flexDirection: 'column',
+          gap: 16,
         }}
       >
         <p style={{ color: 'var(--dim)' }}>Failed to load group.</p>
-        <button 
-          onClick={onBack} 
-          style={{ 
-            background: 'var(--blue)', 
-            color: '#fff', 
-            border: 'none', 
-            padding: '8px 16px', 
+        <button
+          onClick={onBack}
+          style={{
+            background: 'var(--blue)',
+            color: '#fff',
+            border: 'none',
+            padding: '8px 16px',
             borderRadius: 12,
-            cursor: 'pointer'
+            cursor: 'pointer',
           }}
         >
           Go Back
@@ -770,7 +863,6 @@ export default function GroupChat({ groupSlug, onBack }) {
     );
   }
 
-  // Session constants
   const ownUserId = session?.user?.id;
   let lastDayKey = null;
 
@@ -778,107 +870,97 @@ export default function GroupChat({ groupSlug, onBack }) {
   // MAIN COMPONENT RENDER
   // --------------------------------------------------------------------------
   return (
-    <div 
-      style={{ 
-        flex: 1, 
-        display: 'flex', 
-        flexDirection: 'column', 
-        position: 'relative', 
-        height: '100%', 
-        overflow: 'hidden', 
-        zIndex: 1 
+    <div
+      style={{
+        flex: 1,
+        display: 'flex',
+        flexDirection: 'column',
+        position: 'relative',
+        height: '100%',
+        overflow: 'hidden',
+        zIndex: 1,
       }}
     >
       <GlobalKeyframes />
-      
-      {/* 
-        =======================================================================
-        BACKGROUND EFFECTS
-        =======================================================================
-      */}
-      <div 
-        aria-hidden="true" 
-        style={{ 
-          position: 'absolute', 
-          inset: 0, 
-          zIndex: 0, 
-          pointerEvents: 'none', 
-          background: 'var(--bg)' 
+
+      <div
+        aria-hidden="true"
+        style={{
+          position: 'absolute',
+          inset: 0,
+          zIndex: 0,
+          pointerEvents: 'none',
+          background: 'var(--bg)',
         }}
       >
-        <div 
-          style={{ 
-            position: 'absolute', 
-            top: '10%', 
-            left: '10%', 
-            width: '40vw', 
-            height: '40vw', 
-            borderRadius: '50%', 
-            background: 'radial-gradient(circle, rgba(10,132,255,0.08), transparent 70%)', 
-            filter: 'blur(60px)' 
-          }} 
+        <div
+          style={{
+            position: 'absolute',
+            top: '10%',
+            left: '10%',
+            width: '40vw',
+            height: '40vw',
+            borderRadius: '50%',
+            background: 'radial-gradient(circle, rgba(10,132,255,0.08), transparent 70%)',
+            filter: 'blur(60px)',
+          }}
         />
       </div>
 
-      {/* 
-        =======================================================================
-        APPLE GLASS HEADER
-        =======================================================================
-      */}
-      <header 
-        style={{ 
-          flexShrink: 0, 
-          display: 'flex', 
-          alignItems: 'center', 
-          gap: 14, 
-          padding: '12px 20px', 
-          background: 'var(--glass-strong)', 
-          backdropFilter: 'blur(30px) saturate(200%)', 
-          borderBottom: '1px solid var(--glass-border)', 
-          zIndex: 20 
+      <header
+        style={{
+          flexShrink: 0,
+          display: 'flex',
+          alignItems: 'center',
+          gap: 14,
+          padding: '12px 20px',
+          background: 'var(--glass-strong)',
+          backdropFilter: 'blur(30px) saturate(200%)',
+          borderBottom: '1px solid var(--glass-border)',
+          zIndex: 20,
         }}
       >
-        <button 
-          onClick={onBack} 
-          style={{ 
-            border: 'none', 
-            background: 'transparent', 
-            color: 'var(--blue)', 
-            cursor: 'pointer', 
-            padding: '4px', 
-            marginLeft: '-8px' 
+        <button
+          onClick={onBack}
+          style={{
+            border: 'none',
+            background: 'transparent',
+            color: 'var(--blue)',
+            cursor: 'pointer',
+            padding: '4px',
+            marginLeft: '-8px',
           }}
         >
           {Vectors.Back}
         </button>
-        
-        <GroupLiquidAvatar 
-          url={group.cover_url} 
-          name={group.name} 
-          size={42} 
+
+        <GroupLiquidAvatar
+          url={group.cover_url}
+          name={group.name}
+          size={42}
         />
-        
-        <div 
-          style={{ 
-            display: 'flex', 
-            flexDirection: 'column', 
-            justifyContent: 'center', 
-            flex: 1 
+
+        <div
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            justifyContent: 'center',
+            flex: 1,
           }}
         >
-          <span 
-            style={{ 
-              fontWeight: 700, 
-              fontSize: 16, 
-              color: 'var(--ink)' 
+          <span
+            style={{
+              fontWeight: 700,
+              fontSize: 16,
+              color: 'var(--ink)',
             }}
           >
             {group.name}
           </span>
-          <span 
-            style={{ 
-              fontSize: 13, 
-              color: 'var(--dim)' 
+          <span
+            style={{
+              fontSize: 13,
+              color: 'var(--dim)',
             }}
           >
             {group.description || 'Public Group'}
@@ -886,57 +968,55 @@ export default function GroupChat({ groupSlug, onBack }) {
         </div>
       </header>
 
-      {/* 
-        =======================================================================
-        MESSAGE CANVAS (SCROLLABLE AREA)
-        =======================================================================
-      */}
-      <div 
-        ref={scrollRef} 
-        className="custom-scrollbar" 
-        style={{ 
-          flex: 1, 
-          overflowY: 'auto', 
-          overflowX: 'hidden', 
-          overscrollBehavior: 'contain', 
+      <div
+        ref={scrollRef}
+        className="custom-scrollbar"
+        style={{
+          flex: 1,
+          overflowY: 'auto',
+          overflowX: 'hidden',
+          overscrollBehavior: 'contain',
           WebkitOverflowScrolling: 'touch',
-          padding: '20px 16px', 
-          display: 'flex', 
-          flexDirection: 'column', 
+          padding: '20px 16px',
+          display: 'flex',
+          flexDirection: 'column',
           zIndex: 10,
           minHeight: 0,
+          backgroundColor: 'var(--bg)',
+          backgroundImage: CHAT_BACKGROUND_IMAGE,
+          backgroundRepeat: 'repeat',
         }}
       >
         {messagesLoading && (
-          <div 
-            style={{ 
-              flex: 1, 
-              display: 'flex', 
-              alignItems: 'center', 
-              justifyContent: 'center', 
-              color: 'var(--blue)' 
+          <div
+            style={{
+              flex: 1,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: 'var(--blue)',
             }}
           >
             {Vectors.Spinner}
           </div>
         )}
-        
+
         {!messagesLoading && messages.length === 0 && (
-          <div 
-            style={{ 
-              flex: 1, 
-              display: 'flex', 
-              alignItems: 'center', 
-              justifyContent: 'center' 
+          <div
+            style={{
+              flex: 1,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
             }}
           >
-            <div 
-              style={{ 
-                background: 'var(--glass-border)', 
-                padding: '8px 16px', 
-                borderRadius: 20, 
-                fontSize: 14, 
-                color: 'var(--dim)' 
+            <div
+              style={{
+                background: 'var(--glass-border)',
+                padding: '8px 16px',
+                borderRadius: 20,
+                fontSize: 14,
+                color: 'var(--dim)',
               }}
             >
               Say hello to the group 👋
@@ -944,42 +1024,42 @@ export default function GroupChat({ groupSlug, onBack }) {
           </div>
         )}
 
-        {/* Message Loop Render */}
         {!messagesLoading && messages.map((message) => {
           const isOwn = ownUserId && message.user_id === ownUserId;
           const isAdminMsg = isSenderAdmin(message);
-          
+
           const key = dayKey(message.created_at);
           const showDayDivider = key !== lastDayKey;
           lastDayKey = key;
-          
-          const repliedMessage = message.reply_to_id 
-            ? messages.find((m) => m.id === message.reply_to_id) || null 
+
+          const repliedMessage = message.reply_to_id
+            ? messages.find((m) => m.id === message.reply_to_id) || null
             : null;
+
+          const isStickerOrGif = message.media_type === 'gif' || message.media_type === 'sticker';
 
           return (
             <React.Fragment key={message.id}>
-              
-              {/* Day Divider Pill */}
+
               {showDayDivider && (
-                <div 
-                  style={{ 
-                    textAlign: 'center', 
-                    margin: '24px 0 16px', 
-                    position: 'sticky', 
-                    top: 10, 
-                    zIndex: 5 
+                <div
+                  style={{
+                    textAlign: 'center',
+                    margin: '24px 0 16px',
+                    position: 'sticky',
+                    top: 10,
+                    zIndex: 5,
                   }}
                 >
-                  <span 
-                    style={{ 
-                      fontSize: 12, 
-                      fontWeight: 600, 
-                      color: 'var(--dim)', 
-                      background: 'var(--glass-strong)', 
-                      padding: '6px 14px', 
-                      borderRadius: 14, 
-                      boxShadow: '0 2px 8px rgba(0,0,0,0.04)' 
+                  <span
+                    style={{
+                      fontSize: 12,
+                      fontWeight: 600,
+                      color: 'var(--dim)',
+                      background: 'var(--glass-strong)',
+                      padding: '6px 14px',
+                      borderRadius: 14,
+                      boxShadow: '0 2px 8px rgba(0,0,0,0.04)',
                     }}
                   >
                     {formatDayLabel(message.created_at)}
@@ -987,68 +1067,64 @@ export default function GroupChat({ groupSlug, onBack }) {
                 </div>
               )}
 
-              {/* Swipeable Wrapper for Touch Physics */}
-              <SwipeableMessage 
+              <SwipeableMessage
                 onSwipe={() => startReply(message)}
               >
-                <div 
-                  style={{ 
-                    display: 'flex', 
-                    flexDirection: isOwn ? 'row-reverse' : 'row', 
-                    alignItems: 'flex-end', 
-                    gap: 8, 
-                    marginBottom: 16, 
-                    animation: 'slideUpFade 0.3s cubic-bezier(0.2, 0.8, 0.2, 1) both' 
+                <div
+                  style={{
+                    display: 'flex',
+                    flexDirection: isOwn ? 'row-reverse' : 'row',
+                    alignItems: 'flex-end',
+                    gap: 8,
+                    marginBottom: 16,
+                    animation: 'slideUpFade 0.3s cubic-bezier(0.2, 0.8, 0.2, 1) both',
                   }}
                 >
-                  
-                  {/* Left Side: Avatar / DP for other users */}
+
                   {!isOwn && (
-                    <button 
-                      onClick={() => setProfileCardUserId(message.user_id)} 
-                      style={{ 
-                        border: 'none', 
-                        background: 'transparent', 
-                        padding: 0, 
-                        cursor: 'pointer', 
-                        marginBottom: 20 
+                    <button
+                      onClick={() => setProfileCardUserId(message.user_id)}
+                      style={{
+                        border: 'none',
+                        background: 'transparent',
+                        padding: 0,
+                        cursor: 'pointer',
+                        marginBottom: 20,
                       }}
                     >
-                      <GroupLiquidAvatar 
-                        name={message.sender_name} 
-                        isAdmin={isAdminMsg} 
-                        size={36} 
+                      <GroupLiquidAvatar
+                        name={message.sender_name}
+                        isAdmin={isAdminMsg}
+                        size={36}
                       />
                     </button>
                   )}
 
-                  {/* Message Body Wrapper */}
-                  <div 
-                    style={{ 
-                      display: 'flex', 
-                      flexDirection: 'column', 
-                      alignItems: isOwn ? 'flex-end' : 'flex-start', 
-                      maxWidth: '75%' 
+                  <div
+                    style={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      alignItems: isOwn ? 'flex-end' : 'flex-start',
+                      maxWidth: '75%',
                     }}
                   >
-                    
-                    {/* Username Header Above Bubble */}
+
                     {!isOwn && (
-                      <button 
+                      <button
                         onClick={() => setProfileCardUserId(message.user_id)}
-                        style={{ 
-                          fontSize: 13, 
-                          fontWeight: 700, 
-                          marginBottom: 4, 
-                          marginLeft: 6, 
-                          color: isAdminMsg ? '#FF8C00' : 'var(--blue)', 
-                          display: 'flex', 
-                          alignItems: 'center', 
-                          gap: 4, 
-                          border: 'none', 
-                          background: 'transparent', 
-                          padding: 0, 
-                          cursor: 'pointer' 
+                        style={{
+                          fontSize: 13,
+                          fontWeight: 700,
+                          marginBottom: 4,
+                          marginLeft: 6,
+                          color: isAdminMsg ? '#FF8C00' : 'var(--blue)',
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 4,
+                          border: 'none',
+                          background: 'transparent',
+                          padding: 0,
+                          cursor: 'pointer',
                         }}
                       >
                         {isAdminMsg ? ADMIN_DISPLAY_NAME : message.sender_name}
@@ -1056,51 +1132,50 @@ export default function GroupChat({ groupSlug, onBack }) {
                       </button>
                     )}
 
-                    {/* Chat Bubble Container */}
-                    <div 
-                      style={{ 
-                        maxWidth: '100%', 
-                        padding: message.media_url ? '4px' : '10px 16px', 
-                        borderRadius: 20, 
-                        borderBottomRightRadius: isOwn ? 4 : 20, 
-                        borderBottomLeftRadius: isOwn ? 20 : 4, 
-                        background: isOwn ? BUBBLE_OWN : BUBBLE_THEM, 
-                        color: isOwn ? '#fff' : 'var(--ink)', 
-                        boxShadow: '0 2px 10px rgba(0,0,0,0.05)' 
+                    <div
+                      style={{
+                        maxWidth: '100%',
+                        padding: (message.media_url && !isStickerOrGif) ? '4px' : (isStickerOrGif ? 0 : '10px 16px'),
+                        borderRadius: isStickerOrGif ? 0 : 20,
+                        borderBottomRightRadius: isStickerOrGif ? 0 : (isOwn ? 4 : 20),
+                        borderBottomLeftRadius: isStickerOrGif ? 0 : (isOwn ? 20 : 4),
+                        background: isStickerOrGif ? 'transparent' : (isOwn ? BUBBLE_OWN : BUBBLE_THEM),
+                        color: isOwn ? '#fff' : 'var(--ink)',
+                        boxShadow: isStickerOrGif ? 'none' : '0 2px 10px rgba(0,0,0,0.05)',
                       }}
                     >
-                      
-                      {/* Replied Message Snippet Inject */}
+
                       {message.reply_to_id && (
-                        <div 
-                          style={{ 
-                            display: 'flex', 
-                            flexDirection: 'column', 
-                            gap: 2, 
-                            padding: '6px 10px', 
-                            marginBottom: 8, 
-                            marginTop: message.media_url ? 4 : 0, 
-                            borderRadius: 10, 
-                            background: isOwn ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.06)', 
-                            borderLeft: `3px solid ${isOwn ? '#fff' : 'var(--blue)'}` 
+                        <div
+                          style={{
+                            display: 'flex',
+                            flexDirection: 'column',
+                            gap: 2,
+                            padding: '6px 10px',
+                            marginBottom: 8,
+                            marginTop: message.media_url ? 4 : 0,
+                            borderRadius: 10,
+                            background: isOwn ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.06)',
+                            borderLeft: `3px solid ${isOwn ? '#fff' : 'var(--blue)'}`,
                           }}
                         >
-                          <span 
-                            style={{ 
-                              fontSize: 12, 
-                              fontWeight: 700, 
-                              color: isOwn ? '#fff' : 'var(--blue)' 
+                          <span
+                            style={{
+                              fontSize: 12,
+                              fontWeight: 700,
+                              color: isOwn ? '#fff' : 'var(--blue)',
                             }}
                           >
                             {repliedMessage ? repliedMessage.sender_name : 'Original'}
                           </span>
-                          <span 
-                            style={{ 
-                              fontSize: 13, 
-                              color: isOwn ? 'rgba(255,255,255,0.85)' : 'var(--dim)', 
-                              whiteSpace: 'nowrap', 
-                              overflow: 'hidden', 
-                              textOverflow: 'ellipsis' 
+                          <span
+                            className="no-copy-text"
+                            style={{
+                              fontSize: 13,
+                              color: isOwn ? 'rgba(255,255,255,0.85)' : 'var(--dim)',
+                              whiteSpace: 'nowrap',
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
                             }}
                           >
                             {generateReplySnippet(repliedMessage)}
@@ -1108,77 +1183,90 @@ export default function GroupChat({ groupSlug, onBack }) {
                         </div>
                       )}
 
-                      {/* Media Handling Logic */}
                       {message.media_url ? (
-                        <button 
-                          onClick={() => setViewerMedia({ 
-                            url: message.media_url, 
-                            type: message.media_type || 'file' 
-                          })} 
-                          style={{ 
-                            border: 'none', 
-                            background: 'none', 
-                            padding: 0, 
-                            cursor: 'pointer', 
-                            display: 'block', 
-                            width: '100%' 
-                          }}
-                        >
-                          {message.media_type === 'image' ? (
-                            <img 
-                              src={message.media_url} 
-                              alt="Attachment" 
-                              style={{ 
-                                maxWidth: 260, 
-                                maxHeight: 260, 
-                                borderRadius: 16, 
-                                display: 'block', 
-                                objectFit: 'cover' 
-                              }} 
+                        isStickerOrGif ? (
+                          <button
+                            onClick={() => setViewerMedia({ url: message.media_url, type: message.media_type })}
+                            style={{ border: 'none', background: 'none', padding: 0, cursor: 'pointer', display: 'block' }}
+                          >
+                            <img
+                              src={message.media_url}
+                              alt={message.media_type === 'sticker' ? 'Sticker' : 'GIF'}
+                              style={{ maxWidth: 160, maxHeight: 160, display: 'block', borderRadius: 12 }}
                             />
-                          ) : (
-                            <div 
-                              style={{ 
-                                display: 'flex', 
-                                alignItems: 'center', 
-                                gap: 10, 
-                                padding: '12px 16px', 
-                                background: isOwn ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.04)', 
-                                borderRadius: 16 
-                              }}
-                            >
-                              <div style={{ color: isOwn ? '#fff' : 'var(--blue)' }}>
-                                {Vectors.FileText}
+                          </button>
+                        ) : (
+                          <button
+                            onClick={() => setViewerMedia({
+                              url: message.media_url,
+                              type: message.media_type || 'file',
+                            })}
+                            style={{
+                              border: 'none',
+                              background: 'none',
+                              padding: 0,
+                              cursor: 'pointer',
+                              display: 'block',
+                              width: '100%',
+                            }}
+                          >
+                            {message.media_type === 'image' ? (
+                              <img
+                                src={message.media_url}
+                                alt="Attachment"
+                                style={{
+                                  maxWidth: 260,
+                                  maxHeight: 260,
+                                  borderRadius: 16,
+                                  display: 'block',
+                                  objectFit: 'cover',
+                                }}
+                              />
+                            ) : (
+                              <div
+                                style={{
+                                  display: 'flex',
+                                  alignItems: 'center',
+                                  gap: 10,
+                                  padding: '12px 16px',
+                                  background: isOwn ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.04)',
+                                  borderRadius: 16,
+                                }}
+                              >
+                                <div style={{ color: isOwn ? '#fff' : 'var(--blue)' }}>
+                                  {Vectors.FileText}
+                                </div>
+                                <span style={{ color: isOwn ? '#fff' : 'var(--ink)', fontSize: 14, fontWeight: 600 }}>
+                                  Document
+                                </span>
                               </div>
-                              <span style={{ color: isOwn ? '#fff' : 'var(--ink)', fontSize: 14, fontWeight: 600 }}>
-                                Document
-                              </span>
-                            </div>
-                          )}
-                        </button>
+                            )}
+                          </button>
+                        )
                       ) : (
-                        // Standard Text Rendering
-                        <span 
-                          style={{ 
-                            fontSize: 15, 
-                            whiteSpace: 'pre-wrap', 
-                            wordBreak: 'break-word', 
-                            lineHeight: 1.4 
+                        <span
+                          className="no-copy-text"
+                          onCopy={(e) => e.preventDefault()}
+                          onContextMenu={(e) => e.preventDefault()}
+                          style={{
+                            fontSize: 15,
+                            whiteSpace: 'pre-wrap',
+                            wordBreak: 'break-word',
+                            lineHeight: 1.4,
                           }}
                         >
                           {message.text}
                         </span>
                       )}
                     </div>
-                    
-                    {/* Timestamp */}
-                    <span 
-                      style={{ 
-                        fontSize: 11, 
-                        color: 'var(--dim)', 
-                        marginTop: 4, 
-                        marginInline: 4, 
-                        fontWeight: 500 
+
+                    <span
+                      style={{
+                        fontSize: 11,
+                        color: 'var(--dim)',
+                        marginTop: 4,
+                        marginInline: 4,
+                        fontWeight: 500,
                       }}
                     >
                       {formatTime(message.created_at)}
@@ -1191,28 +1279,22 @@ export default function GroupChat({ groupSlug, onBack }) {
         })}
       </div>
 
-      {/* 
-        =======================================================================
-        COMPOSER MODULE (FIXED TO BOTTOM VIA FLEX-SHRINK: 0)
-        =======================================================================
-      */}
-      <div 
+      <div
         className="safe-bottom"
-        style={{ 
-          flexShrink: 0, 
-          zIndex: 20, 
+        style={{
+          flexShrink: 0,
+          zIndex: 20,
           position: 'sticky',
           bottom: 0,
         }}
       >
         {!session ? (
-          /* Logged-out state: no composer at all, just a clear sign-in CTA */
-          <div 
-            style={{ 
-              padding: '16px', 
-              background: 'var(--glass-strong)', 
-              backdropFilter: 'blur(30px) saturate(200%)', 
-              borderTop: '1px solid var(--glass-border)', 
+          <div
+            style={{
+              padding: '16px',
+              background: 'var(--glass-strong)',
+              backdropFilter: 'blur(30px) saturate(200%)',
+              borderTop: '1px solid var(--glass-border)',
             }}
           >
             <button
@@ -1235,38 +1317,37 @@ export default function GroupChat({ groupSlug, onBack }) {
           </div>
         ) : (
         <>
-        {/* Reply Strip Animation Pane */}
-        <div 
-          style={{ 
-            position: 'absolute', 
-            bottom: '100%', 
-            left: 0, 
-            right: 0, 
-            background: 'var(--glass-strong)', 
-            backdropFilter: 'blur(20px)', 
-            borderTop: '1px solid var(--glass-border)', 
-            display: 'flex', 
-            alignItems: 'center', 
-            padding: '10px 16px', 
-            gap: 12, 
-            transition: 'all 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.1)', 
-            transform: replyingTo ? 'translateY(0)' : 'translateY(100%)', 
-            opacity: replyingTo ? 1 : 0, 
-            visibility: replyingTo ? 'visible' : 'hidden', 
-            zIndex: 19 
+        <div
+          style={{
+            position: 'absolute',
+            bottom: '100%',
+            left: 0,
+            right: 0,
+            background: 'var(--glass-strong)',
+            backdropFilter: 'blur(20px)',
+            borderTop: '1px solid var(--glass-border)',
+            display: 'flex',
+            alignItems: 'center',
+            padding: '10px 16px',
+            gap: 12,
+            transition: 'all 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.1)',
+            transform: replyingTo ? 'translateY(0)' : 'translateY(100%)',
+            opacity: replyingTo ? 1 : 0,
+            visibility: replyingTo ? 'visible' : 'hidden',
+            zIndex: 19,
           }}
         >
           <div style={{ color: 'var(--blue)' }}>
             {Vectors.ReplyAction}
           </div>
           <div style={{ width: 3, height: 34, borderRadius: 2, background: 'var(--blue)', flexShrink: 0 }} />
-          <div 
-            style={{ 
-              flex: 1, 
-              minWidth: 0, 
-              display: 'flex', 
-              flexDirection: 'column', 
-              justifyContent: 'center' 
+          <div
+            style={{
+              flex: 1,
+              minWidth: 0,
+              display: 'flex',
+              flexDirection: 'column',
+              justifyContent: 'center',
             }}
           >
             <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--blue)' }}>
@@ -1276,136 +1357,138 @@ export default function GroupChat({ groupSlug, onBack }) {
               {generateReplySnippet(replyingTo)}
             </span>
           </div>
-          <button 
-            onClick={() => setReplyingTo(null)} 
-            style={{ 
-              border: 'none', 
-              background: 'var(--glass-border)', 
-              width: 28, 
-              height: 28, 
-              borderRadius: '50%', 
-              color: 'var(--ink)', 
-              cursor: 'pointer', 
-              display: 'flex', 
-              alignItems: 'center', 
-              justifyContent: 'center' 
+          <button
+            onClick={() => setReplyingTo(null)}
+            style={{
+              border: 'none',
+              background: 'var(--glass-border)',
+              width: 28,
+              height: 28,
+              borderRadius: '50%',
+              color: 'var(--ink)',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
             }}
           >
             {Vectors.Close}
           </button>
         </div>
 
-        {/* Native Form Input Controller */}
-        <form 
-          onSubmit={handleSend} 
-          style={{ 
-            display: 'flex', 
-            alignItems: 'center', 
-            gap: 12, 
-            padding: '12px 16px', 
-            background: 'var(--glass-strong)', 
-            backdropFilter: 'blur(30px) saturate(200%)', 
-            borderTop: replyingTo ? 'none' : '1px solid var(--glass-border)', 
-            position: 'relative', 
-            zIndex: 20 
+        <form
+          onSubmit={handleSend}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 10,
+            padding: '12px 16px',
+            background: 'var(--glass-strong)',
+            backdropFilter: 'blur(30px) saturate(200%)',
+            borderTop: replyingTo ? 'none' : '1px solid var(--glass-border)',
+            position: 'relative',
+            zIndex: 20,
           }}
         >
-          {/* Attachment Button */}
-          <button 
-            type="button" 
-            onClick={() => fileInputRef.current?.click()} 
-            disabled={uploading || cooldownPercent > 0} 
-            style={{ 
-              width: 38, 
-              height: 38, 
-              borderRadius: '50%', 
-              border: 'none', 
-              background: 'transparent', 
-              color: 'var(--dim)', 
-              cursor: 'pointer', 
-              flexShrink: 0, 
-              display: 'flex', 
-              alignItems: 'center', 
-              justifyContent: 'center' 
+          <EmojiGifPicker
+            open={pickerOpen}
+            onClose={() => setPickerOpen(false)}
+            onEmoji={handleEmojiPicked}
+            onMedia={handleMediaPicked}
+          />
+
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={uploading || cooldownPercent > 0}
+            style={{
+              width: 36,
+              height: 36,
+              borderRadius: '50%',
+              border: 'none',
+              background: 'transparent',
+              color: 'var(--dim)',
+              cursor: 'pointer',
+              flexShrink: 0,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
             }}
           >
             {uploading ? Vectors.Spinner : Vectors.Attach}
           </button>
-          
-          <input 
-            ref={fileInputRef} 
-            type="file" 
-            hidden 
-            onChange={handleAttachmentSelected} 
+
+          <input
+            ref={fileInputRef}
+            type="file"
+            hidden
+            onChange={handleAttachmentSelected}
           />
-          
-          {/* Main Input Text Field */}
-          <input 
-            type="text" 
-            value={text} 
-            onChange={(e) => setText(e.target.value)} 
-            placeholder={uploading ? 'Uploading media...' : 'Message'} 
-            disabled={uploading} 
-            style={{ 
-              flex: 1, 
-              border: '1px solid var(--glass-border)', 
-              outline: 'none', 
-              background: 'var(--glass)', 
-              borderRadius: 24, 
-              padding: '12px 18px', 
-              fontSize: 15, 
-              color: 'var(--ink)', 
-              transition: 'border-color 0.2s' 
-            }} 
-          />
-          
-          {/* Action / Send Button */}
-          <button 
-            type="submit" 
-            disabled={!text.trim() || sending || uploading || cooldownPercent > 0} 
-            style={{ 
-              width: 40, 
-              height: 40, 
-              borderRadius: '50%', 
-              border: 'none', 
-              flexShrink: 0, 
-              background: cooldownPercent > 0 
-                ? `conic-gradient(var(--blue) ${cooldownPercent}%, rgba(10,132,255,0.2) 0)` 
-                : (text.trim() ? 'var(--blue)' : 'var(--glass-border)'), 
-              color: text.trim() ? '#fff' : 'var(--dim)', 
-              cursor: text.trim() && !cooldownPercent ? 'pointer' : 'default', 
-              display: 'flex', 
-              alignItems: 'center', 
-              justifyContent: 'center' 
+
+          <button
+            type="button"
+            onClick={() => setPickerOpen((v) => !v)}
+            disabled={uploading}
+            style={{
+              width: 36,
+              height: 36,
+              borderRadius: '50%',
+              border: 'none',
+              background: pickerOpen ? 'var(--glass-border)' : 'transparent',
+              color: pickerOpen ? 'var(--blue)' : 'var(--dim)',
+              cursor: 'pointer',
+              flexShrink: 0,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
             }}
           >
-            {cooldownPercent > 0 ? (
-              <span style={{ width: 22, height: 22, borderRadius: '50%', background: '#fff' }} />
-            ) : (
-              Vectors.Send
-            )}
+            {Vectors.Smiley}
           </button>
+
+          <input
+            type="text"
+            value={text}
+            onChange={(e) => setText(e.target.value)}
+            onFocus={() => setPickerOpen(false)}
+            placeholder={uploading ? 'Uploading media...' : 'Message'}
+            disabled={uploading}
+            style={{
+              flex: 1,
+              border: '1px solid var(--glass-border)',
+              outline: 'none',
+              background: 'var(--glass)',
+              borderRadius: 24,
+              padding: '12px 18px',
+              fontSize: 15,
+              color: 'var(--ink)',
+              transition: 'border-color 0.2s',
+            }}
+          />
+
+          <SendButton
+            canSend={!!text.trim()}
+            sending={sending || uploading}
+            cooldownPercent={cooldownPercent}
+          />
         </form>
         </>
         )}
       </div>
 
-      {/* Media Viewer Global Hook */}
-      <MediaViewer 
-        mediaUrl={viewerMedia?.url} 
-        mediaType={viewerMedia?.type} 
-        open={viewerMedia !== null} 
-        onClose={() => setViewerMedia(null)} 
-      />
-      
-      {/* Profile Card Local Trigger */}
-      <ProfileCard 
-        userId={profileCardUserId} 
-        open={!!profileCardUserId} 
-        onClose={() => setProfileCardUserId(null)} 
+      <MediaViewer
+        mediaUrl={viewerMedia?.url}
+        mediaType={viewerMedia?.type}
+        open={viewerMedia !== null}
+        onClose={() => setViewerMedia(null)}
       />
 
-      {/* Sign-in Modal (opened from the "Sign in to send message" CTA) */}
+      <ProfileCard
+        userId={profileCardUserId}
+        open={!!profileCardUserId}
+        onClose={() => setProfileCardUserId(null)}
+      />
+
       <AuthModal
         open={authOpen}
         onClose={() => setAuthOpen(false)}

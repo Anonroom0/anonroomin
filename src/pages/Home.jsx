@@ -5,14 +5,16 @@
  * This component handles the core desktop/mobile master-detail routing.
  * It features a unified sidebar (Groups and Chats in one list), Apple-style
  * background blurs, and strict Telegram split-pane routing.
- * 
- * Corrected Features Included Inline:
- * - Unified List Architecture (No Tabs)
- * - Profile Avatar Top-Left (Opens Settings)
- * - Removed Admin Group Builder & Logout (Moved to Edit Profile)
- * - Liquid Glassmorphism Sidebars
- * - Realtime Window Resizing Hooks for Mobile/Desktop Switching
- * 
+ *
+ * CHANGE IN THIS PASS — group-open behavior now differs by viewport:
+ * - Desktop: unchanged. Clicking a group does a real browser navigation to
+ *   slug.anonroom.in, exactly like typing that subdomain in by hand. That
+ *   subdomain deployment is expected to render this same sidebar+chat shell.
+ * - Mobile: clicking a group no longer navigates away to the subdomain at
+ *   all. It opens in place instead, the same way a DM opens on mobile —
+ *   local state swaps in <GroupChat> as a full-screen page with its own
+ *   back button, no page reload, no leaving the app shell.
+ *
  * Dependencies: React, Supabase, AuthContext
  * ============================================================================
  */
@@ -36,6 +38,7 @@ import '../styles/tokens.css';
 // 1. CONSTANTS & CONFIGURATION
 // ============================================================================
 const ADMIN_DISPLAY_NAME = 'ADMIN';
+const MOBILE_BREAKPOINT_PX = 768;
 
 // ============================================================================
 // 2. MASSIVE INLINE SVG VECTOR LIBRARY (APPLE / TELEGRAM STYLE)
@@ -228,7 +231,7 @@ export default function Home() {
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
-  const isMobile = windowWidth < 768;
+  const isMobile = windowWidth < MOBILE_BREAKPOINT_PX;
 
   // --------------------------------------------------------------------------
   // APPLICATION STATE
@@ -334,12 +337,22 @@ export default function Home() {
     setSearchQuery(''); 
   }
 
-  // Groups actually live on their own subdomain (slug.anonroom.in). Clicking
-  // one in the sidebar now navigates the browser there for real — same
-  // destination you'd land on typing the subdomain in by hand — instead of
-  // only swapping local React state, which is what made the in-app click
-  // behave differently from a manual subdomain visit.
+  // Groups live on their own subdomain (slug.anonroom.in). The two viewports
+  // now behave differently on purpose:
+  //
+  // - Desktop: a real browser navigation to slug.anonroom.in, same
+  //   destination as typing that subdomain in by hand. That subdomain
+  //   deployment renders this same sidebar+chat shell.
+  // - Mobile: no navigation at all. It opens in place, exactly like a DM
+  //   opens on mobile — local state swaps in <GroupChat> as its own
+  //   full-screen page with a back button, no reload, no leaving the app.
   function handleOpenGroup(slug) {
+    if (isMobile) {
+      setActiveChatId(slug);
+      setActiveChatType('group');
+      setSearchQuery('');
+      return;
+    }
     window.location.href = getGroupUrl(slug);
   }
 
