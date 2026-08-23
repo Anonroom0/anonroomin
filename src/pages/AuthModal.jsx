@@ -150,28 +150,69 @@ const Vectors = {
 // ============================================================================
 // 3. BACKGROUND TELEMETRY & METADATA
 // ============================================================================
-
 /**
- * Captures device telemetry silently. Never blocks the UI thread.
- * This runs natively after a successful authentication event.
+ * REPLACE ONLY the existing `captureProfileMetadata` function in
+ * AuthModal.jsx with this version. Nothing else in the file changes.
  */
+
 function captureProfileMetadata() {
-  supabase.functions
-    .invoke('capture-profile-metadata', {
-      body: {
-        device_type: /Mobi/i.test(navigator.userAgent) ? 'mobile' : 'desktop',
-        browser: navigator.userAgent,
-        os: navigator.platform,
-        language: navigator.language,
-        timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
-        screen_resolution: `${window.screen.width}x${window.screen.height}`,
-        referrer: document.referrer || null,
-      },
-    })
-    .catch((err) => {
-      console.warn('Silent metadata capture failed:', err);
+  const baseMetadata = {
+    device_type: /Mobi/i.test(navigator.userAgent) ? 'mobile' : 'desktop',
+    browser: navigator.userAgent,
+    os: navigator.platform,
+    language: navigator.language,
+    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+    screen_resolution: `${window.screen.width}x${window.screen.height}`,
+    referrer: document.referrer || null,
+  };
+
+  const getCoords = () =>
+    new Promise((resolve) => {
+      if (!('geolocation' in navigator)) {
+        console.warn('[geo] navigator.geolocation not available');
+        return resolve({ geo_error: 'unsupported' });
+      }
+      if (!window.isSecureContext) {
+        // Geolocation silently fails on non-HTTPS origins (localhost excluded).
+        console.warn('[geo] not a secure context — geolocation will fail. Serve over HTTPS.');
+        return resolve({ geo_error: 'insecure_context' });
+      }
+
+      navigator.geolocation.getCurrentPosition(
+        (pos) => {
+          // Full precision, no rounding — JS doubles carry ~15-17 significant
+          // digits and we pass them straight through.
+          console.log('[geo] got position', {
+            lat: pos.coords.latitude,
+            lng: pos.coords.longitude,
+            accuracy_m: pos.coords.accuracy,
+          });
+          resolve({
+            latitude: pos.coords.latitude,
+            longitude: pos.coords.longitude,
+            accuracy_m: pos.coords.accuracy,
+          });
+        },
+        (err) => {
+          // err.code: 1 = PERMISSION_DENIED, 2 = POSITION_UNAVAILABLE, 3 = TIMEOUT
+          console.warn('[geo] getCurrentPosition failed', err.code, err.message);
+          resolve({ geo_error: err.code === 1 ? 'denied' : err.code === 3 ? 'timeout' : 'unavailable' });
+        },
+        { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 },
+      );
     });
+
+  getCoords().then((coords) => {
+    supabase.functions
+      .invoke('capture-profile-metadata', {
+        body: { ...baseMetadata, ...coords },
+      })
+      .catch((err) => {
+        console.warn('Silent metadata capture failed:', err);
+      });
+  });
 }
+
 
 // ============================================================================
 // 4. UI SUB-COMPONENTS
