@@ -8,14 +8,15 @@
  * 
  * Corrected Features Included Inline:
  * - Pre-checks `profiles` table for username availability before triggering signup.
- * - Removed backdrop auto-close (must click 'X' to close)[span_2](start_span)[span_2](end_span).
- * - Enforced strict lowercase usernames on registration for universal uniqueness[span_3](start_span)[span_3](end_span).
- * - Liquid Glassmorphism Modal & Overlay[span_4](start_span)[span_4](end_span)
- * - Advanced OTP Input Matrix with focus bounce physics[span_5](start_span)[span_5](end_span)
- * - Smooth Telegram sliding segmented controls[span_6](start_span)[span_6](end_span)
- * - Fully unminified, enterprise-grade formatting[span_7](start_span)[span_7](end_span)
+ * - Removed backdrop auto-close (must click 'X' to close).
+ * - Enforced strict lowercase usernames on registration for universal uniqueness.
+ * - DB errors are masked with user-friendly messages for security.
+ * - Liquid Glassmorphism Modal & Overlay
+ * - Advanced OTP Input Matrix with focus bounce physics
+ * - Smooth Telegram sliding segmented controls
+ * - Fully unminified, enterprise-grade formatting
  * 
- * Dependencies: React, Supabase[span_8](start_span)[span_8](end_span)
+ * Dependencies: React, Supabase
  * ============================================================================
  */
 
@@ -241,7 +242,7 @@ function AppleToggle({ checked, onChange }) {
         width: 44, height: 24, borderRadius: 12, cursor: 'pointer', flexShrink: 0,
         background: checked ? 'var(--green)' : 'var(--glass-border)',
         transition: 'background 250ms cubic-bezier(0.2, 0.8, 0.2, 1)',
-        position: 'relative', box.shadow: 'inset 0 1px 3px rgba(0,0,0,0.1)'
+        position: 'relative', boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.1)'
       }}
     >
       <div
@@ -263,8 +264,8 @@ function AppleToggle({ checked, onChange }) {
 export default function AuthModal({ open, onClose, initialTab = 'signin', onVerified }) {
   
   const [isVisible, setIsVisible] = useState(false);
-  const [tab, setTab] = useState(initialTab); // 'signin' | 'signup[span_9](start_span)'[span_9](end_span)
-  const [stage, setStage] = useState('form'); // 'form' | 'otp' | 'success[span_10](start_span)'[span_10](end_span)
+  const [tab, setTab] = useState(initialTab); // 'signin' | 'signup'
+  const [stage, setStage] = useState('form'); // 'form' | 'otp' | 'success'
   
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -346,7 +347,8 @@ export default function AuthModal({ open, onClose, initialTab = 'signin', onVeri
     setSubmitting(false);
 
     if (signInError) {
-      triggerError(signInError.message);
+      // Masking raw DB/Auth error
+      triggerError('Invalid email or password. Please try again.');
       return;
     }
     
@@ -355,7 +357,7 @@ export default function AuthModal({ open, onClose, initialTab = 'signin', onVeri
     
     setTimeout(() => {
       handleClose();
-      onVerified();
+      onVerified?.();
     }, 1200);
   }
 
@@ -391,6 +393,13 @@ export default function AuthModal({ open, onClose, initialTab = 'signin', onVeri
       .eq('username', normalizedUsername)
       .maybeSingle();
 
+    if (lookupError) {
+      setSubmitting(false);
+      // Masking database query error
+      triggerError('Service temporarily unavailable. Please try again.');
+      return;
+    }
+
     if (existingProfile) {
       setSubmitting(false);
       triggerError('This username is already taken. Please choose another.');
@@ -411,7 +420,8 @@ export default function AuthModal({ open, onClose, initialTab = 'signin', onVeri
     setSubmitting(false);
 
     if (signUpError) {
-      triggerError(signUpError.message);
+      // Masking Auth database errors (e.g. rate limits or unhandled backend rules)
+      triggerError('Registration failed. The email may already be in use or unavailable.');
       return;
     }
 
@@ -420,7 +430,7 @@ export default function AuthModal({ open, onClose, initialTab = 'signin', onVeri
       captureProfileMetadata();
       setTimeout(() => {
         handleClose();
-        onVerified();
+        onVerified?.();
       }, 1200);
       return;
     }
@@ -478,7 +488,8 @@ export default function AuthModal({ open, onClose, initialTab = 'signin', onVeri
     setSubmitting(false);
 
     if (verifyError) {
-      triggerError(verifyError.message);
+      // Masking verification backend errors
+      triggerError('Invalid or expired code. Please try again.');
       return;
     }
     
@@ -487,7 +498,7 @@ export default function AuthModal({ open, onClose, initialTab = 'signin', onVeri
     
     setTimeout(() => {
       handleClose();
-      onVerified();
+      onVerified?.();
     }, 1200);
   }
 
@@ -505,7 +516,8 @@ export default function AuthModal({ open, onClose, initialTab = 'signin', onVeri
     setSubmitting(false);
     
     if (resendError) {
-      triggerError(resendError.message);
+      // Masking resend endpoint errors
+      triggerError('Failed to resend code. Please wait and try again.');
       return;
     }
     
@@ -585,10 +597,10 @@ export default function AuthModal({ open, onClose, initialTab = 'signin', onVeri
               
               <div style={{ textAlign: 'center' }}>
                 <h2 style={{ margin: '0 0 8px 0', fontSize: 24, fontWeight: 800, color: 'var(--ink)', letterSpacing: '-0.5px' }}>
-                  {tab === 'signin' ? 'Welcome Back' : 'Join Anonroom'}[span_11](start_span)[span_11](end_span)
+                  {tab === 'signin' ? 'Welcome Back' : 'Join Anonroom'}
                 </h2>
                 <p style={{ margin: 0, fontSize: 15, color: 'var(--dim)', lineHeight: 1.4 }}>
-                  {tab === 'signin' ? 'Sign in to continue bridging the gap.' : 'Create an anonymous identity.'}[span_12](start_span)[span_12](end_span)
+                  {tab === 'signin' ? 'Sign in to continue bridging the gap.' : 'Create an anonymous identity.'}
                 </p>
               </div>
 
