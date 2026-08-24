@@ -2,16 +2,13 @@
  * ============================================================================
  * DIRECT MESSAGES MASTER VIEW (APPLE LIQUID UI & TELEGRAM PHYSICS)
  * ============================================================================
- * This component acts as the master chat pane for Private 1-on-1 Conversations.
- *
  * CHANGES IN THIS PASS:
- * - Floating `@` button now scrolls smoothly to the unread mention and pulses it 3 times.
- * - Accurate read receipt syncing tied to visible message rendering.
- * - Universal Case-Insensitive Mentions: Forces `.toLowerCase()` for strict uniqueness.
- * - Native Bottom Rendering: Uses `column-reverse` CSS routing.
- * - Fully uncompressed code with no shortened lines.
- *
- * Dependencies: React, Supabase, AuthContext, EmojiGifPicker
+ * - Anonymous Mode: Toggle 'Ghost' icon to hide PFP/Name (saves as is_anon).
+ * - Admin Deletion: Long-press a message to select it, then delete from header.
+ * - Pull-To-Refresh: Custom iOS-style spinner drops from below the header.
+ * - Skeleton Loading: Beautiful shimmering placeholders before messages load.
+ * - Silent Mentions: Clicking an invalid @mention no longer triggers an alert.
+ * - Fully uncompressed, single-file delivery.
  * ============================================================================
  */
 
@@ -34,12 +31,12 @@ const ADMIN_DISPLAY_NAME = 'ADMIN';
 const BUBBLE_OWN = 'var(--blue)';
 const BUBBLE_THEM = 'var(--glass-strong)';
 
-// Chat canvas background.
+// Chat canvas background
 const CHAT_BACKGROUND_IMAGE =
   "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='60' height='60' viewBox='0 0 60 60'%3E%3Cg fill='none' fill-rule='evenodd'%3E%3Cg fill='%230a84ff' fill-opacity='0.035'%3E%3Ccircle cx='6' cy='6' r='2'/%3E%3Ccircle cx='36' cy='24' r='2'/%3E%3Ccircle cx='18' cy='42' r='2'/%3E%3C/g%3E%3C/g%3E%3C/svg%3E\")";
 
 // ============================================================================
-// 2. MASSIVE INLINE SVG VECTOR LIBRARY (APPLE / TELEGRAM STYLE)
+// 2. MASSIVE INLINE SVG VECTOR LIBRARY
 // ============================================================================
 const Vectors = {
   Back: (
@@ -105,6 +102,49 @@ const Vectors = {
       <line x1="15" y1="9" x2="15.01" y2="9" />
     </svg>
   ),
+  ThreeDots: (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="1" />
+      <circle cx="12" cy="5" r="1" />
+      <circle cx="12" cy="19" r="1" />
+    </svg>
+  ),
+  SearchSmall: (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="11" cy="11" r="8" />
+      <line x1="21" y1="21" x2="16.65" y2="16.65" />
+    </svg>
+  ),
+  Ghost: (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M9 10h.01" />
+      <path d="M15 10h.01" />
+      <path d="M12 2a8 8 0 0 0-8 8v12l3-3 2.5 2.5L12 19l2.5 2.5L17 19l3 3V10a8 8 0 0 0-8-8z" />
+    </svg>
+  ),
+  GhostSolid: (
+    <svg width="42" height="42" viewBox="0 0 24 24" fill="currentColor" stroke="none">
+      <path d="M12 2a8 8 0 0 0-8 8v12l3-3 2.5 2.5L12 19l2.5 2.5L17 19l3 3V10a8 8 0 0 0-8-8zm-3 8a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3zm6 0a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3z" />
+    </svg>
+  ),
+  Trash: (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="3 6 5 6 21 6" />
+      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
+    </svg>
+  ),
+  Refresh: (
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="23 4 23 10 17 10" />
+      <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
+    </svg>
+  ),
+  CheckCircle: (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="var(--blue)" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="10" stroke="none" />
+      <polyline points="8 12 11 15 16 9" />
+    </svg>
+  )
 };
 
 // ============================================================================
@@ -121,9 +161,7 @@ function resolveIdentity(user) {
 function getInitials(name) {
   if (!name) return '?';
   const parts = name.trim().split(' ');
-  if (parts.length >= 2) {
-    return (parts[0][0] + parts[1][0]).toUpperCase();
-  }
+  if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
   return name.slice(0, 2).toUpperCase();
 }
 
@@ -168,47 +206,70 @@ function dayKey(dateString) {
   return new Date(dateString).toDateString();
 }
 
+// ============================================================================
+// 4. SUB-COMPONENTS & PHYSICS ENGINE
+// ============================================================================
+
 const GlobalKeyframes = () => (
   <style>{`
-    @keyframes chatFloat {
-      0% { transform: translate(0, 0) scale(1); }
-      50% { transform: translate(5%, -5%) scale(1.1); }
-      100% { transform: translate(0, 0) scale(1); }
-    }
-    @keyframes slideUpFade {
-      0% { opacity: 0; transform: translateY(10px); }
-      100% { opacity: 1; transform: translateY(0); }
-    }
-    @keyframes pop-in {
-      0% { transform: scale(0.5); opacity: 0; }
-      100% { transform: scale(1); opacity: 1; }
-    }
+    @keyframes slideUpFade { 0% { opacity: 0; transform: translateY(10px); } 100% { opacity: 1; transform: translateY(0); } }
+    @keyframes pop-in { 0% { transform: scale(0.5); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
     @keyframes highlightPulse {
       0% { background-color: rgba(10, 132, 255, 0.4); transform: scale(1.02); }
       50% { background-color: rgba(10, 132, 255, 0.1); transform: scale(1); }
       100% { background-color: rgba(10, 132, 255, 0.4); transform: scale(1.02); }
     }
-    .highlight-flash {
-      animation: highlightPulse 0.6s ease-in-out 3;
-    }
+    .highlight-flash { animation: highlightPulse 0.6s ease-in-out 3; }
     .spinner-animation { animation: spin 1.2s linear infinite; }
     @keyframes spin { 100% { transform: rotate(360deg); } }
+    @keyframes spin-fast { 100% { transform: rotate(360deg); } }
+    .refresh-spin { animation: spin-fast 0.8s linear infinite; }
+    @keyframes shimmer { 0% { background-position: -1000px 0; } 100% { background-position: 1000px 0; } }
+    .shimmer-bg {
+      animation: shimmer 2s infinite linear;
+      background: linear-gradient(to right, rgba(0,0,0,0.04) 4%, rgba(0,0,0,0.08) 25%, rgba(0,0,0,0.04) 36%);
+      background-size: 1000px 100%;
+    }
     .no-copy-text {
-      -webkit-user-select: none;
-      -moz-user-select: none;
-      -ms-user-select: none;
-      user-select: none;
-      -webkit-touch-callout: none;
+      -webkit-user-select: none; -moz-user-select: none; -ms-user-select: none; user-select: none; -webkit-touch-callout: none;
     }
   `}</style>
 );
 
-function LiquidAvatar({ identity, size = 42 }) {
+function MessageSkeleton() {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 16, padding: '10px 16px', opacity: 0.7 }}>
+      <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end', flexDirection: 'row-reverse' }}>
+        <div className="shimmer-bg" style={{ width: '60%', height: 56, borderRadius: 20, borderBottomRightRadius: 4 }} />
+      </div>
+      <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end' }}>
+        <div className="shimmer-bg" style={{ width: 36, height: 36, borderRadius: '50%' }} />
+        <div className="shimmer-bg" style={{ width: '40%', height: 40, borderRadius: 20, borderBottomLeftRadius: 4 }} />
+      </div>
+      <div style={{ display: 'flex', gap: 8, alignItems: 'flex-end', flexDirection: 'row-reverse' }}>
+        <div className="shimmer-bg" style={{ width: '50%', height: 72, borderRadius: 20, borderBottomRightRadius: 4 }} />
+      </div>
+    </div>
+  );
+}
+
+function DMLiquidAvatar({ identity, size = 42, isAnon = false }) {
   const containerStyle = {
     width: size, height: size, borderRadius: '50%', flexShrink: 0,
     display: 'flex', alignItems: 'center', justifyContent: 'center',
     overflow: 'hidden', boxShadow: 'inset 0 0 0 1px var(--glass-border)',
+    userSelect: 'none'
   };
+
+  if (isAnon) {
+    return (
+      <div style={{ ...containerStyle, background: 'var(--glass-border)', color: 'var(--dim)' }}>
+        <div style={{ transform: 'scale(0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          {Vectors.GhostSolid}
+        </div>
+      </div>
+    );
+  }
 
   if (identity.isAdmin) {
     return (
@@ -239,6 +300,66 @@ function LiquidAvatar({ identity, size = 42 }) {
       {getInitials(identity.name)}
     </div>
   );
+}
+
+// Custom hook for Long Press (Admin Selection)
+function useLongPress(callback, ms = 500) {
+  const [startLongPress, setStartLongPress] = useState(false);
+  const timerRef = useRef();
+
+  const start = useCallback((e, msg) => {
+    timerRef.current = setTimeout(() => {
+      callback(msg);
+    }, ms);
+  }, [callback, ms]);
+
+  const stop = useCallback((e) => {
+    clearTimeout(timerRef.current);
+  }, []);
+
+  return {
+    onTouchStart: start,
+    onTouchEnd: stop,
+    onTouchMove: stop
+  };
+}
+
+// Custom hook for Pull-to-Refresh from TOP of screen
+function usePullToRefresh(onRefresh, scrollRef) {
+  const [pullDistance, setPullDistance] = useState(0);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const startY = useRef(null);
+
+  const handleTouchStart = (e) => {
+    if (scrollRef.current) {
+      startY.current = e.touches[0].clientY;
+    }
+  };
+
+  const handleTouchMove = (e) => {
+    if (startY.current === null) return;
+    const currentY = e.touches[0].clientY;
+    const diff = currentY - startY.current;
+
+    // Trigger only if pulling DOWN and we are near the visual top of the container.
+    if (diff > 0 && e.touches[0].clientY < 200) { 
+      const resistance = diff * 0.4;
+      setPullDistance(Math.min(resistance, 80));
+    }
+  };
+
+  const handleTouchEnd = async () => {
+    if (pullDistance > 60 && !isRefreshing) {
+      setIsRefreshing(true);
+      setPullDistance(50);
+      await onRefresh();
+      setIsRefreshing(false);
+    }
+    setPullDistance(0);
+    startY.current = null;
+  };
+
+  return { pullDistance, isRefreshing, handleTouchStart, handleTouchMove, handleTouchEnd };
 }
 
 function SwipeableMessage({ children, onSwipe, disabled }) {
@@ -283,7 +404,7 @@ function SwipeableMessage({ children, onSwipe, disabled }) {
   );
 }
 
-function SendButton({ canSend, sending, cooldownPercent, cooldownSecondsLeft }) {
+function SendButton({ canSend, sending, cooldownPercent }) {
   const isCoolingDown = cooldownPercent > 0;
   const ringSize = 44;
   const strokeWidth = 3;
@@ -295,7 +416,6 @@ function SendButton({ canSend, sending, cooldownPercent, cooldownSecondsLeft }) 
     <button
       type="submit"
       disabled={!canSend || sending || isCoolingDown}
-      aria-label={isCoolingDown ? `Wait ${cooldownSecondsLeft}s` : 'Send message'}
       style={{
         position: 'relative', width: ringSize, height: ringSize, borderRadius: '50%', border: 'none', flexShrink: 0,
         background: isCoolingDown ? 'var(--glass)' : (canSend ? 'var(--blue)' : 'var(--glass-border)'),
@@ -309,9 +429,7 @@ function SendButton({ canSend, sending, cooldownPercent, cooldownSecondsLeft }) 
             <circle cx={ringSize / 2} cy={ringSize / 2} r={radius} fill="none" stroke="var(--glass-border)" strokeWidth={strokeWidth} />
             <circle cx={ringSize / 2} cy={ringSize / 2} r={radius} fill="none" stroke="var(--blue)" strokeWidth={strokeWidth} strokeLinecap="round" strokeDasharray={circumference} strokeDashoffset={dashOffset} style={{ transition: 'stroke-dashoffset 0.2s linear' }} />
           </svg>
-          <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--ink)' }}>
-            {cooldownSecondsLeft}
-          </span>
+          <span style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--blue)' }} />
         </>
       ) : (
         Vectors.Send
@@ -325,8 +443,9 @@ function SendButton({ canSend, sending, cooldownPercent, cooldownSecondsLeft }) 
 // ============================================================================
 
 export default function DirectMessages({ openThreadWithUserId, onBack, onThreadReady }) {
-  const { session } = useAuth();
+  const { session, profile } = useAuth();
   const userId = session?.user?.id;
+  const isAdmin = profile?.is_admin === true;
 
   const [activeThread, setActiveThread] = useState(null);
   const [threadStatus, setThreadStatus] = useState('loading');
@@ -342,20 +461,27 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
 
   const [viewerMedia, setViewerMedia] = useState(null);
   const [cooldownPercent, setCooldownPercent] = useState(0);
-  const [cooldownSecondsLeft, setCooldownSecondsLeft] = useState(0);
   const [profileCardUserId, setProfileCardUserId] = useState(null);
   const [authOpen, setAuthOpen] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
   
-  // Unread Mention & Highlight State
+  // New Features State
   const [hasUnreadMention, setHasUnreadMention] = useState(false);
   const [latestMentionId, setLatestMentionId] = useState(null);
   const [highlightedMsgId, setHighlightedMsgId] = useState(null);
+  const [isAnonMode, setIsAnonMode] = useState(false);
+  const [selectedMessages, setSelectedMessages] = useState([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [chatSearchQuery, setChatSearchQuery] = useState('');
 
   const scrollRef = useRef(null);
   const fileInputRef = useRef(null);
   const cooldownRef = useRef(null);
-  const cooldownTotalMsRef = useRef(0);
+
+  // --------------------------------------------------------------------------
+  // INITIALIZATION EFFECTS
+  // --------------------------------------------------------------------------
 
   useEffect(() => {
     if (!openThreadWithUserId) return;
@@ -427,61 +553,61 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
   }, [userId, openThreadWithUserId, onThreadReady]);
 
   // Messages subscription & Unread Mention Tracking
-  useEffect(() => {
+  const fetchMessagesAndReceipts = useCallback(async () => {
     if (!activeThread?.id || !userId) return;
 
     let isMounted = true;
-    setMessagesLoading(true);
 
-    async function fetchMessagesAndReceipts() {
-      const { data: receiptData } = await supabase
-        .from('dm_read_receipts')
-        .select('last_read_at')
-        .eq('thread_id', activeThread.id)
-        .eq('user_id', userId)
-        .maybeSingle();
+    const { data: receiptData } = await supabase
+      .from('dm_read_receipts')
+      .select('last_read_at')
+      .eq('thread_id', activeThread.id)
+      .eq('user_id', userId)
+      .maybeSingle();
 
-      const lastReadAt = receiptData?.last_read_at || '1970-01-01T00:00:00.000Z';
+    const lastReadAt = receiptData?.last_read_at || '1970-01-01T00:00:00.000Z';
 
-      const { data, error } = await supabase
-        .from('dm_messages')
-        .select('*')
-        .eq('thread_id', activeThread.id)
-        .order('created_at', { ascending: false })
-        .limit(MESSAGE_LIMIT);
+    const { data, error } = await supabase
+      .from('dm_messages')
+      .select('*')
+      .eq('thread_id', activeThread.id)
+      .order('created_at', { ascending: false })
+      .limit(MESSAGE_LIMIT);
 
-      if (error) {
-        setDbErrorDetails(error.message || JSON.stringify(error));
-      } else if (isMounted) {
-        const fetchedMessages = data || [];
-        setMessages(fetchedMessages);
+    if (error) {
+      setDbErrorDetails(error.message || JSON.stringify(error));
+    } else if (isMounted) {
+      const fetchedMessages = data || [];
+      setMessages(fetchedMessages);
 
-        const unreadMention = fetchedMessages.find(
-          m => m.mentioned_user_ids?.includes(userId) && new Date(m.created_at) > new Date(lastReadAt)
-        );
+      const unreadMention = fetchedMessages.find(
+        m => m.mentioned_user_ids?.includes(userId) && new Date(m.created_at) > new Date(lastReadAt)
+      );
 
-        if (unreadMention) {
-          setHasUnreadMention(true);
-          setLatestMentionId(unreadMention.id);
-        } else {
-          supabase.from('dm_read_receipts').upsert({
-            thread_id: activeThread.id,
-            user_id: userId,
-            last_read_at: new Date().toISOString()
-          }).then();
-        }
+      if (unreadMention) {
+        setHasUnreadMention(true);
+        setLatestMentionId(unreadMention.id);
+      } else {
+        supabase.from('dm_read_receipts').upsert({
+          thread_id: activeThread.id,
+          user_id: userId,
+          last_read_at: new Date().toISOString()
+        }).then();
       }
-      setMessagesLoading(false);
     }
+    setMessagesLoading(false);
+  }, [activeThread?.id, userId]);
 
+  useEffect(() => {
     fetchMessagesAndReceipts();
+
+    if (!activeThread?.id) return;
 
     const channel = supabase.channel(`dm_messages:${activeThread.id}`)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'dm_messages', filter: `thread_id=eq.${activeThread.id}` }, (payload) => {
-        if (!isMounted) return;
         
         const newMsg = payload.new;
-        const isMentioned = newMsg.mentioned_user_ids?.includes(userId);
+        const isMentioned = userId && newMsg.mentioned_user_ids?.includes(userId);
 
         if (isMentioned) {
           setHasUnreadMention(true);
@@ -492,28 +618,60 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
           if (prev.some(m => m.id === newMsg.id)) return prev;
           return [newMsg, ...prev];
         });
-      }).subscribe();
+      })
+      .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'dm_messages', filter: `thread_id=eq.${activeThread.id}` }, (payload) => {
+         setMessages((prev) => prev.filter(m => m.id !== payload.old.id));
+      })
+      .subscribe();
 
-    return () => {
-      isMounted = false;
-      supabase.removeChannel(channel);
-    };
-  }, [activeThread?.id, userId]);
+    return () => { supabase.removeChannel(channel); };
+  }, [activeThread?.id, userId, fetchMessagesAndReceipts]);
 
   useEffect(() => {
     cooldownRef.current = createCooldown(
-      (percent) => {
-        setCooldownPercent(percent);
-        const totalMs = cooldownTotalMsRef.current || 0;
-        setCooldownSecondsLeft(Math.max(0, Math.ceil((totalMs * percent) / 100000)));
-      },
-      () => {
-        setCooldownPercent(0);
-        setCooldownSecondsLeft(0);
-      }
+      (percent) => setCooldownPercent(percent),
+      () => setCooldownPercent(0)
     );
     return () => { cooldownRef.current?.cancel(); };
   }, []);
+
+  // Hook into our custom Pull-To-Refresh physics
+  const { pullDistance, isRefreshing, handleTouchStart, handleTouchMove, handleTouchEnd } = usePullToRefresh(fetchMessagesAndReceipts, scrollRef);
+
+  // --------------------------------------------------------------------------
+  // ADMIN DELETION LOGIC
+  // --------------------------------------------------------------------------
+  const toggleSelection = (msgId) => {
+    if (!isAdmin) return;
+    setSelectedMessages(prev => 
+      prev.includes(msgId) ? prev.filter(id => id !== msgId) : [...prev, msgId]
+    );
+  };
+
+  const handleLongPress = (msg) => {
+    if (isAdmin) toggleSelection(msg.id);
+  };
+
+  const longPressHook = useLongPress(handleLongPress, 500);
+
+  const handleDeleteSelected = async () => {
+    if (!isAdmin || selectedMessages.length === 0) return;
+    
+    // Optimistic UI removal
+    setMessages(prev => prev.filter(m => !selectedMessages.includes(m.id)));
+    
+    const { error } = await supabase
+      .from('dm_messages')
+      .delete()
+      .in('id', selectedMessages);
+      
+    if (error) {
+      alert("Failed to delete messages");
+      fetchMessagesAndReceipts(); // Revert on failure
+    }
+    
+    setSelectedMessages([]);
+  };
 
   function handleJumpToMention() {
     if (!latestMentionId) return;
@@ -556,9 +714,8 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
       
     if (data?.id) {
       setProfileCardUserId(data.id);
-    } else {
-      alert("User not found.");
     }
+    // Silently ignore if user is not found. No alert().
   }
 
   const renderMessageTextWithMentions = (messageText, isOwn) => {
@@ -588,7 +745,8 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
 
   const startReply = useCallback((message) => {
     const isOwn = message.sender_id === userId;
-    const senderName = isOwn ? 'You' : resolveIdentity(activeThread?.otherUser).name;
+    // Hide true identity if message was anon
+    const senderName = message.is_anon ? 'Anonymous' : (isOwn ? 'You' : resolveIdentity(activeThread?.otherUser).name);
 
     setReplyingTo({
       id: message.id,
@@ -612,7 +770,8 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
       sender_id: userId,
       text: trimmed,
       reply_to_id: replyingTo?.id ?? null,
-      mentioned_user_ids: mentionedIds
+      mentioned_user_ids: mentionedIds,
+      is_anon: isAnonMode
     });
 
     setSending(false);
@@ -634,8 +793,11 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
     if (!file || !userId || !activeThread || cooldownPercent > 0 || uploading) return;
 
     setUploading(true);
-    const path = `${userId}/dm-${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.\-_]/g, '_')}`;
-    const { error: uploadError } = await supabase.storage.from('media').upload(path, file);
+    const safeName = file.name.replace(/[^a-zA-Z0-9.\-_]/g, '_');
+    const path = `${userId}/dm-${Date.now()}-${safeName}`;
+    
+    // Explicit upload with upsert false
+    const { error: uploadError } = await supabase.storage.from('media').upload(path, file, { upsert: false });
 
     if (uploadError) {
       setUploading(false);
@@ -644,13 +806,22 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
       return;
     }
 
-    const publicUrl = supabase.storage.from('media').getPublicUrl(path).data.publicUrl;
+    const { data: publicUrlData } = supabase.storage.from('media').getPublicUrl(path);
+    const publicUrl = publicUrlData?.publicUrl;
+
+    if (!publicUrl) {
+      setUploading(false);
+      alert('Failed to resolve image URL.');
+      return;
+    }
+
     const { error: insertError } = await supabase.from('dm_messages').insert({
       thread_id: activeThread.id,
       sender_id: userId,
       media_url: publicUrl,
       media_type: guessMediaType(file),
       reply_to_id: replyingTo?.id ?? null,
+      is_anon: isAnonMode
     });
 
     if (insertError) setDbErrorDetails(insertError.message);
@@ -670,6 +841,7 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
       media_url: url,
       media_type: mediaType,
       reply_to_id: replyingTo?.id ?? null,
+      is_anon: isAnonMode
     });
 
     if (error) {
@@ -685,6 +857,15 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
   function handleEmojiPicked(char) {
     setText((prev) => prev + char);
   }
+
+  const filteredMessages = messages.filter((m) => {
+    if (!isSearching || !chatSearchQuery.trim()) return true;
+    const q = chatSearchQuery.trim().toLowerCase();
+    
+    // In DMs, sender_name isn't stored in db for dm_messages, so we can't easily search by sender_name locally 
+    // unless we resolve it on the fly, but we can search by text.
+    return m.text?.toLowerCase().includes(q);
+  });
 
   if (threadStatus === 'loading') {
     return (
@@ -721,23 +902,66 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
         <div style={{ position: 'absolute', top: '10%', left: '10%', width: '40vw', height: '40vw', borderRadius: '50%', background: 'radial-gradient(circle, rgba(10,132,255,0.08), transparent 70%)', filter: 'blur(60px)' }} />
       </div>
 
-      <header style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: 14, padding: '12px 20px', background: 'var(--glass-strong)', backdropFilter: 'blur(30px) saturate(200%)', borderBottom: '1px solid var(--glass-border)', zIndex: 20 }}>
-        <button onClick={onBack} style={{ border: 'none', background: 'transparent', color: 'var(--blue)', cursor: 'pointer', padding: '4px', marginLeft: '-8px' }}>
-          {Vectors.Back}
-        </button>
-
-        <button onClick={() => setProfileCardUserId(activeThread.otherUser.id)} style={{ border: 'none', background: 'transparent', padding: 0, cursor: 'pointer' }}>
-          <LiquidAvatar identity={otherIdentity} size={42} />
-        </button>
-
-        <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', flex: 1 }}>
-          <button onClick={() => setProfileCardUserId(activeThread.otherUser.id)} style={{ fontWeight: 700, fontSize: 16, color: otherIdentity.isAdmin ? '#FF8C00' : 'var(--ink)', background: 'transparent', border: 'none', padding: 0, cursor: 'pointer', textAlign: 'left', display: 'flex', alignItems: 'center', gap: 6 }}>
-            {otherIdentity.name}
-            {otherIdentity.isAdmin && Vectors.AdminShield}
+      {/* SELECTION OR NORMAL HEADER */}
+      {selectedMessages.length > 0 ? (
+        <header style={{ flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 20px', background: 'var(--blue)', color: '#fff', zIndex: 20 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+            <button onClick={() => setSelectedMessages([])} style={{ border: 'none', background: 'transparent', color: '#fff', cursor: 'pointer', padding: '4px', marginLeft: '-8px' }}>
+              {Vectors.Close}
+            </button>
+            <span style={{ fontWeight: 700, fontSize: 16 }}>{selectedMessages.length} Selected</span>
+          </div>
+          <button onClick={handleDeleteSelected} style={{ border: 'none', background: 'transparent', color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontWeight: 600 }}>
+            {Vectors.Trash} Delete
           </button>
-          <span style={{ fontSize: 13, color: 'var(--blue)' }}>Online</span>
-        </div>
-      </header>
+        </header>
+      ) : (
+        <header style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: 14, padding: '12px 20px', background: 'var(--glass-strong)', backdropFilter: 'blur(30px) saturate(200%)', borderBottom: '1px solid var(--glass-border)', zIndex: 20 }}>
+          <button onClick={onBack} style={{ border: 'none', background: 'transparent', color: 'var(--blue)', cursor: 'pointer', padding: '4px', marginLeft: '-8px' }}>
+            {Vectors.Back}
+          </button>
+
+          <button onClick={() => setProfileCardUserId(activeThread.otherUser.id)} style={{ border: 'none', background: 'transparent', padding: 0, cursor: 'pointer' }}>
+            <DMLiquidAvatar identity={otherIdentity} size={42} />
+          </button>
+
+          <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', flex: 1 }}>
+            <button onClick={() => setProfileCardUserId(activeThread.otherUser.id)} style={{ fontWeight: 700, fontSize: 16, color: otherIdentity.isAdmin ? '#FF8C00' : 'var(--ink)', background: 'transparent', border: 'none', padding: 0, cursor: 'pointer', textAlign: 'left', display: 'flex', alignItems: 'center', gap: 6 }}>
+              {otherIdentity.name}
+              {otherIdentity.isAdmin && Vectors.AdminShield}
+            </button>
+            <span style={{ fontSize: 13, color: 'var(--blue)' }}>Online</span>
+          </div>
+
+          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+            {/* ANONYMOUS TOGGLE */}
+            <button 
+              onClick={() => setIsAnonMode(!isAnonMode)} 
+              style={{ border: 'none', background: isAnonMode ? 'rgba(10,132,255,0.1)' : 'transparent', color: isAnonMode ? 'var(--blue)' : 'var(--dim)', cursor: 'pointer', padding: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '50%', transition: 'all 0.2s' }} 
+              title={isAnonMode ? "Anonymous Mode ON" : "Anonymous Mode OFF"}
+            >
+              {Vectors.Ghost}
+            </button>
+
+            <div style={{ position: 'relative' }}>
+              <button onClick={() => setMenuOpen((v) => !v)} style={{ border: 'none', background: 'transparent', color: 'var(--ink)', cursor: 'pointer', padding: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '50%' }}>
+                {Vectors.ThreeDots}
+              </button>
+              {menuOpen && (
+                <div style={{ position: 'absolute', right: 0, top: '100%', marginTop: 4, background: 'var(--glass-strong)', backdropFilter: 'blur(20px)', border: '1px solid var(--glass-border)', borderRadius: 12, boxShadow: '0 8px 24px rgba(0,0,0,0.15)', zIndex: 30, minWidth: 160, padding: 6 }}>
+                  <button onClick={() => { setIsSearching(true); setMenuOpen(false); }} style={{ width: '100%', padding: '10px 14px', border: 'none', background: 'transparent', color: 'var(--ink)', textAlign: 'left', borderRadius: 8, cursor: 'pointer', fontSize: 14, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8 }}>
+                    {Vectors.SearchSmall} Search Chat
+                  </button>
+                  <button onClick={() => { navigator.clipboard.writeText(window.location.href); setMenuOpen(false); alert('Link copied to clipboard!'); }} style={{ width: '100%', padding: '10px 14px', border: 'none', background: 'transparent', color: 'var(--ink)', textAlign: 'left', borderRadius: 8, cursor: 'pointer', fontSize: 14, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8 }}>
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>
+                    Share link
+                  </button>
+                </div>
+              )}
+            </div>
+          </div>
+        </header>
+      )}
 
       {dbErrorDetails && (
         <div style={{ background: 'rgba(255, 59, 48, 0.12)', borderBottom: '1px solid rgba(255, 59, 48, 0.3)', padding: '8px 16px', color: '#ff3b30', fontSize: 12, fontFamily: 'monospace', zIndex: 25, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
@@ -746,29 +970,64 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
         </div>
       )}
 
-      <div
-        className="custom-scrollbar"
+      {isSearching && (
+        <div style={{ background: 'var(--glass-strong)', borderBottom: '1px solid var(--glass-border)', padding: '10px 16px', display: 'flex', alignItems: 'center', gap: 10, zIndex: 19 }}>
+          <div style={{ flex: 1, position: 'relative' }}>
+            <span style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--dim)', pointerEvents: 'none' }}>
+              {Vectors.SearchSmall}
+            </span>
+            <input
+              autoFocus
+              type="text"
+              value={chatSearchQuery}
+              onChange={(e) => setChatSearchQuery(e.target.value)}
+              placeholder="Search in chat..."
+              style={{ width: '100%', padding: '8px 12px 8px 36px', borderRadius: 16, border: 'none', background: 'var(--glass-border)', color: 'var(--ink)', fontSize: 14, outline: 'none', boxSizing: 'border-box' }}
+            />
+            {chatSearchQuery && (
+              <button onClick={() => setChatSearchQuery('')} style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', background: 'var(--glass)', border: 'none', borderRadius: '50%', width: 20, height: 20, fontSize: 10, fontWeight: 'bold', color: 'var(--dim)', cursor: 'pointer' }}>
+                ✕
+              </button>
+            )}
+          </div>
+          <button onClick={() => { setIsSearching(false); setChatSearchQuery(''); }} style={{ background: 'none', border: 'none', color: 'var(--blue)', fontWeight: 600, cursor: 'pointer', fontSize: 14 }}>
+            Cancel
+          </button>
+        </div>
+      )}
+
+      {/* HIDDEN PULL-TO-REFRESH SPINNER CONTAINER */}
+      <div 
         style={{
-          flex: 1,
-          overflowY: 'auto',
-          overflowX: 'hidden',
-          overscrollBehavior: 'contain',
-          WebkitOverflowScrolling: 'touch',
-          padding: '20px 16px',
-          display: 'flex',
-          flexDirection: 'column-reverse',
-          zIndex: 10,
-          minHeight: 0,
-          backgroundColor: 'var(--bg)',
-          backgroundImage: CHAT_BACKGROUND_IMAGE,
-          backgroundRepeat: 'repeat',
+          position: 'absolute', top: 72, left: 0, right: 0, height: 60,
+          display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 5,
+          transform: `translateY(${Math.min(pullDistance - 60, 0)}px)`,
+          opacity: pullDistance > 10 ? 1 : 0,
+          transition: isRefreshing ? 'transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1)' : 'none',
+          color: 'var(--blue)'
         }}
       >
-        {messagesLoading && (
-          <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--blue)' }}>
-            {Vectors.Spinner}
-          </div>
-        )}
+        <div className={isRefreshing ? "refresh-spin" : ""} style={{ transform: `rotate(${pullDistance * 4}deg)` }}>
+          {Vectors.Refresh}
+        </div>
+      </div>
+
+      <div
+        ref={scrollRef}
+        onTouchStart={handleTouchStart}
+        onTouchMove={handleTouchMove}
+        onTouchEnd={handleTouchEnd}
+        className="custom-scrollbar"
+        style={{
+          flex: 1, overflowY: 'auto', overflowX: 'hidden', overscrollBehavior: 'contain',
+          WebkitOverflowScrolling: 'touch', padding: '20px 16px', display: 'flex',
+          flexDirection: 'column-reverse', zIndex: 10, minHeight: 0,
+          backgroundColor: 'var(--bg)', backgroundImage: CHAT_BACKGROUND_IMAGE, backgroundRepeat: 'repeat',
+          transform: `translateY(${pullDistance}px)`,
+          transition: isRefreshing || pullDistance === 0 ? 'transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1)' : 'none',
+        }}
+      >
+        {messagesLoading && <MessageSkeleton />}
 
         {!messagesLoading && messages.length === 0 && (
           <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
@@ -778,72 +1037,103 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
           </div>
         )}
 
-        {!messagesLoading && messages.map((message, index) => {
+        {!messagesLoading && filteredMessages.map((message, index) => {
           const isOwn = userId && message.sender_id === userId;
+          const isAnonMsg = message.is_anon === true;
 
-          const olderMessage = messages[index + 1];
+          const olderMessage = filteredMessages[index + 1];
           const showDayDivider = !olderMessage || dayKey(message.created_at) !== dayKey(olderMessage.created_at);
 
           const repliedMessage = message.reply_to_id ? messages.find((m) => m.id === message.reply_to_id) || null : null;
           const isStickerOrGif = message.media_type === 'gif' || message.media_type === 'sticker';
           const isHighlighted = highlightedMsgId === message.id;
+          const isSelected = selectedMessages.includes(message.id);
 
           return (
             <React.Fragment key={message.id}>
-              <SwipeableMessage onSwipe={() => startReply(message)}>
-                <div 
-                  id={`dm-msg-${message.id}`}
-                  className={isHighlighted ? 'highlight-flash' : ''}
-                  style={{ 
-                    display: 'flex', flexDirection: isOwn ? 'row-reverse' : 'row', alignItems: 'flex-end', 
-                    gap: 8, marginBottom: 16, borderRadius: 16, padding: 4,
-                    animation: 'slideUpFade 0.3s cubic-bezier(0.2, 0.8, 0.2, 1) both' 
-                  }}
-                >
-                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: isOwn ? 'flex-end' : 'flex-start', maxWidth: '75%' }}>
-                    <div style={{ maxWidth: '100%', padding: (message.media_url && !isStickerOrGif) ? '4px' : (isStickerOrGif ? 0 : '10px 16px'), borderRadius: isStickerOrGif ? 0 : 20, borderBottomRightRadius: isStickerOrGif ? 0 : (isOwn ? 4 : 20), borderBottomLeftRadius: isStickerOrGif ? 0 : (isOwn ? 20 : 4), background: isStickerOrGif ? 'transparent' : (isOwn ? BUBBLE_OWN : BUBBLE_THEM), color: isOwn ? '#fff' : 'var(--ink)', boxShadow: isStickerOrGif ? 'none' : '0 2px 10px rgba(0,0,0,0.05)' }}>
-                      {message.reply_to_id && (
-                        <div style={{ display: 'flex', flexDirection: 'column', gap: 2, padding: '6px 10px', marginBottom: 8, marginTop: message.media_url ? 4 : 0, borderRadius: 10, background: isOwn ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.06)', borderLeft: `3px solid ${isOwn ? '#fff' : 'var(--blue)'}` }}>
-                          <span style={{ fontSize: 12, fontWeight: 700, color: isOwn ? '#fff' : 'var(--blue)' }}>
-                            {repliedMessage ? (repliedMessage.sender_id === userId ? 'You' : otherIdentity.name) : 'Original'}
-                          </span>
-                          <span className="no-copy-text" style={{ fontSize: 13, color: isOwn ? 'rgba(255,255,255,0.85)' : 'var(--dim)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                            {generateReplySnippet(repliedMessage)}
-                          </span>
-                        </div>
-                      )}
+              <div
+                {...longPressHook}
+                onClick={() => {
+                  if (selectedMessages.length > 0) toggleSelection(message.id);
+                }}
+              >
+                <SwipeableMessage onSwipe={() => { if(selectedMessages.length === 0) startReply(message); }} disabled={isSearching || selectedMessages.length > 0}>
+                  <div 
+                    id={`dm-msg-${message.id}`}
+                    className={isHighlighted ? 'highlight-flash' : ''}
+                    style={{ 
+                      display: 'flex', flexDirection: isOwn ? 'row-reverse' : 'row', alignItems: 'flex-end', 
+                      gap: 8, marginBottom: 16, borderRadius: 16, padding: '4px 8px',
+                      background: isSelected ? 'rgba(10, 132, 255, 0.15)' : 'transparent',
+                      animation: 'slideUpFade 0.3s cubic-bezier(0.2, 0.8, 0.2, 1) both',
+                      transition: 'background 0.2s'
+                    }}
+                  >
 
-                      {message.media_url ? (
-                        isStickerOrGif ? (
-                          <button onClick={() => setViewerMedia({ url: message.media_url, type: message.media_type })} style={{ border: 'none', background: 'none', padding: 0, cursor: 'pointer', display: 'block' }}>
-                            <img src={message.media_url} alt={message.media_type === 'sticker' ? 'Sticker' : 'GIF'} style={{ maxWidth: 160, maxHeight: 160, display: 'block', borderRadius: 12 }} />
-                          </button>
-                        ) : (
-                          <button onClick={() => setViewerMedia({ url: message.media_url, type: message.media_type || 'file' })} style={{ border: 'none', background: 'none', padding: 0, cursor: 'pointer', display: 'block', width: '100%' }}>
-                            {message.media_type === 'image' ? (
-                              <img src={message.media_url} alt="Attachment" style={{ maxWidth: 260, maxHeight: 260, borderRadius: 16, display: 'block', objectFit: 'cover' }} />
-                            ) : (
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px', background: isOwn ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.04)', borderRadius: 16 }}>
-                                <div style={{ color: isOwn ? '#fff' : 'var(--blue)' }}>{Vectors.FileText}</div>
-                                <span style={{ color: isOwn ? '#fff' : 'var(--ink)', fontSize: 14, fontWeight: 600 }}>Document</span>
-                              </div>
-                            )}
-                          </button>
-                        )
-                      ) : (
-                        <span className="no-copy-text" style={{ fontSize: 15, whiteSpace: 'pre-wrap', wordBreak: 'break-word', lineHeight: 1.4 }}>
-                          {renderMessageTextWithMentions(message.text, isOwn)}
+                    {/* SELECTION CHECKMARK */}
+                    {selectedMessages.length > 0 && isAdmin && (
+                       <div style={{ margin: '0 8px 16px', color: isSelected ? 'var(--blue)' : 'var(--glass-border)' }}>
+                         {isSelected ? Vectors.CheckCircle : <div style={{ width: 20, height: 20, borderRadius: '50%', border: '2px solid currentColor' }} />}
+                       </div>
+                    )}
+
+                    {!isOwn && (
+                      <div style={{ padding: 0, marginBottom: 20 }}>
+                        <DMLiquidAvatar identity={otherIdentity} isAnon={isAnonMsg} size={36} />
+                      </div>
+                    )}
+
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: isOwn ? 'flex-end' : 'flex-start', maxWidth: '75%' }}>
+                      {!isOwn && isAnonMsg && (
+                        <span style={{ fontSize: 13, fontWeight: 700, marginBottom: 4, marginLeft: 6, color: 'var(--dim)' }}>
+                          Anonymous
                         </span>
                       )}
-                    </div>
-                    <span style={{ fontSize: 11, color: 'var(--dim)', marginTop: 4, marginInline: 4, fontWeight: 500 }}>
-                      {formatTime(message.created_at)}
-                    </span>
-                  </div>
-                </div>
-              </SwipeableMessage>
 
-              {showDayDivider && (
+                      <div style={{ maxWidth: '100%', padding: (message.media_url && !isStickerOrGif) ? '4px' : (isStickerOrGif ? 0 : '10px 16px'), borderRadius: isStickerOrGif ? 0 : 20, borderBottomRightRadius: isStickerOrGif ? 0 : (isOwn ? 4 : 20), borderBottomLeftRadius: isStickerOrGif ? 0 : (isOwn ? 20 : 4), background: isStickerOrGif ? 'transparent' : (isOwn ? BUBBLE_OWN : BUBBLE_THEM), color: isOwn ? '#fff' : 'var(--ink)', boxShadow: isStickerOrGif ? 'none' : '0 2px 10px rgba(0,0,0,0.05)' }}>
+                        {message.reply_to_id && (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 2, padding: '6px 10px', marginBottom: 8, marginTop: message.media_url ? 4 : 0, borderRadius: 10, background: isOwn ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.06)', borderLeft: `3px solid ${isOwn ? '#fff' : 'var(--blue)'}` }}>
+                            <span style={{ fontSize: 12, fontWeight: 700, color: isOwn ? '#fff' : 'var(--blue)' }}>
+                              {repliedMessage ? (repliedMessage.is_anon ? 'Anonymous' : (repliedMessage.sender_id === userId ? 'You' : otherIdentity.name)) : 'Original'}
+                            </span>
+                            <span className="no-copy-text" style={{ fontSize: 13, color: isOwn ? 'rgba(255,255,255,0.85)' : 'var(--dim)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                              {generateReplySnippet(repliedMessage)}
+                            </span>
+                          </div>
+                        )}
+
+                        {message.media_url ? (
+                          isStickerOrGif ? (
+                            <button onClick={() => setViewerMedia({ url: message.media_url, type: message.media_type })} disabled={selectedMessages.length > 0} style={{ border: 'none', background: 'none', padding: 0, cursor: 'pointer', display: 'block' }}>
+                              <img src={message.media_url} alt={message.media_type === 'sticker' ? 'Sticker' : 'GIF'} style={{ maxWidth: 160, maxHeight: 160, display: 'block', borderRadius: 12 }} />
+                            </button>
+                          ) : (
+                            <button onClick={() => setViewerMedia({ url: message.media_url, type: message.media_type || 'file' })} disabled={selectedMessages.length > 0} style={{ border: 'none', background: 'none', padding: 0, cursor: 'pointer', display: 'block', width: '100%' }}>
+                              {message.media_type === 'image' ? (
+                                <img src={message.media_url} alt="Attachment" style={{ maxWidth: 260, maxHeight: 260, borderRadius: 16, display: 'block', objectFit: 'cover' }} />
+                              ) : (
+                                <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px', background: isOwn ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.04)', borderRadius: 16 }}>
+                                  <div style={{ color: isOwn ? '#fff' : 'var(--blue)' }}>{Vectors.FileText}</div>
+                                  <span style={{ color: isOwn ? '#fff' : 'var(--ink)', fontSize: 14, fontWeight: 600 }}>Document</span>
+                                </div>
+                              )}
+                            </button>
+                          )
+                        ) : (
+                          <span className="no-copy-text" style={{ fontSize: 15, whiteSpace: 'pre-wrap', wordBreak: 'break-word', lineHeight: 1.4 }}>
+                            {renderMessageTextWithMentions(message.text, isOwn)}
+                          </span>
+                        )}
+                      </div>
+                      <span style={{ fontSize: 11, color: 'var(--dim)', marginTop: 4, marginInline: 4, fontWeight: 500 }}>
+                        {formatTime(message.created_at)}
+                      </span>
+                    </div>
+                  </div>
+                </SwipeableMessage>
+              </div>
+
+              {showDayDivider && !isSearching && (
                 <div style={{ textAlign: 'center', margin: '24px 0 16px', position: 'sticky', top: 10, zIndex: 5 }}>
                   <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--dim)', background: 'var(--glass-strong)', padding: '6px 14px', borderRadius: 14, boxShadow: '0 2px 8px rgba(0,0,0,0.04)' }}>
                     {formatDayLabel(message.created_at)}
@@ -855,7 +1145,6 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
         })}
       </div>
 
-      {/* Floating Action Button for Unread Mentions */}
       {hasUnreadMention && (
         <button
           onClick={handleJumpToMention}
@@ -888,11 +1177,11 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
 
         <form onSubmit={handleSend} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px', background: 'var(--glass-strong)', backdropFilter: 'blur(30px) saturate(200%)', borderTop: replyingTo ? 'none' : '1px solid var(--glass-border)', position: 'relative', zIndex: 20 }}>
           <EmojiGifPicker open={pickerOpen} onClose={() => setPickerOpen(false)} onEmoji={handleEmojiPicked} onMedia={handleMediaPicked} />
-          <button type="button" onClick={() => fileInputRef.current?.click()} disabled={uploading || cooldownPercent > 0} style={{ width: 36, height: 36, borderRadius: '50%', border: 'none', background: 'transparent', color: 'var(--dim)', cursor: 'pointer', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{uploading ? Vectors.Spinner : Vectors.Attach}</button>
+          <button type="button" onClick={() => fileInputRef.current?.click()} disabled={uploading || cooldownPercent > 0 || selectedMessages.length > 0} style={{ width: 36, height: 36, borderRadius: '50%', border: 'none', background: 'transparent', color: 'var(--dim)', cursor: 'pointer', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{uploading ? Vectors.Spinner : Vectors.Attach}</button>
           <input ref={fileInputRef} type="file" hidden onChange={handleAttachmentSelected} />
-          <button type="button" onClick={() => setPickerOpen((v) => !v)} disabled={uploading} style={{ width: 36, height: 36, borderRadius: '50%', border: 'none', background: pickerOpen ? 'var(--glass-border)' : 'transparent', color: pickerOpen ? 'var(--blue)' : 'var(--dim)', cursor: 'pointer', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{Vectors.Smiley}</button>
-          <input type="text" value={text} onChange={(e) => setText(e.target.value)} onFocus={() => setPickerOpen(false)} placeholder={uploading ? 'Uploading media...' : 'Message'} disabled={uploading} style={{ flex: 1, border: '1px solid var(--glass-border)', outline: 'none', background: 'var(--glass)', borderRadius: 24, padding: '12px 18px', fontSize: 15, color: 'var(--ink)', transition: 'border-color 0.2s' }} />
-          <SendButton canSend={!!text.trim()} sending={sending || uploading} cooldownPercent={cooldownPercent} cooldownSecondsLeft={cooldownSecondsLeft} />
+          <button type="button" onClick={() => setPickerOpen((v) => !v)} disabled={uploading || selectedMessages.length > 0} style={{ width: 36, height: 36, borderRadius: '50%', border: 'none', background: pickerOpen ? 'var(--glass-border)' : 'transparent', color: pickerOpen ? 'var(--blue)' : 'var(--dim)', cursor: 'pointer', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{Vectors.Smiley}</button>
+          <input type="text" value={text} onChange={(e) => setText(e.target.value)} onFocus={() => setPickerOpen(false)} placeholder={uploading ? 'Uploading media...' : 'Message'} disabled={uploading || selectedMessages.length > 0} style={{ flex: 1, border: '1px solid var(--glass-border)', outline: 'none', background: 'var(--glass)', borderRadius: 24, padding: '12px 18px', fontSize: 15, color: 'var(--ink)', transition: 'border-color 0.2s' }} />
+          <SendButton canSend={!!text.trim()} sending={sending || uploading} cooldownPercent={cooldownPercent} />
         </form>
         </>
         )}

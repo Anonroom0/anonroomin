@@ -3,18 +3,20 @@
  * AUTHENTICATION MODAL (APPLE LIQUID UI & TELEGRAM PHYSICS)
  * ============================================================================
  * This component handles the complete authentication flow: Sign In, Sign Up,
- * and OTP Verification. It utilizes Apple-style glassmorphism, fluid tab
- * transitions, and precise micro-interactions for a premium feel.
+ * Password Reset, and OTP Verification. It utilizes Apple-style glassmorphism, 
+ * fluid tab transitions, and precise micro-interactions for a premium feel.
  * 
  * Corrected Features Included Inline:
  * - Pre-checks `profiles` table for username availability before triggering signup.
- * - Removed backdrop auto-close (must click 'X' to close).
  * - Enforced strict lowercase usernames on registration for universal uniqueness.
+ * - Password Visibility Toggles (Eye / EyeOff) implemented natively.
+ * - Forgot Password / Reset Password flow added.
+ * - Removed backdrop auto-close (must click 'X' to close) when submitting.
  * - DB errors are masked with user-friendly messages for security.
- * - Liquid Glassmorphism Modal & Overlay
- * - Advanced OTP Input Matrix with focus bounce physics
- * - Smooth Telegram sliding segmented controls
- * - Fully unminified, enterprise-grade formatting
+ * - Liquid Glassmorphism Modal & Overlay.
+ * - Advanced OTP Input Matrix with focus bounce physics.
+ * - Smooth Telegram sliding segmented controls.
+ * - Fully unminified, enterprise-grade formatting.
  * 
  * Dependencies: React, Supabase
  * ============================================================================
@@ -94,6 +96,36 @@ const Vectors = {
       <circle cx="12" cy="7" r="4" />
     </svg>
   ),
+  Eye: (
+    <svg 
+      width="20" 
+      height="20" 
+      viewBox="0 0 24 24" 
+      fill="none" 
+      stroke="currentColor" 
+      strokeWidth="2" 
+      strokeLinecap="round" 
+      strokeLinejoin="round"
+    >
+      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
+      <circle cx="12" cy="12" r="3" />
+    </svg>
+  ),
+  EyeOff: (
+    <svg 
+      width="20" 
+      height="20" 
+      viewBox="0 0 24 24" 
+      fill="none" 
+      stroke="currentColor" 
+      strokeWidth="2" 
+      strokeLinecap="round" 
+      strokeLinejoin="round"
+    >
+      <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" />
+      <line x1="1" y1="1" x2="23" y2="23" />
+    </svg>
+  ),
   Alert: (
     <svg 
       width="20" 
@@ -145,6 +177,21 @@ const Vectors = {
     >
       <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
       <polyline points="22 4 12 14.01 9 11.01" />
+    </svg>
+  ),
+  ArrowLeft: (
+    <svg 
+      width="20" 
+      height="20" 
+      viewBox="0 0 24 24" 
+      fill="none" 
+      stroke="currentColor" 
+      strokeWidth="2.5" 
+      strokeLinecap="round" 
+      strokeLinejoin="round"
+    >
+      <line x1="19" y1="12" x2="5" y2="12" />
+      <polyline points="12 19 5 12 12 5" />
     </svg>
   )
 };
@@ -225,7 +272,7 @@ const GlobalKeyframes = () => (
     @keyframes spin {
       100% { transform: rotate(360deg); }
     }
-    .liquid-input-wrapper:focus-within svg {
+    .liquid-input-wrapper:focus-within svg.input-icon {
       color: var(--blue) !important;
       transform: scale(1.1);
     }
@@ -264,7 +311,7 @@ function AppleToggle({ checked, onChange }) {
 export default function AuthModal({ open, onClose, initialTab = 'signin', onVerified }) {
   
   const [isVisible, setIsVisible] = useState(false);
-  const [tab, setTab] = useState(initialTab); // 'signin' | 'signup'
+  const [tab, setTab] = useState(initialTab); // 'signin' | 'signup' | 'forgot'
   const [stage, setStage] = useState('form'); // 'form' | 'otp' | 'success'
   
   const [email, setEmail] = useState('');
@@ -272,6 +319,9 @@ export default function AuthModal({ open, onClose, initialTab = 'signin', onVeri
   const [confirmPassword, setConfirmPassword] = useState('');
   const [username, setUsername] = useState('');
   const [acceptedTerms, setAcceptedTerms] = useState(false);
+  
+  const [showPassword, setShowPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   
   const [otp, setOtp] = useState(['', '', '', '', '', '']);
   const otpRefs = useRef([]);
@@ -311,6 +361,8 @@ export default function AuthModal({ open, onClose, initialTab = 'signin', onVeri
     setConfirmPassword('');
     setUsername('');
     setAcceptedTerms(false);
+    setShowPassword(false);
+    setShowConfirmPassword(false);
     setOtp(['', '', '', '', '', '']);
     setError('');
   }, []);
@@ -324,11 +376,19 @@ export default function AuthModal({ open, onClose, initialTab = 'signin', onVeri
   }, []);
 
   const handleClose = useCallback(() => {
+    if (submitting) return;
     setIsVisible(false);
     setTimeout(() => {
       onClose();
     }, ANIMATION_DURATION - 50);
-  }, [onClose]);
+  }, [onClose, submitting]);
+
+  // Handle click outside to close (disabled when submitting)
+  const handleBackdropClick = useCallback((e) => {
+    if (e.target === e.currentTarget && !submitting) {
+      handleClose();
+    }
+  }, [handleClose, submitting]);
 
   async function handleSignIn(e) {
     e.preventDefault();
@@ -365,6 +425,7 @@ export default function AuthModal({ open, onClose, initialTab = 'signin', onVeri
     e.preventDefault();
     setError('');
 
+    // Force strictly lowercase and trim spaces
     const normalizedUsername = username.trim().toLowerCase();
 
     if (!acceptedTerms) {
@@ -375,6 +436,13 @@ export default function AuthModal({ open, onClose, initialTab = 'signin', onVeri
       triggerError('Username is required for anonymity.');
       return;
     }
+    
+    // Strict alphanumeric/underscore check
+    if (!/^[a-z0-9_]+$/.test(normalizedUsername)) {
+      triggerError('Username can only contain lowercase letters, numbers, and underscores.');
+      return;
+    }
+    
     if (password !== confirmPassword) {
       triggerError('Passwords do not match.');
       return;
@@ -387,13 +455,14 @@ export default function AuthModal({ open, onClose, initialTab = 'signin', onVeri
     setSubmitting(true);
 
     // 🛑 PRE-CHECK: Explicitly verify if username already exists in profiles table
+    // Uses ilike just in case, but normalizedUsername is already strictly lowercased.
     const { data: existingProfile, error: lookupError } = await supabase
       .from('profiles')
       .select('id')
-      .eq('username', normalizedUsername)
+      .ilike('username', normalizedUsername)
       .maybeSingle();
 
-    if (lookupError) {
+    if (lookupError && lookupError.code !== 'PGRST116') {
       setSubmitting(false);
       // Masking database query error
       triggerError('Service temporarily unavailable. Please try again.');
@@ -437,6 +506,35 @@ export default function AuthModal({ open, onClose, initialTab = 'signin', onVeri
 
     setStage('otp');
     setResendCooldown(RESEND_COOLDOWN_S);
+  }
+
+  async function handleResetPassword(e) {
+    e.preventDefault();
+    setError('');
+
+    if (!email.trim()) {
+      triggerError('Please enter your email address.');
+      return;
+    }
+
+    setSubmitting(true);
+
+    try {
+      const { error: resetError } = await supabase.auth.resetPasswordForEmail(email.trim(), {
+        redirectTo: window.location.origin,
+      });
+
+      if (resetError) throw resetError;
+
+      setStage('success');
+      setTimeout(() => {
+        handleClose();
+      }, 2000);
+    } catch (err) {
+      triggerError(err.message || 'Failed to send reset link.');
+    } finally {
+      setSubmitting(false);
+    }
   }
 
   function handleOtpChange(index, value) {
@@ -552,6 +650,7 @@ export default function AuthModal({ open, onClose, initialTab = 'signin', onVeri
     <>
       <GlobalKeyframes />
       <div
+        onClick={handleBackdropClick}
         style={{
           position: 'fixed', inset: 0, zIndex: 1000,
           background: 'rgba(0,0,0,0.5)',
@@ -585,9 +684,10 @@ export default function AuthModal({ open, onClose, initialTab = 'signin', onVeri
             style={{
               position: 'absolute', top: 16, right: 16, width: 32, height: 32, borderRadius: '50%',
               border: 'none', background: 'transparent', color: 'var(--dim)',
-              cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
-              transition: 'background 0.2s, color 0.2s'
+              cursor: submitting ? 'default' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+              transition: 'background 0.2s, color 0.2s', opacity: submitting ? 0.5 : 1
             }}
+            disabled={submitting}
           >
             {Vectors.Close}
           </button>
@@ -595,52 +695,70 @@ export default function AuthModal({ open, onClose, initialTab = 'signin', onVeri
           {stage === 'form' && (
             <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
               
-              <div style={{ textAlign: 'center' }}>
+              <div style={{ textAlign: 'center', position: 'relative' }}>
+                {tab === 'forgot' && (
+                  <button 
+                    onClick={() => switchTab('signin')} 
+                    disabled={submitting}
+                    style={{ 
+                      position: 'absolute', left: -16, top: '50%', transform: 'translateY(-50%)',
+                      border: 'none', background: 'transparent', color: 'var(--blue)', 
+                      padding: 8, cursor: submitting ? 'default' : 'pointer', display: 'flex', 
+                      alignItems: 'center', opacity: submitting ? 0.5 : 1 
+                    }}
+                    aria-label="Back to Sign In"
+                  >
+                    {Vectors.ArrowLeft}
+                  </button>
+                )}
                 <h2 style={{ margin: '0 0 8px 0', fontSize: 24, fontWeight: 800, color: 'var(--ink)', letterSpacing: '-0.5px' }}>
-                  {tab === 'signin' ? 'Welcome Back' : 'Join Anonroom'}
+                  {tab === 'signin' ? 'Welcome Back' : tab === 'signup' ? 'Join Anonroom' : 'Reset Password'}
                 </h2>
                 <p style={{ margin: 0, fontSize: 15, color: 'var(--dim)', lineHeight: 1.4 }}>
-                  {tab === 'signin' ? 'Sign in to continue bridging the gap.' : 'Create an anonymous identity.'}
+                  {tab === 'signin' ? 'Sign in to continue bridging the gap.' : tab === 'signup' ? 'Create an anonymous identity.' : 'Enter your email to receive a reset link.'}
                 </p>
               </div>
 
-              <div style={{ position: 'relative', display: 'flex', background: 'var(--glass-border)', borderRadius: 16, padding: 4, boxShadow: 'inset 0 1px 4px rgba(0,0,0,0.04)' }}>
-                <div 
-                  style={{
-                    position: 'absolute', top: 4, bottom: 4, width: 'calc(50% - 4px)',
-                    left: tab === 'signin' ? 4 : 'calc(50% + 0px)',
-                    background: 'var(--glass-strong)', borderRadius: 12,
-                    transition: 'left 300ms cubic-bezier(0.2, 0.8, 0.2, 1)',
-                    boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
-                  }} 
-                />
-                
-                <button
-                  onClick={() => switchTab('signin')}
-                  style={{
-                    flex: 1, zIndex: 1, padding: '10px 0', border: 'none', background: 'transparent',
-                    fontWeight: 600, fontSize: 15, borderRadius: 12,
-                    color: tab === 'signin' ? 'var(--ink)' : 'var(--dim)', cursor: 'pointer'
-                  }}
-                >
-                  Sign In
-                </button>
-                <button
-                  onClick={() => switchTab('signup')}
-                  style={{
-                    flex: 1, zIndex: 1, padding: '10px 0', border: 'none', background: 'transparent',
-                    fontWeight: 600, fontSize: 15, borderRadius: 12,
-                    color: tab === 'signup' ? 'var(--ink)' : 'var(--dim)', cursor: 'pointer'
-                  }}
-                >
-                  Create Account
-                </button>
-              </div>
+              {tab !== 'forgot' && (
+                <div style={{ position: 'relative', display: 'flex', background: 'var(--glass-border)', borderRadius: 16, padding: 4, boxShadow: 'inset 0 1px 4px rgba(0,0,0,0.04)' }}>
+                  <div 
+                    style={{
+                      position: 'absolute', top: 4, bottom: 4, width: 'calc(50% - 4px)',
+                      left: tab === 'signin' ? 4 : 'calc(50% + 0px)',
+                      background: 'var(--glass-strong)', borderRadius: 12,
+                      transition: 'left 300ms cubic-bezier(0.2, 0.8, 0.2, 1)',
+                      boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
+                    }} 
+                  />
+                  
+                  <button
+                    onClick={() => switchTab('signin')}
+                    style={{
+                      flex: 1, zIndex: 1, padding: '10px 0', border: 'none', background: 'transparent',
+                      fontWeight: 600, fontSize: 15, borderRadius: 12,
+                      color: tab === 'signin' ? 'var(--ink)' : 'var(--dim)', cursor: 'pointer'
+                    }}
+                  >
+                    Sign In
+                  </button>
+                  <button
+                    onClick={() => switchTab('signup')}
+                    style={{
+                      flex: 1, zIndex: 1, padding: '10px 0', border: 'none', background: 'transparent',
+                      fontWeight: 600, fontSize: 15, borderRadius: 12,
+                      color: tab === 'signup' ? 'var(--ink)' : 'var(--dim)', cursor: 'pointer'
+                    }}
+                  >
+                    Create Account
+                  </button>
+                </div>
+              )}
 
+              {/* FORMS */}
               {tab === 'signin' ? (
                 <form onSubmit={handleSignIn} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                   <div className="liquid-input-wrapper" style={getInputWrapperStyle('email')}>
-                    <div style={{ color: 'var(--dim)' }}>{Vectors.Mail}</div>
+                    <div className="input-icon" style={{ color: 'var(--dim)', transition: 'all 0.2s' }}>{Vectors.Mail}</div>
                     <input
                       type="email" placeholder="Email Address" value={email} required
                       onChange={(e) => setEmail(e.target.value)}
@@ -651,14 +769,33 @@ export default function AuthModal({ open, onClose, initialTab = 'signin', onVeri
                   </div>
                   
                   <div className="liquid-input-wrapper" style={getInputWrapperStyle('password')}>
-                    <div style={{ color: 'var(--dim)' }}>{Vectors.Lock}</div>
+                    <div className="input-icon" style={{ color: 'var(--dim)', transition: 'all 0.2s' }}>{Vectors.Lock}</div>
                     <input
-                      type="password" placeholder="Password" value={password} required
+                      type={showPassword ? "text" : "password"} placeholder="Password" value={password} required
                       onChange={(e) => setPassword(e.target.value)}
                       onFocus={() => setFocusedField('password')}
                       onBlur={() => setFocusedField(null)}
                       style={getInputFieldStyle()}
                     />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      tabIndex="-1"
+                      style={{ border: 'none', background: 'transparent', color: showPassword ? 'var(--blue)' : 'var(--dim)', cursor: 'pointer', padding: 0, display: 'flex', transition: 'color 0.2s' }}
+                    >
+                      {showPassword ? Vectors.EyeOff : Vectors.Eye}
+                    </button>
+                  </div>
+
+                  <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: -4 }}>
+                    <button 
+                      type="button" 
+                      onClick={() => switchTab('forgot')}
+                      disabled={submitting}
+                      style={{ border: 'none', background: 'transparent', color: 'var(--blue)', fontSize: 14, fontWeight: 600, cursor: submitting ? 'default' : 'pointer', opacity: submitting ? 0.5 : 1, padding: 0 }}
+                    >
+                      Forgot Password?
+                    </button>
                   </div>
 
                   {error && (
@@ -680,10 +817,42 @@ export default function AuthModal({ open, onClose, initialTab = 'signin', onVeri
                     {submitting ? <>{Vectors.Spinner} Authenticating...</> : 'Sign In'}
                   </button>
                 </form>
+              ) : tab === 'forgot' ? (
+                <form onSubmit={handleResetPassword} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                  <div className="liquid-input-wrapper" style={getInputWrapperStyle('email')}>
+                    <div className="input-icon" style={{ color: 'var(--dim)', transition: 'all 0.2s' }}>{Vectors.Mail}</div>
+                    <input
+                      type="email" placeholder="Email Address" value={email} required
+                      onChange={(e) => setEmail(e.target.value)}
+                      onFocus={() => setFocusedField('email')}
+                      onBlur={() => setFocusedField(null)}
+                      style={getInputFieldStyle()}
+                    />
+                  </div>
+
+                  {error && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--red)', fontSize: 14, fontWeight: 500, background: 'rgba(255,59,48,0.1)', padding: '10px 14px', borderRadius: 12 }}>
+                      {Vectors.Alert}
+                      <span>{error}</span>
+                    </div>
+                  )}
+
+                  <button
+                    type="submit" disabled={submitting}
+                    style={{
+                      marginTop: 8, padding: '16px 0', borderRadius: 16, border: 'none',
+                      background: 'var(--blue)', color: '#fff', fontWeight: 700, fontSize: 16, 
+                      cursor: submitting ? 'default' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                      opacity: submitting ? 0.7 : 1, boxShadow: submitting ? 'none' : '0 8px 24px rgba(10, 132, 255, 0.3)'
+                    }}
+                  >
+                    {submitting ? <>{Vectors.Spinner} Sending...</> : 'Send Reset Link'}
+                  </button>
+                </form>
               ) : (
                 <form onSubmit={handleSignUp} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                   <div className="liquid-input-wrapper" style={getInputWrapperStyle('username')}>
-                    <div style={{ color: 'var(--dim)' }}>{Vectors.User}</div>
+                    <div className="input-icon" style={{ color: 'var(--dim)', transition: 'all 0.2s' }}>{Vectors.User}</div>
                     <input
                       type="text" placeholder="Anonymous Username" value={username} required
                       onChange={(e) => setUsername(e.target.value)}
@@ -694,7 +863,7 @@ export default function AuthModal({ open, onClose, initialTab = 'signin', onVeri
                   </div>
 
                   <div className="liquid-input-wrapper" style={getInputWrapperStyle('email')}>
-                    <div style={{ color: 'var(--dim)' }}>{Vectors.Mail}</div>
+                    <div className="input-icon" style={{ color: 'var(--dim)', transition: 'all 0.2s' }}>{Vectors.Mail}</div>
                     <input
                       type="email" placeholder="Email Address (Kept Private)" value={email} required
                       onChange={(e) => setEmail(e.target.value)}
@@ -705,25 +874,41 @@ export default function AuthModal({ open, onClose, initialTab = 'signin', onVeri
                   </div>
                   
                   <div className="liquid-input-wrapper" style={getInputWrapperStyle('password')}>
-                    <div style={{ color: 'var(--dim)' }}>{Vectors.Lock}</div>
+                    <div className="input-icon" style={{ color: 'var(--dim)', transition: 'all 0.2s' }}>{Vectors.Lock}</div>
                     <input
-                      type="password" placeholder="Create Password" value={password} required
+                      type={showPassword ? "text" : "password"} placeholder="Create Password" value={password} required
                       onChange={(e) => setPassword(e.target.value)}
                       onFocus={() => setFocusedField('password')}
                       onBlur={() => setFocusedField(null)}
                       style={getInputFieldStyle()}
                     />
+                    <button
+                      type="button"
+                      onClick={() => setShowPassword(!showPassword)}
+                      tabIndex="-1"
+                      style={{ border: 'none', background: 'transparent', color: showPassword ? 'var(--blue)' : 'var(--dim)', cursor: 'pointer', padding: 0, display: 'flex', transition: 'color 0.2s' }}
+                    >
+                      {showPassword ? Vectors.EyeOff : Vectors.Eye}
+                    </button>
                   </div>
 
                   <div className="liquid-input-wrapper" style={getInputWrapperStyle('confirmPassword')}>
-                    <div style={{ color: 'var(--dim)' }}>{Vectors.Lock}</div>
+                    <div className="input-icon" style={{ color: 'var(--dim)', transition: 'all 0.2s' }}>{Vectors.Lock}</div>
                     <input
-                      type="password" placeholder="Confirm Password" value={confirmPassword} required
+                      type={showConfirmPassword ? "text" : "password"} placeholder="Confirm Password" value={confirmPassword} required
                       onChange={(e) => setConfirmPassword(e.target.value)}
                       onFocus={() => setFocusedField('confirmPassword')}
                       onBlur={() => setFocusedField(null)}
                       style={getInputFieldStyle()}
                     />
+                    <button
+                      type="button"
+                      onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                      tabIndex="-1"
+                      style={{ border: 'none', background: 'transparent', color: showConfirmPassword ? 'var(--blue)' : 'var(--dim)', cursor: 'pointer', padding: 0, display: 'flex', transition: 'color 0.2s' }}
+                    >
+                      {showConfirmPassword ? Vectors.EyeOff : Vectors.Eye}
+                    </button>
                   </div>
 
                   <label style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 4, cursor: 'pointer' }}>
@@ -786,7 +971,9 @@ export default function AuthModal({ open, onClose, initialTab = 'signin', onVeri
                       width: 48, height: 56, textAlign: 'center', fontSize: 24, fontWeight: 700,
                       background: 'var(--glass)', padding: 0, outline: 'none',
                       color: 'var(--ink)', borderRadius: 14, border: '1px solid',
-                      borderColor: focusedField === `otp-${i}` || digit ? 'var(--blue)' : 'var(--glass-border)'
+                      borderColor: focusedField === `otp-${i}` || digit ? 'var(--blue)' : 'var(--glass-border)',
+                      transition: 'border-color 0.2s, box-shadow 0.2s',
+                      boxShadow: focusedField === `otp-${i}` ? '0 0 0 4px rgba(10,132,255,0.15)' : 'none'
                     }}
                   />
                 ))}
@@ -805,7 +992,8 @@ export default function AuthModal({ open, onClose, initialTab = 'signin', onVeri
                   style={{
                     padding: '16px 0', borderRadius: 16, border: 'none',
                     background: 'var(--blue)', color: '#fff', fontWeight: 700, fontSize: 16, 
-                    cursor: submitting ? 'default' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8
+                    cursor: submitting ? 'default' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                    opacity: submitting ? 0.7 : 1, boxShadow: submitting ? 'none' : '0 8px 24px rgba(10, 132, 255, 0.3)'
                   }}
                 >
                   {submitting ? <>{Vectors.Spinner} Verifying...</> : 'Verify & Continue'}
@@ -813,7 +1001,7 @@ export default function AuthModal({ open, onClose, initialTab = 'signin', onVeri
 
                 <button
                   type="button" onClick={handleResend} disabled={resendCooldown > 0 || submitting}
-                  style={{ background: 'none', border: 'none', fontSize: 14, fontWeight: 600, cursor: resendCooldown > 0 ? 'default' : 'pointer', textAlign: 'center', padding: '12px 0', color: resendCooldown > 0 ? 'var(--dim)' : 'var(--blue)' }}
+                  style={{ background: 'none', border: 'none', fontSize: 14, fontWeight: 600, cursor: resendCooldown > 0 ? 'default' : 'pointer', textAlign: 'center', padding: '12px 0', color: resendCooldown > 0 ? 'var(--dim)' : 'var(--blue)', transition: 'color 0.2s' }}
                 >
                   {resendCooldown > 0 ? `Resend code in ${resendCooldown}s` : 'Resend Verification Code'}
                 </button>
@@ -825,7 +1013,9 @@ export default function AuthModal({ open, onClose, initialTab = 'signin', onVeri
             <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '40px 0' }}>
               <div style={{ color: 'var(--green)', marginBottom: 20 }}>{Vectors.CheckCircle}</div>
               <h2 style={{ margin: '0 0 8px 0', fontSize: 24, fontWeight: 800, color: 'var(--ink)' }}>Success</h2>
-              <p style={{ margin: 0, fontSize: 15, color: 'var(--dim)' }}>Redirecting you to Anonroom...</p>
+              <p style={{ margin: 0, fontSize: 15, color: 'var(--dim)' }}>
+                {tab === 'forgot' ? 'Check your email for the reset link.' : 'Redirecting you to Anonroom...'}
+              </p>
             </div>
           )}
 

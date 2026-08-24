@@ -1,7 +1,18 @@
-import { createContext, useContext, useEffect, useState } from 'react';
+/**
+ * ============================================================================
+ * AUTHENTICATION CONTEXT PROVIDER
+ * ============================================================================
+ * This file acts as the global state manager for the user's session and profile.
+ * It listens to Supabase auth events and automatically fetches the user's 
+ * public profile (including `is_admin`, `username`, and `avatar_url`) so it 
+ * is instantly available to all components without prop drilling.
+ * ============================================================================
+ */
+
+import React, { createContext, useContext, useEffect, useState } from 'react';
 import supabase from './supabaseClient';
 
-export const AuthContext = createContext(undefined);
+const AuthContext = createContext();
 
 export function AuthProvider({ children }) {
   const [session, setSession] = useState(null);
@@ -11,42 +22,29 @@ export function AuthProvider({ children }) {
   useEffect(() => {
     let isMounted = true;
 
-    async function loadProfile(currentSession) {
-      if (!currentSession?.user) {
-        if (isMounted) setProfile(null);
-        return;
-      }
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('*')
-        .eq('id', currentSession.user.id)
-        .single();
-
+    // 1. Fetch initial active session
+    supabase.auth.getSession().then(({ data: { session: initialSession } }) => {
       if (isMounted) {
-        if (error) {
-          console.warn('Failed to load profile:', error.message);
-          setProfile(null);
+        setSession(initialSession);
+        if (initialSession?.user) {
+          fetchProfile(initialSession.user.id);
         } else {
-          setProfile(data);
+          setLoading(false);
         }
       }
-    }
-
-    supabase.auth.getSession().then(async ({ data: { session: initialSession } }) => {
-      if (!isMounted) return;
-      setSession(initialSession);
-      await loadProfile(initialSession);
-      if (isMounted) setLoading(false);
     });
 
-    const {
-      data: { subscription },
-    } = supabase.auth.onAuthStateChange(async (_event, nextSession) => {
-      if (!isMounted) return;
-      setSession(nextSession);
-      setLoading(true);
-      await loadProfile(nextSession);
-      if (isMounted) setLoading(false);
+    // 2. Listen for login/logout events dynamically
+    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, currentSession) => {
+      if (isMounted) {
+        setSession(currentSession);
+        if (currentSession?.user) {
+          fetchProfile(currentSession.user.id);
+        } else {
+          setProfile(null);
+          setLoading(false);
+        }
+      }
     });
 
     return () => {
@@ -55,23 +53,36 @@ export function AuthProvider({ children }) {
     };
   }, []);
 
-  const isAdmin = profile?.is_admin === true;
-
-  async function signOut() {
-    await supabase.auth.signOut();
+  // 3. Fetch the custom profile data linked to the auth UUID
+  async function fetchProfile(userId) {
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', userId)
+        .single();
+        
+      if (error && error.code !== 'PGRST116') {
+        throw error;
+      }
+      
+      setProfile(data || null);
+    } catch (error) {
+      console.error('Error fetching user profile context:', error.message);
+    } finally {
+      setLoading(false);
+    }
   }
 
+  // Provide the session, profile, and loading state globally
   return (
-    <AuthContext.Provider value={{ session, profile, loading, isAdmin, signOut }}>
-      {children}
+    <AuthContext.Provider value={{ session, profile, loading }}>
+      {!loading && children}
     </AuthContext.Provider>
   );
 }
 
+// Custom hook for easy access inside components
 export function useAuth() {
-  const context = useContext(AuthContext);
-  if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider');
-  }
-  return context;
+  return useContext(AuthContext);
 }

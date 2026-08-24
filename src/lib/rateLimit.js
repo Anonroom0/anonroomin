@@ -1,47 +1,48 @@
-export const RATE_LIMIT_MS = 5000;
+/**
+ * ============================================================================
+ * MESSAGE COOLDOWN / RATE LIMITER
+ * ============================================================================
+ * This script powers the visual cooldown ring on the Send buttons in both
+ * GroupChat and DirectMessages. It prevents database spamming by locking
+ * the send function for a few seconds after a message or image is sent.
+ * ============================================================================
+ */
 
-const TICK_INTERVAL_MS = 100;
-
-// Counts down from RATE_LIMIT_MS to 0, calling onTick(percentRemaining)
-// roughly every 100ms and onDone() once it reaches 0. This only drives UI
-// (disabling the composer / showing a countdown) — real enforcement is the
-// Postgres trigger in schema.sql.
-export function createCooldown(onTick, onDone) {
-  let intervalId = null;
-  let startedAt = null;
-
-  function clear() {
-    if (intervalId !== null) {
-      clearInterval(intervalId);
-      intervalId = null;
-    }
-  }
+export function createCooldown(onUpdate, onComplete, cooldownMs = 3000) {
+  let startTime = 0;
+  let animationFrameId = null;
+  let isCanceled = false;
 
   function tick() {
-    const elapsed = Date.now() - startedAt;
-    const remainingMs = Math.max(RATE_LIMIT_MS - elapsed, 0);
-    const percent = (remainingMs / RATE_LIMIT_MS) * 100;
+    if (isCanceled) return;
 
-    if (remainingMs <= 0) {
-      clear();
-      onTick(0);
-      onDone();
+    const elapsed = Date.now() - startTime;
+    const remaining = cooldownMs - elapsed;
+
+    if (remaining <= 0) {
+      onUpdate(0); // 0% cooldown remaining
+      if (onComplete) onComplete();
       return;
     }
 
-    onTick(percent);
+    // Calculate percentage remaining (100 to 0)
+    const percent = (remaining / cooldownMs) * 100;
+    onUpdate(percent);
+
+    animationFrameId = requestAnimationFrame(tick);
   }
 
-  function start() {
-    clear();
-    startedAt = Date.now();
-    onTick(100);
-    intervalId = setInterval(tick, TICK_INTERVAL_MS);
-  }
-
-  function cancel() {
-    clear();
-  }
-
-  return { start, cancel };
+  return {
+    start: () => {
+      isCanceled = false;
+      startTime = Date.now();
+      if (animationFrameId) cancelAnimationFrame(animationFrameId);
+      animationFrameId = requestAnimationFrame(tick);
+    },
+    cancel: () => {
+      isCanceled = true;
+      if (animationFrameId) cancelAnimationFrame(animationFrameId);
+      onUpdate(0);
+    }
+  };
 }

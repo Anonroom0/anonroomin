@@ -5,18 +5,17 @@
  * This component handles the core desktop/mobile master-detail routing.
  *
  * CHANGES IN THIS PASS:
- * - Locked homescreen to be completely unscrollable (height: 100vh, overflow: hidden).
- * - Added functional unread mention badge logic (`@`) for groups and DM rows in the sidebar.
- * - Profile lookup from URL is strictly case-insensitive (`toLowerCase()`).
- * - Profile/Menu button positioned on the right side of the search bar.
- * - Clear (✕) button inside the search input to return to home.
+ * - Custom iOS-style Pull-to-Refresh: Spinner slides from behind the search header.
+ * - Push Notification Prompt: Asks users for notification permissions on first load.
+ * - Locked homescreen to be completely unscrollable/unzoomable (100dvh, overflow hidden).
+ * - Full Sidebar Unread Mention Badges (`@`) for groups and DM rows.
  * - All code fully unrolled and un-compressed.
  *
  * Dependencies: React, Supabase, AuthContext
  * ============================================================================
  */
 
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import supabase from '../lib/supabaseClient';
 import { useAuth } from '../lib/authContext';
 import {
@@ -69,19 +68,29 @@ const Icons = {
     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
       <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" />
     </svg>
+  ),
+  Bell: (
+    <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+      <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+    </svg>
+  ),
+  Refresh: (
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="23 4 23 10 17 10" />
+      <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
+    </svg>
   )
 };
 
 // ============================================================================
-// 3. UTILITY & FORMATTING FUNCTIONS
+// 3. UTILITY & PHYSICS FUNCTIONS
 // ============================================================================
 
 function getInitials(name) {
   if (!name) return '?';
   const parts = name.trim().split(' ');
-  if (parts.length >= 2) {
-    return (parts[0][0] + parts[1][0]).toUpperCase();
-  }
+  if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
   return name.slice(0, 2).toUpperCase();
 }
 
@@ -112,6 +121,46 @@ function displayIdentity(user) {
   };
 }
 
+/**
+ * Custom React Hook for iOS-style Pull-to-Refresh Physics
+ */
+function usePullToRefresh(onRefresh, scrollRef) {
+  const [pullDistance, setPullDistance] = useState(0);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const startY = useRef(null);
+
+  const handleTouchStart = (e) => {
+    if (scrollRef.current && scrollRef.current.scrollTop === 0) {
+      startY.current = e.touches[0].clientY;
+    }
+  };
+
+  const handleTouchMove = (e) => {
+    if (startY.current === null) return;
+    const currentY = e.touches[0].clientY;
+    const diff = currentY - startY.current;
+
+    // Apply friction to the pull down
+    if (diff > 0 && scrollRef.current && scrollRef.current.scrollTop === 0) {
+      const resistance = diff * 0.4; 
+      setPullDistance(Math.min(resistance, 80)); // Cap the pull visual at 80px
+    }
+  };
+
+  const handleTouchEnd = async () => {
+    if (pullDistance > 60 && !isRefreshing) {
+      setIsRefreshing(true);
+      setPullDistance(50); // Hold spinner position while refreshing
+      await onRefresh();
+      setIsRefreshing(false);
+    }
+    setPullDistance(0); // Snap back
+    startY.current = null;
+  };
+
+  return { pullDistance, isRefreshing, handleTouchStart, handleTouchMove, handleTouchEnd };
+}
+
 // ============================================================================
 // 4. UI SUB-COMPONENTS
 // ============================================================================
@@ -120,9 +169,7 @@ function LiquidBackgroundEffects() {
   return (
     <div 
       aria-hidden="true" 
-      style={{ 
-        position: 'fixed', inset: 0, overflow: 'hidden', zIndex: -1, pointerEvents: 'none', background: 'var(--bg)' 
-      }}
+      style={{ position: 'fixed', inset: 0, overflow: 'hidden', zIndex: -1, pointerEvents: 'none', background: 'var(--bg)' }}
     >
       <div 
         style={{
@@ -145,11 +192,13 @@ function LiquidBackgroundEffects() {
           66% { transform: translate(-3%, 4%) scale(0.95) rotate(-3deg); }
           100% { transform: translate(0, 0) scale(1) rotate(0deg); }
         }
-        .chat-row {
-          transition: background 0.15s ease-in-out, transform 0.1s ease-in-out;
-        }
-        .chat-row:active {
-          transform: scale(0.98);
+        .chat-row { transition: background 0.15s ease-in-out, transform 0.1s ease-in-out; }
+        .chat-row:active { transform: scale(0.98); }
+        @keyframes spin-fast { 100% { transform: rotate(360deg); } }
+        .refresh-spin { animation: spin-fast 0.8s linear infinite; }
+        @keyframes slide-up-modal { 
+          0% { transform: translateY(100%); opacity: 0; } 
+          100% { transform: translateY(0); opacity: 1; } 
         }
       `}</style>
     </div>
@@ -159,7 +208,7 @@ function LiquidBackgroundEffects() {
 function ListSkeletonLoader() {
   const skeletons = Array(8).fill(0);
   return (
-    <div style={{ padding: '0 8px' }}>
+    <div style={{ padding: '0 8px', width: '100%', boxSizing: 'border-box' }}>
       {skeletons.map((_, i) => (
         <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 8px', opacity: 1 - (i * 0.1) }}>
           <div style={{ width: 48, height: 48, borderRadius: '50%', background: 'var(--glass-border)', animation: 'pulse 1.5s infinite ease-in-out' }} />
@@ -170,10 +219,7 @@ function ListSkeletonLoader() {
         </div>
       ))}
       <style>{`
-        @keyframes pulse {
-          0%, 100% { opacity: 0.5; }
-          50% { opacity: 0.2; }
-        }
+        @keyframes pulse { 0%, 100% { opacity: 0.5; } 50% { opacity: 0.2; } }
       `}</style>
     </div>
   );
@@ -212,7 +258,6 @@ function LiquidAvatar({ identity, size = 48, isGroup = false }) {
     </div>
   );
 }
-
 // ============================================================================
 // 5. MAIN HOME COMPONENT (MASTER/DETAIL)
 // ============================================================================
@@ -221,6 +266,9 @@ export default function Home() {
   const { session, profile } = useAuth();
   const userId = session?.user?.id;
   
+  // --------------------------------------------------------------------------
+  // WINDOW RESIZE / LAYOUT HOOK
+  // --------------------------------------------------------------------------
   const [windowWidth, setWindowWidth] = useState(window.innerWidth);
   
   useEffect(() => {
@@ -231,6 +279,9 @@ export default function Home() {
   
   const isMobile = windowWidth < MOBILE_BREAKPOINT_PX;
 
+  // --------------------------------------------------------------------------
+  // APPLICATION STATE
+  // --------------------------------------------------------------------------
   const [activeChatId, setActiveChatId] = useState(null); 
   const [activeChatType, setActiveChatType] = useState(null); 
   const [activeChatSource, setActiveChatSource] = useState(null);
@@ -239,20 +290,29 @@ export default function Home() {
   const [searchFocused, setSearchFocused] = useState(false);
   const showSearch = searchFocused || searchQuery.trim().length > 0;
 
+  // Modals & Prompts
   const [authOpen, setAuthOpen] = useState(false);
   const [editProfileOpen, setEditProfileOpen] = useState(false);
   const [profileCardUserId, setProfileCardUserId] = useState(null);
+  const [showPushPrompt, setShowPushPrompt] = useState(false);
 
+  // Data Stores
   const [threads, setThreads] = useState([]);
   const [groups, setGroups] = useState([]);
   const [loadingList, setLoadingList] = useState(true);
+
+  const scrollRef = useRef(null);
 
   // --------------------------------------------------------------------------
   // UNIFIED DATA FETCHING WITH UNREAD MENTION BADGE CALCULATION
   // --------------------------------------------------------------------------
   const fetchData = useCallback(async () => {
     let isMounted = true;
-    setLoadingList(true);
+    
+    // Only show full skeleton load if it's the very first load (prevents flashing on pull-to-refresh)
+    if (groups.length === 0 && threads.length === 0) {
+      setLoadingList(true);
+    }
 
     try {
       // 1. Fetch All Public Groups
@@ -346,13 +406,60 @@ export default function Home() {
     } finally {
       if (isMounted) setLoadingList(false);
     }
-    
-    return () => { isMounted = false; };
-  }, [userId]);
+  }, [userId, groups.length, threads.length]);
 
   useEffect(() => {
     fetchData();
   }, [fetchData]);
+
+  // Hook into our custom Pull-To-Refresh physics
+  const { pullDistance, isRefreshing, handleTouchStart, handleTouchMove, handleTouchEnd } = usePullToRefresh(fetchData, scrollRef);
+
+  // --------------------------------------------------------------------------
+  // FIRST-TIME PUSH NOTIFICATION PROMPT LOGIC
+  // --------------------------------------------------------------------------
+  useEffect(() => {
+    if (userId && 'Notification' in window) {
+      const hasPrompted = localStorage.getItem('anonroom_push_prompted');
+      if (!hasPrompted && Notification.permission === 'default') {
+        // Delay prompt slightly to not overwhelm user on immediate login
+        const timer = setTimeout(() => setShowPushPrompt(true), 2500);
+        return () => clearTimeout(timer);
+      }
+    }
+  }, [userId]);
+
+  const handleEnablePush = async () => {
+    localStorage.setItem('anonroom_push_prompted', 'true');
+    setShowPushPrompt(false);
+    
+    try {
+      const permission = await Notification.requestPermission();
+      if (permission === 'granted') {
+        const registration = await navigator.serviceWorker.ready;
+        // NOTE: A real VAPID key is required for actual delivery, this sets up the DB subscription
+        const sub = await registration.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: 'BLANK_VAPID_KEY_PLACEHOLDER_REPLACE_LATER' 
+        });
+        const subJSON = sub.toJSON();
+        
+        await supabase.from('push_subscriptions').insert({
+          user_id: userId,
+          endpoint: subJSON.endpoint,
+          p256dh: subJSON.keys.p256dh,
+          auth: subJSON.keys.auth
+        });
+      }
+    } catch (err) {
+      console.warn("Push setup failed or user denied:", err);
+    }
+  };
+
+  const handleDismissPush = () => {
+    localStorage.setItem('anonroom_push_prompted', 'true');
+    setShowPushPrompt(false);
+  };
 
   // --------------------------------------------------------------------------
   // ROUTING & INVALID URL FALLBACKS
@@ -373,6 +480,7 @@ export default function Home() {
 
       const dmUsername = getDmUsernameFromPath();
       if (dmUsername) {
+        // STRICT LOWERCASE LOOKUP
         const { data, error } = await supabase
           .from('profiles')
           .select('id, username')
@@ -386,6 +494,7 @@ export default function Home() {
           setActiveChatType('dm');
           setActiveChatSource('path');
         } else {
+          // SILENT INVALID URL FALLBACK: User does not exist, redirect strictly to Home with ZERO alerts.
           window.history.replaceState({}, '', ROOT_PATH);
           setActiveChatId(null);
           setActiveChatType(null);
@@ -443,9 +552,9 @@ export default function Home() {
       style={{ 
         display: 'flex', 
         width: '100vw', 
-        height: '100vh',
-        maxHeight: '100vh',
-        overflow: 'hidden',
+        height: '100dvh', // STRICT DYNAMIC HEIGHT
+        maxHeight: '100dvh',
+        overflow: 'hidden', // PREVENTS ENTIRE SCREEN FROM SCROLLING
         position: 'fixed',
         inset: 0,
         userSelect: 'none', 
@@ -455,23 +564,50 @@ export default function Home() {
     >
       <LiquidBackgroundEffects />
 
-      {/* LEFT PANEL: TELEGRAM SIDEBAR */}
+      {/* 
+        ======================================================================
+        LEFT PANEL: TELEGRAM SIDEBAR
+        ======================================================================
+      */}
       {(!isMobile || !isChatActive) && (
         <div 
           className="glass-panel"
           style={{ 
-            display: 'flex', flexDirection: 'column',
+            display: 'flex', 
+            flexDirection: 'column',
             width: isMobile ? '100%' : '25%', 
             minWidth: isMobile ? '100%' : 280, 
-            height: '100vh', 
+            height: '100dvh', 
             borderRight: '1px solid var(--glass-border)', 
-            zIndex: 10, borderRadius: 0 
+            zIndex: 10, 
+            borderRadius: 0,
+            position: 'relative'
           }}
         >
-          {/* HEADER */}
-          <div style={{ padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 12, background: 'var(--glass-strong)', borderBottom: '1px solid var(--glass-border)' }}>
+          {/* HEADER (Z-INDEX 20 TO COVER PULL-TO-REFRESH SPINNER) */}
+          <div 
+            style={{ 
+              padding: '14px 16px', 
+              display: 'flex', 
+              alignItems: 'center', 
+              gap: 12, 
+              background: 'var(--glass-strong)', 
+              borderBottom: '1px solid var(--glass-border)',
+              zIndex: 20,
+              position: 'relative'
+            }}
+          >
             <div style={{ position: 'relative', flex: 1 }}>
-              <span style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--dim)', pointerEvents: 'none' }}>
+              <span 
+                style={{ 
+                  position: 'absolute', 
+                  left: 12, 
+                  top: '50%', 
+                  transform: 'translateY(-50%)', 
+                  color: 'var(--dim)', 
+                  pointerEvents: 'none' 
+                }}
+              >
                 {Icons.Search}
               </span>
               
@@ -483,20 +619,40 @@ export default function Home() {
                 onBlur={() => setTimeout(() => setSearchFocused(false), 200)} 
                 placeholder="Search..." 
                 style={{ 
-                  width: '100%', border: 'none', background: 'var(--glass-border)', 
-                  padding: '10px 36px 10px 42px', borderRadius: 14, fontSize: 16, 
-                  color: 'var(--ink)', outline: 'none', boxSizing: 'border-box' 
+                  width: '100%', 
+                  border: 'none', 
+                  background: 'var(--glass-border)', 
+                  padding: '10px 36px 10px 42px', 
+                  borderRadius: 14, 
+                  fontSize: 16, 
+                  color: 'var(--ink)', 
+                  outline: 'none', 
+                  transition: 'background 0.2s', 
+                  boxSizing: 'border-box' 
                 }} 
               />
               
+              {/* CLEAR SEARCH BUTTON */}
               {searchQuery.length > 0 && (
                 <button
                   onClick={() => setSearchQuery('')}
                   style={{
-                    position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)',
-                    background: 'var(--glass)', border: 'none', color: 'var(--dim)',
-                    borderRadius: '50%', width: 22, height: 22, display: 'flex', 
-                    alignItems: 'center', justifyContent: 'center', cursor: 'pointer', fontSize: 11, fontWeight: 'bold'
+                    position: 'absolute', 
+                    right: 10, 
+                    top: '50%', 
+                    transform: 'translateY(-50%)',
+                    background: 'var(--glass)', 
+                    border: 'none', 
+                    color: 'var(--dim)',
+                    borderRadius: '50%', 
+                    width: 22, 
+                    height: 22, 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    justifyContent: 'center', 
+                    cursor: 'pointer', 
+                    fontSize: 11, 
+                    fontWeight: 'bold'
                   }}
                 >
                   ✕
@@ -504,20 +660,87 @@ export default function Home() {
               )}
             </div>
 
+            {/* Profile Avatar Button moved to the right */}
             <button 
               onClick={() => session ? setEditProfileOpen(true) : setAuthOpen(true)} 
-              style={{ width: 44, height: 44, borderRadius: '50%', border: 'none', padding: 0, cursor: 'pointer', flexShrink: 0, background: 'transparent' }}
+              style={{ 
+                width: 44, 
+                height: 44, 
+                borderRadius: '50%', 
+                border: 'none', 
+                padding: 0, 
+                cursor: 'pointer', 
+                flexShrink: 0, 
+                background: 'transparent', 
+                transition: 'transform 0.2s' 
+              }}
+              onMouseEnter={(e) => e.currentTarget.style.transform = 'scale(1.05)'}
+              onMouseLeave={(e) => e.currentTarget.style.transform = 'scale(1)'}
             >
-              {session ? <LiquidAvatar identity={profileIdentity} size={44} /> : (
-                <div style={{ width: '100%', height: '100%', background: 'var(--blue)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '50%' }}>
+              {session ? (
+                <LiquidAvatar identity={profileIdentity} size={44} />
+              ) : (
+                <div 
+                  style={{ 
+                    width: '100%', 
+                    height: '100%', 
+                    background: 'var(--blue)', 
+                    color: '#fff', 
+                    display: 'flex', 
+                    alignItems: 'center', 
+                    justifyContent: 'center', 
+                    borderRadius: '50%' 
+                  }}
+                >
                   {Icons.Menu}
                 </div>
               )}
             </button>
           </div>
 
-          {/* SCROLLING LIST */}
-          <div className="custom-scrollbar" style={{ flex: 1, overflowY: 'auto', paddingBottom: 24 }}>
+          {/* HIDDEN PULL-TO-REFRESH SPINNER CONTAINER */}
+          <div 
+            style={{
+              position: 'absolute',
+              top: 72, // Just below the header
+              left: 0,
+              right: 0,
+              height: 60,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              zIndex: 5,
+              transform: `translateY(${Math.min(pullDistance - 60, 0)}px)`,
+              opacity: pullDistance > 10 ? 1 : 0,
+              transition: isRefreshing ? 'transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1)' : 'none',
+              color: 'var(--blue)'
+            }}
+          >
+            <div 
+              className={isRefreshing ? "refresh-spin" : ""}
+              style={{ transform: `rotate(${pullDistance * 4}deg)` }}
+            >
+              {Icons.Refresh}
+            </div>
+          </div>
+
+          {/* SCROLLING LIST WITH TOUCH PHYSICS */}
+          <div 
+            ref={scrollRef}
+            onTouchStart={handleTouchStart}
+            onTouchMove={handleTouchMove}
+            onTouchEnd={handleTouchEnd}
+            className="custom-scrollbar" 
+            style={{ 
+              flex: 1, 
+              overflowY: 'auto', 
+              paddingBottom: 24,
+              zIndex: 10,
+              background: 'transparent',
+              transform: `translateY(${pullDistance}px)`,
+              transition: isRefreshing || pullDistance === 0 ? 'transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1)' : 'none',
+            }}
+          >
             {showSearch ? (
               <div className="pop-in">
                 <SearchUsers 
@@ -534,7 +757,16 @@ export default function Home() {
 
                 {!loadingList && groups.length > 0 && (
                   <>
-                    <div style={{ fontSize: 13, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5, color: 'var(--dim)', padding: '18px 16px 6px' }}>
+                    <div 
+                      style={{ 
+                        fontSize: 13, 
+                        fontWeight: 700, 
+                        textTransform: 'uppercase', 
+                        letterSpacing: 0.5, 
+                        color: 'var(--dim)', 
+                        padding: '18px 16px 6px' 
+                      }}
+                    >
                       Groups
                     </div>
                     {groups.map((group) => {
@@ -547,26 +779,76 @@ export default function Home() {
                           className="chat-row"
                           onClick={() => handleOpenGroup(group.slug)} 
                           style={{ 
-                            display: 'flex', alignItems: 'center', gap: 12, padding: '10px 16px', 
-                            border: 'none', textAlign: 'left', cursor: 'pointer', width: '100%', 
-                            background: isActive ? 'var(--blue)' : 'transparent', color: isActive ? '#fff' : 'var(--ink)' 
+                            display: 'flex', 
+                            alignItems: 'center', 
+                            gap: 12, 
+                            padding: '10px 16px', 
+                            border: 'none', 
+                            textAlign: 'left', 
+                            cursor: 'pointer', 
+                            width: '100%', 
+                            background: isActive ? 'var(--blue)' : 'transparent', 
+                            color: isActive ? '#fff' : 'var(--ink)' 
                           }}
                         >
                           <LiquidAvatar identity={identity} size={50} isGroup={true} />
                           
-                          <div style={{ flex: 1, minWidth: 0, borderBottom: isActive ? 'none' : '1px solid var(--glass-border)', paddingBottom: 12, paddingTop: 2, display: 'flex', alignItems: 'center' }}>
+                          <div 
+                            style={{ 
+                              flex: 1, 
+                              minWidth: 0, 
+                              borderBottom: isActive ? 'none' : '1px solid var(--glass-border)', 
+                              paddingBottom: 12, 
+                              paddingTop: 2, 
+                              display: 'flex', 
+                              alignItems: 'center' 
+                            }}
+                          >
                             <div style={{ flex: 1, overflow: 'hidden' }}>
-                              <span style={{ fontWeight: 600, fontSize: 16, display: 'block', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                              <span 
+                                style={{ 
+                                  fontWeight: 600, 
+                                  fontSize: 16, 
+                                  display: 'block', 
+                                  whiteSpace: 'nowrap', 
+                                  overflow: 'hidden', 
+                                  textOverflow: 'ellipsis' 
+                                }}
+                              >
                                 {group.name}
                               </span>
-                              <span style={{ fontSize: 14, color: isActive ? 'rgba(255,255,255,0.8)' : 'var(--dim)', display: 'block', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
+                              <span 
+                                style={{ 
+                                  fontSize: 14, 
+                                  color: isActive ? 'rgba(255,255,255,0.8)' : 'var(--dim)', 
+                                  display: 'block', 
+                                  textOverflow: 'ellipsis', 
+                                  overflow: 'hidden', 
+                                  whiteSpace: 'nowrap' 
+                                }}
+                              >
                                 {group.description || 'Public Channel'}
                               </span>
                             </div>
                             
                             {/* UNREAD MENTION BADGE UI FOR GROUPS */}
                             {group.unread_mention && (
-                              <div style={{ width: 22, height: 22, borderRadius: '50%', background: 'var(--blue)', color: '#fff', fontSize: 12, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginLeft: 8 }}>
+                              <div 
+                                style={{ 
+                                  width: 22, 
+                                  height: 22, 
+                                  borderRadius: '50%', 
+                                  background: 'var(--blue)', 
+                                  color: '#fff', 
+                                  fontSize: 12, 
+                                  fontWeight: 700, 
+                                  display: 'flex', 
+                                  alignItems: 'center', 
+                                  justifyContent: 'center', 
+                                  flexShrink: 0, 
+                                  marginLeft: 8 
+                                }}
+                              >
                                 @
                               </div>
                             )}
@@ -579,7 +861,16 @@ export default function Home() {
 
                 {!loadingList && userId && threads.length > 0 && (
                   <>
-                    <div style={{ fontSize: 13, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5, color: 'var(--dim)', padding: '24px 16px 6px' }}>
+                    <div 
+                      style={{ 
+                        fontSize: 13, 
+                        fontWeight: 700, 
+                        textTransform: 'uppercase', 
+                        letterSpacing: 0.5, 
+                        color: 'var(--dim)', 
+                        padding: '24px 16px 6px' 
+                      }}
+                    >
                       Chats
                     </div>
                     {threads.map((thread) => {
@@ -593,40 +884,119 @@ export default function Home() {
                           className="chat-row"
                           onClick={() => handleOpenChat(otherId, 'dm', thread.otherUser?.username)} 
                           style={{ 
-                            display: 'flex', alignItems: 'center', gap: 12, padding: '10px 16px', 
-                            border: 'none', textAlign: 'left', cursor: 'pointer', width: '100%', 
-                            background: isActive ? 'var(--blue)' : 'transparent', color: isActive ? '#fff' : 'var(--ink)' 
+                            display: 'flex', 
+                            alignItems: 'center', 
+                            gap: 12, 
+                            padding: '10px 16px', 
+                            border: 'none', 
+                            textAlign: 'left', 
+                            cursor: 'pointer', 
+                            width: '100%', 
+                            background: isActive ? 'var(--blue)' : 'transparent', 
+                            color: isActive ? '#fff' : 'var(--ink)' 
                           }}
                         >
                           <LiquidAvatar identity={identity} size={50} />
                           
-                          <div style={{ flex: 1, minWidth: 0, borderBottom: isActive ? 'none' : '1px solid var(--glass-border)', paddingBottom: 12, paddingTop: 2, display: 'flex', alignItems: 'center' }}>
-                            <div style={{ flex: 1, overflow: 'hidden' }}>
-                              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
-                                <span style={{ fontWeight: 600, fontSize: 16, display: 'flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
-                                  {identity.name}
-                                  {identity.isAdmin && <span style={{ color: isActive ? '#fff' : '#FF8C00' }}>{Icons.AdminShield}</span>}
-                                </span>
-                                <span style={{ fontSize: 12, color: isActive ? 'rgba(255,255,255,0.7)' : 'var(--dim)', flexShrink: 0, paddingLeft: 8 }}>
+                          <div 
+                            style={{ 
+                              flex: 1, 
+                              minWidth: 0, 
+                              borderBottom: isActive ? 'none' : '1px solid var(--glass-border)', 
+                              paddingBottom: 12, 
+                              paddingTop: 2 
+                            }}
+                          >
+                            <div 
+                              style={{ 
+                                display: 'flex', 
+                                justifyContent: 'space-between', 
+                                alignItems: 'center', 
+                                marginBottom: 4 
+                              }}
+                            >
+                              <span 
+                                style={{ 
+                                  fontWeight: 600, 
+                                  fontSize: 16, 
+                                  display: 'flex', 
+                                  alignItems: 'center', 
+                                  gap: 4, 
+                                  whiteSpace: 'nowrap', 
+                                  overflow: 'hidden', 
+                                  textOverflow: 'ellipsis' 
+                                }}
+                              >
+                                {identity.name}
+                                {identity.isAdmin && <span style={{ color: isActive ? '#fff' : '#FF8C00' }}>{Icons.AdminShield}</span>}
+                              </span>
+                              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0, paddingLeft: 8 }}>
+                                
+                                {/* UNREAD MENTION BADGE UI FOR DMS */}
+                                {thread.unread_mention && (
+                                  <div 
+                                    style={{ 
+                                      width: 18, 
+                                      height: 18, 
+                                      borderRadius: '50%', 
+                                      background: 'var(--blue)', 
+                                      color: '#fff', 
+                                      fontSize: 11, 
+                                      fontWeight: 700, 
+                                      display: 'flex', 
+                                      alignItems: 'center', 
+                                      justifyContent: 'center' 
+                                    }}
+                                  >
+                                    @
+                                  </div>
+                                )}
+                                <span style={{ fontSize: 12, color: isActive ? 'rgba(255,255,255,0.7)' : 'var(--dim)' }}>
                                   {formatTelegramTime(thread.created_at)}
                                 </span>
                               </div>
-                              <span style={{ fontSize: 14, color: isActive ? 'rgba(255,255,255,0.8)' : 'var(--dim)', display: 'block', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
-                                Tap to view messages
-                              </span>
                             </div>
-
-                            {/* UNREAD MENTION BADGE UI FOR DMS */}
-                            {thread.unread_mention && (
-                              <div style={{ width: 22, height: 22, borderRadius: '50%', background: 'var(--blue)', color: '#fff', fontSize: 12, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginLeft: 8 }}>
-                                @
-                              </div>
-                            )}
+                            <span 
+                              style={{ 
+                                fontSize: 14, 
+                                color: isActive ? 'rgba(255,255,255,0.8)' : 'var(--dim)', 
+                                display: 'block', 
+                                textOverflow: 'ellipsis', 
+                                overflow: 'hidden', 
+                                whiteSpace: 'nowrap' 
+                              }}
+                            >
+                              Tap to view messages
+                            </span>
                           </div>
                         </button>
                       );
                     })}
                   </>
+                )}
+
+                {!loadingList && !userId && (
+                  <div style={{ padding: '40px 20px', textAlign: 'center', color: 'var(--dim)' }}>
+                    <p style={{ fontSize: 15, marginBottom: 16, fontWeight: 500 }}>
+                      Sign in to view your private chats.
+                    </p>
+                    <button 
+                      onClick={() => setAuthOpen(true)} 
+                      style={{ 
+                        background: 'var(--blue)', 
+                        color: '#fff', 
+                        border: 'none', 
+                        padding: '12px 24px', 
+                        borderRadius: 20, 
+                        fontWeight: 700, 
+                        fontSize: 15, 
+                        cursor: 'pointer', 
+                        boxShadow: '0 8px 24px rgba(10,132,255,0.3)' 
+                      }}
+                    >
+                      Sign In
+                    </button>
+                  </div>
                 )}
               </div>
             )}
@@ -634,22 +1004,72 @@ export default function Home() {
         </div>
       )}
 
-      {/* RIGHT PANEL: CHAT VIEW */}
+      {/* 
+        ======================================================================
+        RIGHT PANEL: TELEGRAM MASTER CHAT VIEW
+        ======================================================================
+      */}
       {(!isMobile || isChatActive) && (
         <div 
           className={isMobile ? 'mobile-chat-page glass-strong' : 'glass-strong'}
-          style={{ flex: 1, display: 'flex', flexDirection: 'column', position: 'relative', height: '100vh', borderRadius: 0, zIndex: 1 }}
+          style={{ 
+            flex: 1, 
+            display: 'flex', 
+            flexDirection: 'column', 
+            position: 'relative', 
+            width: isMobile ? '100%' : undefined, 
+            height: '100dvh', 
+            borderRadius: 0, 
+            zIndex: 1, 
+            boxShadow: '-4px 0 24px rgba(0,0,0,0.03)' 
+          }}
         >
           {activeChatId ? (
             activeChatType === 'dm' ? (
-              <DirectMessages openThreadWithUserId={activeChatId} onBack={closeActiveChat} />
+              <DirectMessages 
+                openThreadWithUserId={activeChatId} 
+                onBack={closeActiveChat}
+                onThreadReady={(identity) => {
+                  if (identity?.username) {
+                    window.history.replaceState({}, '', buildDmPath(identity.username.toLowerCase()));
+                  }
+                }}
+              />
             ) : (
-              <GroupChat groupSlug={activeChatId} onBack={closeActiveChat} />
+              <GroupChat 
+                groupSlug={activeChatId} 
+                onBack={closeActiveChat}
+                onGroupResolved={(resolvedGroup) => {
+                  if (!resolvedGroup && activeChatSource === 'path') {
+                    closeActiveChat();
+                  }
+                }}
+              />
             )
           ) : (
-            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: 'var(--dim)', userSelect: 'none' }}>
-              <div style={{ marginBottom: 20 }}>{Icons.EmptyChat}</div>
-              <p style={{ fontSize: 15, fontWeight: 600, background: 'var(--glass-border)', padding: '8px 20px', borderRadius: 24 }}>
+            <div 
+              style={{ 
+                flex: 1, 
+                display: 'flex', 
+                flexDirection: 'column', 
+                alignItems: 'center', 
+                justifyContent: 'center', 
+                color: 'var(--dim)', 
+                userSelect: 'none' 
+              }}
+            >
+              <div style={{ marginBottom: 20, animation: 'pop-in 0.6s cubic-bezier(0.2, 0.8, 0.2, 1)' }}>
+                {Icons.EmptyChat}
+              </div>
+              <p 
+                style={{ 
+                  fontSize: 15, 
+                  fontWeight: 600, 
+                  background: 'var(--glass-border)', 
+                  padding: '8px 20px', 
+                  borderRadius: 24 
+                }}
+              >
                 Select a chat to start messaging
               </p>
             </div>
@@ -657,9 +1077,67 @@ export default function Home() {
         </div>
       )}
 
-      <AuthModal open={authOpen} onClose={() => setAuthOpen(false)} initialTab="signin" onVerified={() => setAuthOpen(false)} />
-      <EditProfile open={editProfileOpen} onClose={() => setEditProfileOpen(false)} />
-      <ProfileCard userId={profileCardUserId} open={profileCardUserId !== null} onClose={() => setProfileCardUserId(null)} onMessage={(id) => { setProfileCardUserId(null); handleOpenChat(id, 'dm'); }} />
+      {/* PUSH NOTIFICATION PROMPT MODAL */}
+      {showPushPrompt && (
+        <div 
+          style={{ 
+            position: 'fixed', inset: 0, zIndex: 9999, background: 'rgba(0,0,0,0.5)',
+            display: 'flex', alignItems: 'flex-end', justifyContent: 'center',
+            backdropFilter: 'blur(10px)', animation: 'pop-in 0.3s ease-out'
+          }}
+        >
+          <div 
+            style={{ 
+              width: '100%', maxWidth: 400, background: 'var(--glass-strong)', 
+              borderRadius: '24px 24px 0 0', padding: '32px 24px 40px',
+              boxShadow: '0 -10px 40px rgba(0,0,0,0.2)', textAlign: 'center',
+              animation: 'slide-up-modal 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.05)'
+            }}
+          >
+            <div style={{ color: 'var(--blue)', marginBottom: 16 }}>{Icons.Bell}</div>
+            <h2 style={{ margin: '0 0 12px 0', fontSize: 22, fontWeight: 800 }}>Enable Notifications</h2>
+            <p style={{ margin: '0 0 24px 0', color: 'var(--dim)', fontSize: 15, lineHeight: 1.4 }}>
+              Get instantly notified when someone mentions you or sends a private message.
+            </p>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <button 
+                onClick={handleEnablePush}
+                style={{ background: 'var(--blue)', color: '#fff', border: 'none', padding: '14px', borderRadius: 16, fontWeight: 700, fontSize: 16, cursor: 'pointer' }}
+              >
+                Turn On Notifications
+              </button>
+              <button 
+                onClick={handleDismissPush}
+                style={{ background: 'transparent', color: 'var(--dim)', border: 'none', padding: '14px', borderRadius: 16, fontWeight: 600, fontSize: 15, cursor: 'pointer' }}
+              >
+                Not Now
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <AuthModal 
+        open={authOpen} 
+        onClose={() => setAuthOpen(false)} 
+        initialTab="signin" 
+        onVerified={() => setAuthOpen(false)} 
+      />
+      
+      <EditProfile 
+        open={editProfileOpen} 
+        onClose={() => setEditProfileOpen(false)} 
+      />
+      
+      <ProfileCard 
+        userId={profileCardUserId} 
+        open={profileCardUserId !== null} 
+        onClose={() => setProfileCardUserId(null)} 
+        onMessage={(id) => { 
+          setProfileCardUserId(null); 
+          handleOpenChat(id, 'dm');
+        }} 
+      />
     </div>
   );
 }

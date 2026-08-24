@@ -136,6 +136,21 @@ const Vectors = {
       <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" />
     </svg>
   ),
+  User: (
+    <svg 
+      width="20" 
+      height="20" 
+      viewBox="0 0 24 24" 
+      fill="none" 
+      stroke="currentColor" 
+      strokeWidth="2" 
+      strokeLinecap="round" 
+      strokeLinejoin="round"
+    >
+      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+      <circle cx="12" cy="7" r="4" />
+    </svg>
+  ),
   Spinner: (
     <svg 
       width="32" 
@@ -373,6 +388,52 @@ function LiquidProfileAvatar({ identity, size = 140 }) {
   );
 }
 
+/**
+ * Read-Only input for displaying bio and other static text cleanly.
+ */
+function ReadOnlyInput({ icon, label, value, isTextArea = false }) {
+  if (!value) return null;
+
+  return (
+    <div 
+      style={{
+        position: 'relative', display: 'flex', alignItems: isTextArea ? 'flex-start' : 'center', gap: 12,
+        background: 'rgba(0,0,0,0.03)', border: '1px solid var(--glass-border)',
+        borderRadius: 16, padding: isTextArea ? '16px' : '8px 16px',
+        marginTop: 12, opacity: 0.8, cursor: 'default'
+      }}
+    >
+      <div style={{ color: 'var(--dim)', paddingTop: isTextArea ? 2 : 0 }}>
+        {icon}
+      </div>
+      
+      <div style={{ position: 'relative', flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+        {isTextArea ? (
+          <textarea
+            value={value} readOnly rows={4}
+            style={{ width: '100%', border: 'none', background: 'transparent', outline: 'none', fontSize: 16, color: 'var(--ink)', fontFamily: 'inherit', resize: 'none', paddingTop: 12, pointerEvents: 'none' }}
+          />
+        ) : (
+          <input
+            type="text" value={value} readOnly
+            style={{ width: '100%', border: 'none', background: 'transparent', outline: 'none', fontSize: 16, color: 'var(--ink)', padding: '12px 0 4px', pointerEvents: 'none' }}
+          />
+        )}
+        
+        <label 
+          style={{
+            position: 'absolute', top: 0, left: 0,
+            transform: isTextArea ? 'translateY(-20px) scale(0.85)' : 'translateY(-24px) scale(0.85)',
+            transformOrigin: 'left top', color: 'var(--dim)', fontSize: 16, pointerEvents: 'none',
+          }}
+        >
+          {label}
+        </label>
+      </div>
+    </div>
+  );
+}
+
 // ============================================================================
 // 5. MAIN PROFILE CARD COMPONENT EXPORT
 // ============================================================================
@@ -593,6 +654,9 @@ export default function ProfileCard({ userId, open, onClose, onMessage }) {
                     gap: 12 
                   }}
                 >
+                  <div style={{ color: 'var(--dim)', opacity: 0.5, marginBottom: 8 }}>
+                    {Vectors.User}
+                  </div>
                   <p 
                     style={{ 
                       color: 'var(--ink)', 
@@ -617,175 +681,60 @@ export default function ProfileCard({ userId, open, onClose, onMessage }) {
               
               {/* STATE: READY */}
               {status === 'ready' && identity && (
-                <>
+                <div style={{ width: '100%', display: 'flex', flexDirection: 'column', gap: 32 }}>
                   {/* Big Avatar Rendering */}
-                  <LiquidProfileAvatar 
-                    identity={identity} 
-                    size={140} 
-                  />
-                  
-                  {/* Name and Admin Badges */}
-                  <div 
-                    style={{ 
-                      display: 'flex', 
-                      alignItems: 'center', 
-                      gap: 8, 
-                      marginTop: 24, 
-                      marginBottom: 12 
-                    }}
-                  >
-                    <h2 
-                      style={{ 
-                        margin: 0, 
-                        fontSize: 28, 
-                        fontWeight: 800, 
-                        color: identity.isAdmin ? 'var(--admin-gold)' : 'var(--ink)', 
-                        letterSpacing: '-0.5px' 
-                      }}
-                    >
-                      {identity.name}
-                    </h2>
-                    {identity.isAdmin && (
-                      <span style={{ color: 'var(--admin-gold)' }}>
-                        {Vectors.AdminShield}
-                      </span>
-                    )}
+                  <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 16 }}>
+                    <LiquidProfileAvatar 
+                      identity={identity} 
+                      size={140} 
+                    />
+                    
+                    {/* Name and Admin Badges */}
+                    <div style={{ textAlign: 'center' }}>
+                      <h2 
+                        style={{ 
+                          margin: 0, 
+                          fontSize: 24, 
+                          fontWeight: 800, 
+                          color: identity.isAdmin ? '#FF8C00' : 'var(--ink)', 
+                          display: 'flex', 
+                          alignItems: 'center', 
+                          justifyContent: 'center', 
+                          gap: 8 
+                        }}
+                      >
+                        {identity.name}
+                        {identity.isAdmin && Vectors.AdminShield}
+                      </h2>
+                      {!identity.isAdmin && (
+                        <p style={{ margin: '4px 0 0', fontSize: 15, color: 'var(--dim)' }}>
+                          @{profile.username}
+                        </p>
+                      )}
+                    </div>
                   </div>
-
-                  {/* Biography */}
-                  {identity.bio && (
-                    <p 
-                      style={{ 
-                        margin: '0 0 24px 0', 
-                        fontSize: 16, 
-                        color: 'var(--ink)', 
-                        textAlign: 'center', 
-                        lineHeight: 1.5, 
-                        opacity: 0.85 
-                      }}
-                    >
-                      {identity.bio}
-                    </p>
-                  )}
 
                   {/* Joined Date Pill */}
-                  <div 
-                    style={{ 
-                      display: 'flex', 
-                      alignItems: 'center', 
-                      gap: 8, 
-                      color: 'var(--dim)', 
-                      fontSize: 14, 
-                      fontWeight: 600, 
-                      marginBottom: 32, 
-                      background: 'var(--glass-border)', 
-                      padding: '8px 16px', 
-                      borderRadius: 20 
-                    }}
-                  >
-                    {Vectors.Calendar} 
-                    <span>Joined {identity.joined}</span>
+                  <div style={{ display: 'flex', justifyContent: 'center' }}>
+                    <div 
+                      style={{ 
+                        display: 'flex', 
+                        alignItems: 'center', 
+                        gap: 8, 
+                        color: 'var(--dim)', 
+                        fontSize: 14, 
+                        fontWeight: 600, 
+                        background: 'var(--glass-border)', 
+                        padding: '8px 16px', 
+                        borderRadius: 20 
+                      }}
+                    >
+                      {Vectors.Calendar} 
+                      <span>Joined {identity.joined}</span>
+                    </div>
                   </div>
 
-                  {/* 
-                    ===========================================================
-                    SOCIAL LINKS ENGINE
-                    ===========================================================
-                    These only render if the user has actually filled them out.
-                  */}
-                  <div 
-                    style={{ 
-                      display: 'flex', 
-                      flexDirection: 'column', 
-                      gap: 12, 
-                      width: '100%', 
-                      marginBottom: 40 
-                    }}
-                  >
-                    {/* TWITTER / X */}
-                    {identity.social?.twitter && (
-                      <a 
-                        href={`https://x.com/${identity.social.twitter.replace('@','')}`} 
-                        target="_blank" 
-                        rel="noreferrer" 
-                        style={{ 
-                          display: 'flex', 
-                          alignItems: 'center', 
-                          gap: 14, 
-                          padding: '16px 20px', 
-                          background: 'var(--glass-border)', 
-                          borderRadius: 18, 
-                          color: 'var(--ink)', 
-                          textDecoration: 'none', 
-                          fontWeight: 600,
-                          transition: 'transform 0.2s, background 0.2s'
-                        }}
-                        onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(0,0,0,0.08)'}
-                        onMouseLeave={(e) => e.currentTarget.style.background = 'var(--glass-border)'}
-                      >
-                        <div style={{ color: 'var(--blue)' }}>{Vectors.Twitter}</div>
-                        x.com/{identity.social.twitter.replace('@','')}
-                      </a>
-                    )}
-                    
-                    {/* INSTAGRAM */}
-                    {identity.social?.instagram && (
-                      <a 
-                        href={`https://instagram.com/${identity.social.instagram.replace('@','')}`} 
-                        target="_blank" 
-                        rel="noreferrer" 
-                        style={{ 
-                          display: 'flex', 
-                          alignItems: 'center', 
-                          gap: 14, 
-                          padding: '16px 20px', 
-                          background: 'var(--glass-border)', 
-                          borderRadius: 18, 
-                          color: 'var(--ink)', 
-                          textDecoration: 'none', 
-                          fontWeight: 600,
-                          transition: 'transform 0.2s, background 0.2s'
-                        }}
-                        onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(0,0,0,0.08)'}
-                        onMouseLeave={(e) => e.currentTarget.style.background = 'var(--glass-border)'}
-                      >
-                        <div style={{ color: '#E1306C' }}>{Vectors.Instagram}</div>
-                        instagram.com/{identity.social.instagram.replace('@','')}
-                      </a>
-                    )}
-                    
-                    {/* PERSONAL WEBSITE */}
-                    {identity.social?.website && (
-                      <a 
-                        href={identity.social.website.startsWith('http') ? identity.social.website : `https://${identity.social.website}`} 
-                        target="_blank" 
-                        rel="noreferrer" 
-                        style={{ 
-                          display: 'flex', 
-                          alignItems: 'center', 
-                          gap: 14, 
-                          padding: '16px 20px', 
-                          background: 'var(--glass-border)', 
-                          borderRadius: 18, 
-                          color: 'var(--ink)', 
-                          textDecoration: 'none', 
-                          fontWeight: 600,
-                          transition: 'transform 0.2s, background 0.2s'
-                        }}
-                        onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(0,0,0,0.08)'}
-                        onMouseLeave={(e) => e.currentTarget.style.background = 'var(--glass-border)'}
-                      >
-                        <div style={{ color: 'var(--dim)' }}>{Vectors.Link}</div>
-                        {identity.social.website.replace(/^https?:\/\//, '')}
-                      </a>
-                    )}
-                  </div>
-
-                  {/* 
-                    ===========================================================
-                    ACTION BUTTON (SEND MESSAGE)
-                    ===========================================================
-                  */}
+                  {/* Action Button (Send Message) */}
                   {onMessage && (
                     <button 
                       onClick={() => { 
@@ -798,7 +747,7 @@ export default function ProfileCard({ userId, open, onClose, onMessage }) {
                       }} 
                       style={{ 
                         width: '100%', 
-                        padding: '18px 0', 
+                        padding: '16px 0', 
                         borderRadius: 20, 
                         border: 'none', 
                         background: 'var(--blue)', 
@@ -827,7 +776,113 @@ export default function ProfileCard({ userId, open, onClose, onMessage }) {
                       Send Message
                     </button>
                   )}
-                </>
+
+                  {/* Details section */}
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 24, width: '100%' }}>
+                    
+                    {/* Biography */}
+                    {identity.bio && (
+                      <div>
+                        <h3 style={{ margin: '0 0 8px 12px', fontSize: 13, fontWeight: 600, color: 'var(--dim)', textTransform: 'uppercase', letterSpacing: 0.5 }}>About</h3>
+                        <ReadOnlyInput icon={Vectors.User} label="Biography" value={identity.bio} isTextArea={true} />
+                      </div>
+                    )}
+
+                    {/* Social Links Engine */}
+                    {(identity.social?.twitter || identity.social?.instagram || identity.social?.website) && (
+                      <div>
+                        <h3 style={{ margin: '0 0 8px 12px', fontSize: 13, fontWeight: 600, color: 'var(--dim)', textTransform: 'uppercase', letterSpacing: 0.5 }}>Social Links</h3>
+                        <div 
+                          style={{ 
+                            display: 'flex', 
+                            flexDirection: 'column', 
+                            gap: 12, 
+                            width: '100%', 
+                            marginTop: 12 
+                          }}
+                        >
+                          {/* TWITTER / X */}
+                          {identity.social?.twitter && (
+                            <a 
+                              href={`https://x.com/${identity.social.twitter.replace('@','')}`} 
+                              target="_blank" 
+                              rel="noreferrer" 
+                              style={{ 
+                                display: 'flex', 
+                                alignItems: 'center', 
+                                gap: 14, 
+                                padding: '16px 20px', 
+                                background: 'var(--glass-border)', 
+                                borderRadius: 18, 
+                                color: 'var(--ink)', 
+                                textDecoration: 'none', 
+                                fontWeight: 600,
+                                transition: 'transform 0.2s, background 0.2s'
+                              }}
+                              onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(0,0,0,0.08)'}
+                              onMouseLeave={(e) => e.currentTarget.style.background = 'var(--glass-border)'}
+                            >
+                              <div style={{ color: 'var(--blue)' }}>{Vectors.Twitter}</div>
+                              x.com/{identity.social.twitter.replace('@','')}
+                            </a>
+                          )}
+                          
+                          {/* INSTAGRAM */}
+                          {identity.social?.instagram && (
+                            <a 
+                              href={`https://instagram.com/${identity.social.instagram.replace('@','')}`} 
+                              target="_blank" 
+                              rel="noreferrer" 
+                              style={{ 
+                                display: 'flex', 
+                                alignItems: 'center', 
+                                gap: 14, 
+                                padding: '16px 20px', 
+                                background: 'var(--glass-border)', 
+                                borderRadius: 18, 
+                                color: 'var(--ink)', 
+                                textDecoration: 'none', 
+                                fontWeight: 600,
+                                transition: 'transform 0.2s, background 0.2s'
+                              }}
+                              onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(0,0,0,0.08)'}
+                              onMouseLeave={(e) => e.currentTarget.style.background = 'var(--glass-border)'}
+                            >
+                              <div style={{ color: '#E1306C' }}>{Vectors.Instagram}</div>
+                              instagram.com/{identity.social.instagram.replace('@','')}
+                            </a>
+                          )}
+                          
+                          {/* PERSONAL WEBSITE */}
+                          {identity.social?.website && (
+                            <a 
+                              href={identity.social.website.startsWith('http') ? identity.social.website : `https://${identity.social.website}`} 
+                              target="_blank" 
+                              rel="noreferrer" 
+                              style={{ 
+                                display: 'flex', 
+                                alignItems: 'center', 
+                                gap: 14, 
+                                padding: '16px 20px', 
+                                background: 'var(--glass-border)', 
+                                borderRadius: 18, 
+                                color: 'var(--ink)', 
+                                textDecoration: 'none', 
+                                fontWeight: 600,
+                                transition: 'transform 0.2s, background 0.2s'
+                              }}
+                              onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(0,0,0,0.08)'}
+                              onMouseLeave={(e) => e.currentTarget.style.background = 'var(--glass-border)'}
+                            >
+                              <div style={{ color: 'var(--dim)' }}>{Vectors.Link}</div>
+                              {identity.social.website.replace(/^https?:\/\//, '')}
+                            </a>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
               )}
             </div>
           </div>
