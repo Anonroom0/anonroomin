@@ -1018,34 +1018,52 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
   // INSTAGRAM
   // --------------------------------------------------------------------------
   async function handleInstagramSubmit(username) {
-    setInstagramLoading(true);
-    const data = await scrapeInstagram(username);
-    setInstagramLoading(false);
+  if (!userId || !activeThread) return;
+  setInstagramLoading(true);
+  const data = await scrapeInstagram(username);
+  setInstagramLoading(false);
 
-    if (!data) {
-      showToast("Couldn't find that Instagram profile. Double check the username.", 'error');
-      return;
-    }
-
-    setInstagramModalOpen(false);
-    const { error } = await supabase.from('group_messages').insert({
-      group_id: group.id, user_id: session.user.id, sender_name: currentSenderName(),
-      instagram_username: data.username, instagram_pfp_url: data.pfp_url,
-      instagram_full_name: data.full_name, instagram_bio: data.bio,
-      instagram_followers: data.followers, instagram_following: data.following,
-      instagram_posts: data.posts, instagram_is_verified: data.is_verified,
-      instagram_is_private: data.is_private,
-      reply_to_id: replyingTo?.id ?? null, is_anon: isAnonMode,
-    });
-
-    if (error) {
-      console.error(error);
-      showToast(friendlyDbError(), 'error');
-      return;
-    }
-    setReplyingTo(null);
-    cooldownRef.current?.start();
+  if (!data) {
+    showToast("Couldn't find that Instagram profile. Double check the username.", 'error');
+    return;
   }
+
+  setInstagramModalOpen(false);
+
+  const insertPayload = data.fallback
+    ? {
+        thread_id: activeThread.id,
+        sender_id: userId,
+        instagram_username: data.username,
+        reply_to_id: replyingTo?.id ?? null,
+        is_anon: false,
+      }
+    : {
+        thread_id: activeThread.id,
+        sender_id: userId,
+        instagram_username: data.username,
+        instagram_pfp_url: data.pfp_url,
+        instagram_full_name: data.full_name,
+        instagram_bio: data.bio,
+        instagram_followers: data.followers,
+        instagram_following: data.following,
+        instagram_posts: data.posts,
+        instagram_is_verified: data.is_verified,
+        instagram_is_private: data.is_private,
+        reply_to_id: replyingTo?.id ?? null,
+        is_anon: false,
+      };
+
+  const { error } = await supabase.from('dm_messages').insert(insertPayload);
+
+  if (error) {
+    console.error(error);
+    showToast(friendlyDbError(), 'error');
+    return;
+  }
+  setReplyingTo(null);
+  cooldownRef.current?.start();
+}
 
   const filteredMessages = messages.filter((m) => {
     if (!isSearching || !chatSearchQuery.trim()) return true;

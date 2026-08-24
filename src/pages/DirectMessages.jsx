@@ -720,8 +720,9 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
   const [instagramLoading, setInstagramLoading] = useState(false);
 
   const scrollRef = useRef(null);
-  const fileInputRef = useRef(null);
-  const cameraInputRef = useRef(null);
+ const fileInputRef = useRef(null);
+const photoInputRef = useRef(null);
+const cameraInputRef = useRef(null);
   const cooldownRef = useRef(null);
 
   // --------------------------------------------------------------------------
@@ -1145,41 +1146,52 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
   // INSTAGRAM
   // --------------------------------------------------------------------------
   async function handleInstagramSubmit(username) {
-    if (!userId || !activeThread) return;
-    setInstagramLoading(true);
-    const data = await scrapeInstagram(username);
-    setInstagramLoading(false);
+  if (!userId || !activeThread) return;
+  setInstagramLoading(true);
+  const data = await scrapeInstagram(username);
+  setInstagramLoading(false);
 
-    if (!data) {
-      showToast("Couldn't find that Instagram profile. Double check the username.", 'error');
-      return;
-    }
-
-    setInstagramModalOpen(false);
-    const { error } = await supabase.from('dm_messages').insert({
-      thread_id: activeThread.id,
-      sender_id: userId,
-      instagram_username: data.username,
-      instagram_pfp_url: data.pfp_url,
-      instagram_full_name: data.full_name,
-      instagram_bio: data.bio,
-      instagram_followers: data.followers,
-      instagram_following: data.following,
-      instagram_posts: data.posts,
-      instagram_is_verified: data.is_verified,
-      instagram_is_private: data.is_private,
-      reply_to_id: replyingTo?.id ?? null,
-      is_anon: false,
-    });
-
-    if (error) {
-      console.error(error);
-      showToast(friendlyDbError(), 'error');
-      return;
-    }
-    setReplyingTo(null);
-    cooldownRef.current?.start();
+  if (!data) {
+    showToast("Couldn't find that Instagram profile. Double check the username.", 'error');
+    return;
   }
+
+  setInstagramModalOpen(false);
+
+  const insertPayload = data.fallback
+    ? {
+        thread_id: activeThread.id,
+        sender_id: userId,
+        instagram_username: data.username,
+        reply_to_id: replyingTo?.id ?? null,
+        is_anon: false,
+      }
+    : {
+        thread_id: activeThread.id,
+        sender_id: userId,
+        instagram_username: data.username,
+        instagram_pfp_url: data.pfp_url,
+        instagram_full_name: data.full_name,
+        instagram_bio: data.bio,
+        instagram_followers: data.followers,
+        instagram_following: data.following,
+        instagram_posts: data.posts,
+        instagram_is_verified: data.is_verified,
+        instagram_is_private: data.is_private,
+        reply_to_id: replyingTo?.id ?? null,
+        is_anon: false,
+      };
+
+  const { error } = await supabase.from('dm_messages').insert(insertPayload);
+
+  if (error) {
+    console.error(error);
+    showToast(friendlyDbError(), 'error');
+    return;
+  }
+  setReplyingTo(null);
+  cooldownRef.current?.start();
+}
 
   const filteredMessages = messages.filter((m) => {
     if (!isSearching || !chatSearchQuery.trim()) return true;
@@ -1531,6 +1543,7 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
           <input
             ref={fileInputRef}
             type="file"
+            accept="*/*"
             onChange={handleAttachmentSelected}
             style={{
               position: 'absolute',
@@ -1546,6 +1559,17 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
               pointerEvents: 'none',
             }}
           />
+          <input
+  ref={photoInputRef}
+  type="file"
+  accept="image/*"
+  onChange={handleAttachmentSelected}
+  style={{
+    position: 'absolute', width: 1, height: 1, padding: 0, margin: -1,
+    overflow: 'hidden', clip: 'rect(0,0,0,0)', whiteSpace: 'nowrap',
+    border: 0, opacity: 0, pointerEvents: 'none',
+  }}
+/>
           <input
             ref={cameraInputRef}
             type="file"
@@ -1575,13 +1599,13 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
       </div>
 
       <AttachmentSheet
-        open={attachSheetOpen}
-        onClose={() => setAttachSheetOpen(false)}
-        onPickFile={() => { setAttachSheetOpen(false); fileInputRef.current?.click(); }}
-        onPickImage={() => { setAttachSheetOpen(false); fileInputRef.current?.click(); }}
-        onOpenCamera={() => { setAttachSheetOpen(false); cameraInputRef.current?.click(); }}
-        onPickInstagram={() => { setAttachSheetOpen(false); setInstagramModalOpen(true); }}
-      />
+  open={attachSheetOpen}
+  onClose={() => setAttachSheetOpen(false)}
+  onPickFile={() => { setAttachSheetOpen(false); fileInputRef.current?.click(); }}
+  onPickImage={() => { setAttachSheetOpen(false); photoInputRef.current?.click(); }}
+  onOpenCamera={() => { setAttachSheetOpen(false); cameraInputRef.current?.click(); }}
+  onPickInstagram={() => { setAttachSheetOpen(false); setInstagramModalOpen(true); }}
+/>
       <InstagramModal open={instagramModalOpen} onClose={() => !instagramLoading && setInstagramModalOpen(false)} onSubmit={handleInstagramSubmit} loading={instagramLoading} />
 
       <MediaViewer mediaUrl={viewerMedia?.url} mediaType={viewerMedia?.type} open={viewerMedia !== null} onClose={() => setViewerMedia(null)} />
