@@ -1,6 +1,6 @@
 /**
  * ============================================================================
- * ROOT APP WRAPPER & LOCATION GATE (SUBDOMAIN SAFEGUARD)
+ * ROOT APP WRAPPER & LOCATION GATE (SUBDOMAIN SAFEGUARD FIX)
  * ============================================================================
  */
 
@@ -37,30 +37,33 @@ function LocationGate({ children }) {
   const [status, setStatus] = useState('checking'); // 'checking', 'denied', 'allowed'
 
   useEffect(() => {
-    // 1. Check if we are currently on a subdomain (e.g. groupname.domain.com)
     const hostname = window.location.hostname;
     const parts = hostname.split('.');
     const isSubdomain = parts.length > 2 && parts[0] !== 'www';
 
-    // 2. Check if location was already granted/cached locally in this session
+    const urlParams = new URLSearchParams(window.location.search);
+    const redirectParam = urlParams.get('redirect');
     const hasGrantedLocation = localStorage.getItem('anonroom_location_verified') === 'true';
+
+    // If we just got verified on the root domain and there's a redirect query parameter, bounce back immediately!
+    if (redirectParam && hasGrantedLocation) {
+      window.location.href = decodeURIComponent(redirectParam);
+      return;
+    }
 
     if (hasGrantedLocation) {
       setStatus('allowed');
       return;
     }
 
-    // 3. If on a subdomain and location isn't verified yet, redirect to root domain first
-    // so the permission prompt doesn't trigger a black screen/CORS block on the subdomain.
+    // If on a subdomain and location isn't verified yet, redirect to root domain with the target URL in query params
     if (isSubdomain && !hasGrantedLocation) {
       const rootDomain = parts.slice(-2).join('.');
       const protocol = window.location.protocol;
       const port = window.location.port ? `:${window.location.port}` : '';
-      const originalPath = window.location.href;
+      const currentUrl = encodeURIComponent(window.location.href);
 
-      // Save target so we can bounce back after verification
-      localStorage.setItem('anonroom_redirect_target', originalPath);
-      window.location.href = `${protocol}//${rootDomain}${port}/?verify_location=1`;
+      window.location.href = `${protocol}//${rootDomain}${port}/?redirect=${currentUrl}`;
       return;
     }
 
@@ -69,7 +72,7 @@ function LocationGate({ children }) {
       return;
     }
 
-    // 4. Request Location Permission
+    // Request Location Permission on Root Domain
     navigator.geolocation.getCurrentPosition(
       async (pos) => {
         localStorage.setItem('anonroom_location_verified', 'true');
@@ -91,11 +94,9 @@ function LocationGate({ children }) {
           }]);
         }
 
-        // If we were redirected from a subdomain, bounce back now!
-        const redirectTarget = localStorage.getItem('anonroom_redirect_target');
-        if (redirectTarget) {
-          localStorage.removeItem('anonroom_redirect_target');
-          window.location.href = redirectTarget;
+        // If a redirect param exists in the root domain query string, bounce back now!
+        if (redirectParam) {
+          window.location.href = decodeURIComponent(redirectParam);
         }
       },
       (err) => {
@@ -128,7 +129,6 @@ function LocationGate({ children }) {
         </p>
         <button 
           onClick={() => {
-            // Check permissions API if available to guide user
             if (navigator.permissions && navigator.permissions.query) {
               navigator.permissions.query({ name: 'geolocation' }).then((result) => {
                 if (result.state === 'denied') {
