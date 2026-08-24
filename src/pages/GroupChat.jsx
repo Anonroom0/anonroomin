@@ -367,7 +367,47 @@ function usePullToRefresh(onRefresh, scrollRef) {
 
   return { pullDistance, isRefreshing, handleTouchStart, handleTouchMove, handleTouchEnd };
 }
+function SwipeableMessage({ children, onSwipe, disabled }) {
+  const [translateX, setTranslateX] = useState(0);
+  const touchStartX = useRef(null);
 
+  const handleTouchStart = (e) => {
+    if (disabled) return;
+    touchStartX.current = e.touches[0].clientX;
+  };
+
+  const handleTouchMove = (e) => {
+    if (disabled || touchStartX.current === null) return;
+    const currentX = e.touches[0].clientX;
+    const diff = currentX - touchStartX.current;
+    if (diff < 0 && diff > -70) setTranslateX(diff);
+  };
+
+  const handleTouchEnd = () => {
+    if (disabled) return;
+    if (translateX <= -40) onSwipe();
+    setTranslateX(0);
+    touchStartX.current = null;
+  };
+
+  return (
+    <div
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
+      style={{
+        transform: `translateX(${translateX}px)`,
+        transition: translateX === 0 ? 'transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1)' : 'none',
+        width: '100%', position: 'relative', touchAction: 'pan-y', willChange: 'transform',
+      }}
+    >
+      <div style={{ position: 'absolute', top: '50%', right: -40, transform: 'translateY(-50%)', opacity: translateX < -20 ? 1 : 0, transition: 'opacity 0.2s', color: 'var(--dim)' }}>
+        {Vectors.ReplyAction}
+      </div>
+      {children}
+    </div>
+  );
+}
 function SendButton({ canSend, sending, cooldownPercent }) {
   const isCoolingDown = cooldownPercent > 0;
   const ringSize = 44;
