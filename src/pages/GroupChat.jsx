@@ -454,7 +454,7 @@ function InstagramCard({ message, isOwn }) {
   );
 }
 
-function AttachmentSheet({ open, onClose, onPickImage, onPickFile, onOpenCamera, onPickInstagram, onPickConfession }) {
+function AttachmentSheet({ open, onClose, onOpenCamera, onPickInstagram }) {
   if (!open) return null;
   const Item = ({ icon, label, onClick }) => (
     <button onClick={onClick} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, border: 'none', background: 'transparent', cursor: 'pointer', flex: 1 }}>
@@ -465,10 +465,7 @@ function AttachmentSheet({ open, onClose, onPickImage, onPickFile, onOpenCamera,
   return (
     <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 50, display: 'flex', alignItems: 'flex-end' }}>
       <div onClick={(e) => e.stopPropagation()} style={{ width: '100%', background: 'var(--glass-strong)', backdropFilter: 'blur(30px)', borderRadius: '20px 20px 0 0', padding: '20px 16px', display: 'flex', gap: 8 }}>
-        <Item icon={Vectors.FileText} label="Files" onClick={onPickFile} />
-        <Item icon={Vectors.Smiley} label="Photo" onClick={onPickImage} />
         <Item icon={Vectors.Camera} label="Camera" onClick={onOpenCamera} />
-        <Item icon={Vectors.Ghost} label="Confession" onClick={onPickConfession} />
         <Item icon={Vectors.Instagram} label="Instagram" onClick={onPickInstagram} />
       </div>
     </div>
@@ -1371,7 +1368,7 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
                 {uploading ? Vectors.Spinner : Vectors.Attach}
               </button>
               <input ref={fileInputRef} type="file" onChange={handleAttachmentSelected} style={{ position: 'absolute', width: 1, height: 1, padding: 0, margin: -1, overflow: 'hidden', clip: 'rect(0,0,0,0)', whiteSpace: 'nowrap', border: 0, opacity: 0, pointerEvents: 'none' }} />
-              <input ref={cameraInputRef} type="file" accept="image/*,video/*" capture="environment" onChange={handleAttachmentSelected} style={{ position: 'absolute', width: 1, height: 1, padding: 0, margin: -1, overflow: 'hidden', clip: 'rect(0,0,0,0)', whiteSpace: 'nowrap', border: 0, opacity: 0, pointerEvents: 'none' }} />
+              <input ref={cameraInputRef} type="file" accept="image/*,video/*" onChange={handleAttachmentSelected} style={{ position: 'absolute', width: 1, height: 1, padding: 0, margin: -1, overflow: 'hidden', clip: 'rect(0,0,0,0)', whiteSpace: 'nowrap', border: 0, opacity: 0, pointerEvents: 'none' }} />
               <button type="button" onClick={() => setPickerOpen((v) => !v)} disabled={uploading || selectedMessages.length > 0} style={{ width: 36, height: 36, borderRadius: '50%', border: 'none', background: pickerOpen ? 'var(--glass-border)' : 'transparent', color: pickerOpen ? 'var(--blue)' : 'var(--dim)', cursor: 'pointer', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{Vectors.Smiley}</button>
               <input type="text" value={text} onChange={(e) => setText(e.target.value)} onFocus={() => setPickerOpen(false)} placeholder={uploading ? 'Uploading media...' : 'Message'} disabled={uploading || selectedMessages.length > 0} style={{ flex: 1, border: '1px solid var(--glass-border)', outline: 'none', background: 'var(--glass)', borderRadius: 24, padding: '12px 18px', fontSize: 15, color: 'var(--ink)', transition: 'border-color 0.2s' }} />
               <SendButton canSend={!!text.trim()} sending={sending || uploading} cooldownPercent={cooldownPercent} />
@@ -1380,15 +1377,12 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
         )}
       </div>
 
-      <AttachmentSheet
-        open={attachSheetOpen}
-        onClose={() => setAttachSheetOpen(false)}
-        onPickFile={() => { setAttachSheetOpen(false); fileInputRef.current?.click(); }}
-        onPickImage={() => { setAttachSheetOpen(false); fileInputRef.current?.click(); }}
-        onOpenCamera={() => { setAttachSheetOpen(false); cameraInputRef.current?.click(); }}
-        onPickConfession={() => { setAttachSheetOpen(false); setConfessionModalOpen(true); }}
-        onPickInstagram={() => { setAttachSheetOpen(false); setInstagramModalOpen(true); }}
-      />
+    <AttachmentSheet
+  open={attachSheetOpen}
+  onClose={() => setAttachSheetOpen(false)}
+  onOpenCamera={() => { setAttachSheetOpen(false); cameraInputRef.current?.click(); }}
+  onPickInstagram={() => { setAttachSheetOpen(false); setInstagramModalOpen(true); }}
+/>
       <ConfessionModal open={confessionModalOpen} onClose={() => setConfessionModalOpen(false)} onSubmit={handleConfessionSubmit} />
       <InstagramModal open={instagramModalOpen} onClose={() => !instagramLoading && setInstagramModalOpen(false)} onSubmit={handleInstagramSubmit} loading={instagramLoading} />
 

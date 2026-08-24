@@ -488,7 +488,7 @@ function InstagramCard({ message, isOwn }) {
   );
 }
 
-function AttachmentSheet({ open, onClose, onPickImage, onPickFile, onOpenCamera, onPickInstagram }) {
+function AttachmentSheet({ open, onClose, onOpenCamera, onPickInstagram }) {
   if (!open) return null;
   const Item = ({ icon, label, onClick }) => (
     <button onClick={onClick} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, border: 'none', background: 'transparent', cursor: 'pointer', flex: 1 }}>
@@ -499,15 +499,12 @@ function AttachmentSheet({ open, onClose, onPickImage, onPickFile, onOpenCamera,
   return (
     <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 50, display: 'flex', alignItems: 'flex-end' }}>
       <div onClick={(e) => e.stopPropagation()} style={{ width: '100%', background: 'var(--glass-strong)', backdropFilter: 'blur(30px)', borderRadius: '20px 20px 0 0', padding: '20px 16px', display: 'flex', gap: 8 }}>
-        <Item icon={Vectors.FileText} label="Files" onClick={onPickFile} />
-        <Item icon={Vectors.Smiley} label="Photo" onClick={onPickImage} />
         <Item icon={Vectors.Camera} label="Camera" onClick={onOpenCamera} />
         <Item icon={Vectors.Instagram} label="Instagram" onClick={onPickInstagram} />
       </div>
     </div>
   );
 }
-
 // Only asks for a username — the edge function does the rest.
 function InstagramModal({ open, onClose, onSubmit, loading }) {
   const [username, setUsername] = useState('');
@@ -1574,7 +1571,7 @@ const cameraInputRef = useRef(null);
             ref={cameraInputRef}
             type="file"
             accept="image/*,video/*"
-            capture="environment"
+           
             onChange={handleAttachmentSelected}
             style={{
               position: 'absolute',
@@ -1601,8 +1598,6 @@ const cameraInputRef = useRef(null);
       <AttachmentSheet
   open={attachSheetOpen}
   onClose={() => setAttachSheetOpen(false)}
-  onPickFile={() => { setAttachSheetOpen(false); fileInputRef.current?.click(); }}
-  onPickImage={() => { setAttachSheetOpen(false); photoInputRef.current?.click(); }}
   onOpenCamera={() => { setAttachSheetOpen(false); cameraInputRef.current?.click(); }}
   onPickInstagram={() => { setAttachSheetOpen(false); setInstagramModalOpen(true); }}
 />
