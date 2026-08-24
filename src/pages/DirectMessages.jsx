@@ -2,12 +2,22 @@
  * ============================================================================
  * DIRECT MESSAGES MASTER VIEW (APPLE LIQUID UI & TELEGRAM PHYSICS)
  * ============================================================================
- * CHANGES IN THIS PASS:
- * - Admin Deletion: Long-press a message to select it, then delete from header.
- * - Pull-To-Refresh: Custom iOS-style spinner drops from below the header.
- * - Skeleton Loading: Beautiful shimmering placeholders before messages load.
- * - Silent Mentions: Clicking an invalid @mention no longer triggers an alert.
- * - Fully uncompressed, single-file delivery.
+ * CHANGES IN THIS PASS (bringing DMs up to parity with GroupChat):
+ * - Audio messages: custom waveform-style player (play/pause, scrub, timer)
+ *   instead of the bare browser <audio> element.
+ * - Video messages: framed in a rounded, shadowed player instead of a raw tag.
+ * - guessMediaType now recognizes video/ and audio/ mime types (previously
+ *   everything but images fell through to the generic "file" bucket).
+ * - Attachment flow now goes through a preview/caption step before upload,
+ *   with a 60s timeout so a bad connection fails loudly instead of spinning
+ *   forever.
+ * - Attachment sheet: Files / Image / Camera / Instagram (no Confessions —
+ *   that feature stays scoped to group chats).
+ * - Instagram sharing: asks ONLY for a username, then renders a profile card
+ *   (avatar, name, verified badge, follower count) pulled from the
+ *   instagram-scrape edge function.
+ * - Admin Deletion, Pull-to-Refresh, Skeleton Loading, Silent Mentions kept
+ *   from the previous pass.
  * ============================================================================
  */
 
@@ -27,6 +37,7 @@ import { showToast, friendlyDbError } from '../lib/toast';
 const MESSAGE_LIMIT = 200;
 const REPLY_SNIPPET_LENGTH = 80;
 const ADMIN_DISPLAY_NAME = 'ADMIN';
+const UPLOAD_TIMEOUT_MS = 60000;
 
 const BUBBLE_OWN = 'var(--blue)';
 const BUBBLE_THEM = 'var(--glass-strong)';
@@ -144,7 +155,29 @@ const Vectors = {
       <circle cx="12" cy="12" r="10" stroke="none" />
       <polyline points="8 12 11 15 16 9" />
     </svg>
-  )
+  ),
+  Play: (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="none">
+      <polygon points="6 3 20 12 6 21 6 3" />
+    </svg>
+  ),
+  Pause: (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="none">
+      <rect x="6" y="4" width="4" height="16" rx="1" /><rect x="14" y="4" width="4" height="16" rx="1" />
+    </svg>
+  ),
+  Camera: (
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" />
+      <circle cx="12" cy="13" r="4" />
+    </svg>
+  ),
+  Instagram: (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <rect x="2" y="2" width="20" height="20" rx="5" ry="5" /><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z" />
+      <line x1="17.5" y1="6.5" x2="17.51" y2="6.5" />
+    </svg>
+  ),
 };
 
 // ============================================================================
@@ -170,16 +203,37 @@ function formatTime(dateString) {
   return new Date(dateString).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
 }
 
+function formatClock(seconds) {
+  if (!seconds || Number.isNaN(seconds)) return '0:00';
+  const m = Math.floor(seconds / 60);
+  const s = Math.floor(seconds % 60).toString().padStart(2, '0');
+  return `${m}:${s}`;
+}
+
+function formatCount(n) {
+  if (n === null || n === undefined) return null;
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
+  return `${n}`;
+}
+
+// Recognizes image/video/audio mime prefixes; everything else falls back to
+// the generic "file" bucket (rendered as a document link).
 function guessMediaType(file) {
   if (!file) return 'file';
   if (file.type.startsWith('image/')) return 'image';
+  if (file.type.startsWith('video/')) return 'video';
+  if (file.type.startsWith('audio/')) return 'audio';
   return 'file';
 }
 
 function generateReplySnippet(message) {
   if (!message) return 'Original message';
+  if (message.instagram_username) return `📷 @${message.instagram_username}`;
   if (message.media_url) {
     if (message.media_type === 'image') return '📸 Photo';
+    if (message.media_type === 'video') return '🎬 Video';
+    if (message.media_type === 'audio') return '🎵 Voice message';
     if (message.media_type === 'gif') return '🎞️ GIF';
     if (message.media_type === 'sticker') return '🏷️ Sticker';
     return '📄 Attachment';
@@ -204,6 +258,18 @@ function formatDayLabel(dateString) {
 
 function dayKey(dateString) {
   return new Date(dateString).toDateString();
+}
+
+// Calls the instagram-scrape edge function. Returns null on any failure so
+// callers can show one clean toast instead of leaking error shapes.
+async function scrapeInstagram(username) {
+  try {
+    const { data, error } = await supabase.functions.invoke('instagram-scrape', { body: { username } });
+    if (error || !data || data.error) return null;
+    return data;
+  } catch {
+    return null;
+  }
 }
 
 // ============================================================================
@@ -302,9 +368,179 @@ function DMLiquidAvatar({ identity, size = 42, isAnon = false }) {
   );
 }
 
+// ---- Beautiful audio player: waveform bars, scrub, play/pause, timer -------
+function AudioBubble({ src, isOwn }) {
+  const audioRef = useRef(null);
+  const [playing, setPlaying] = useState(false);
+  const [progress, setProgress] = useState(0);
+  const [duration, setDuration] = useState(0);
+  const [currentTime, setCurrentTime] = useState(0);
+
+  useEffect(() => {
+    const el = audioRef.current;
+    if (!el) return;
+    const onTime = () => {
+      setCurrentTime(el.currentTime);
+      if (el.duration) setProgress((el.currentTime / el.duration) * 100);
+    };
+    const onLoaded = () => setDuration(el.duration || 0);
+    const onPlay = () => setPlaying(true);
+    const onPause = () => setPlaying(false);
+    const onEnd = () => { setPlaying(false); setProgress(0); setCurrentTime(0); };
+
+    el.addEventListener('timeupdate', onTime);
+    el.addEventListener('loadedmetadata', onLoaded);
+    el.addEventListener('play', onPlay);
+    el.addEventListener('pause', onPause);
+    el.addEventListener('ended', onEnd);
+    return () => {
+      el.removeEventListener('timeupdate', onTime);
+      el.removeEventListener('loadedmetadata', onLoaded);
+      el.removeEventListener('play', onPlay);
+      el.removeEventListener('pause', onPause);
+      el.removeEventListener('ended', onEnd);
+    };
+  }, []);
+
+  const toggle = () => {
+    const el = audioRef.current;
+    if (!el) return;
+    playing ? el.pause() : el.play();
+  };
+
+  const seek = (e) => {
+    const el = audioRef.current;
+    if (!el || !duration) return;
+    const rect = e.currentTarget.getBoundingClientRect();
+    const pct = Math.min(1, Math.max(0, (e.clientX - rect.left) / rect.width));
+    el.currentTime = pct * duration;
+  };
+
+  const barCount = 26;
+  const activeColor = isOwn ? '#fff' : 'var(--blue)';
+  const inactiveColor = isOwn ? 'rgba(255,255,255,0.35)' : 'var(--glass-border)';
+
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 10, width: 230, padding: '2px 2px' }}>
+      <audio ref={audioRef} src={src} preload="metadata" style={{ display: 'none' }} />
+      <button
+        onClick={toggle}
+        style={{ width: 34, height: 34, borderRadius: '50%', border: 'none', flexShrink: 0, background: isOwn ? 'rgba(255,255,255,0.25)' : 'var(--blue)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}
+      >
+        {playing ? Vectors.Pause : Vectors.Play}
+      </button>
+      <div onClick={seek} style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 2, height: 26, cursor: 'pointer' }}>
+        {Array.from({ length: barCount }).map((_, i) => {
+          const active = (i / barCount) * 100 <= progress;
+          const h = 5 + Math.abs(Math.sin(i * 1.35 + 0.4)) * 15;
+          return (
+            <div key={i} style={{ width: 2.5, height: h, borderRadius: 2, background: active ? activeColor : inactiveColor, transition: 'background 0.1s' }} />
+          );
+        })}
+      </div>
+      <span style={{ fontSize: 11, fontWeight: 600, color: isOwn ? 'rgba(255,255,255,0.85)' : 'var(--dim)', flexShrink: 0, minWidth: 30, textAlign: 'right' }}>
+        {formatClock(playing || currentTime ? currentTime : duration)}
+      </span>
+    </div>
+  );
+}
+
+// ---- Framed video player -----------------------------------------------
+function VideoBubble({ src }) {
+  return (
+    <div style={{ borderRadius: 16, overflow: 'hidden', boxShadow: '0 4px 16px rgba(0,0,0,0.18)', background: '#000', maxWidth: 260 }}>
+      <video src={src} controls playsInline preload="metadata" style={{ width: '100%', maxHeight: 320, display: 'block' }} />
+    </div>
+  );
+}
+
+// ---- Instagram profile card ---------------------------------------------
+function InstagramCard({ message, isOwn }) {
+  const followers = formatCount(message.instagram_followers);
+  return (
+    <a
+      href={`https://instagram.com/${message.instagram_username}`}
+      target="_blank" rel="noopener noreferrer"
+      style={{ display: 'flex', gap: 12, alignItems: 'center', padding: 12, borderRadius: 16, minWidth: 220, textDecoration: 'none', background: isOwn ? 'rgba(255,255,255,0.14)' : 'rgba(0,0,0,0.04)' }}
+    >
+      <div style={{ width: 48, height: 48, borderRadius: '50%', overflow: 'hidden', flexShrink: 0, background: 'var(--glass-border)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: isOwn ? '#fff' : 'var(--blue)' }}>
+        {message.instagram_pfp_url ? (
+          <img src={message.instagram_pfp_url} alt={message.instagram_username} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+        ) : Vectors.Instagram}
+      </div>
+      <div style={{ minWidth: 0 }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+          <span style={{ fontWeight: 700, fontSize: 14, color: isOwn ? '#fff' : 'var(--ink)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            @{message.instagram_username}
+          </span>
+          {message.instagram_is_verified && <span style={{ color: 'var(--blue)', fontSize: 13 }}>✓</span>}
+        </div>
+        {message.instagram_full_name && (
+          <div style={{ fontSize: 12, color: isOwn ? 'rgba(255,255,255,0.85)' : 'var(--dim)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {message.instagram_full_name}
+          </div>
+        )}
+        <div style={{ fontSize: 11, color: isOwn ? 'rgba(255,255,255,0.7)' : 'var(--dim)', marginTop: 2 }}>
+          {followers ? `${followers} followers` : 'View on Instagram'}
+        </div>
+      </div>
+    </a>
+  );
+}
+
+function AttachmentSheet({ open, onClose, onPickImage, onPickFile, onOpenCamera, onPickInstagram }) {
+  if (!open) return null;
+  const Item = ({ icon, label, onClick }) => (
+    <button onClick={onClick} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, border: 'none', background: 'transparent', cursor: 'pointer', flex: 1 }}>
+      <div style={{ width: 52, height: 52, borderRadius: '50%', background: 'var(--glass-border)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--blue)' }}>{icon}</div>
+      <span style={{ fontSize: 12, color: 'var(--ink)', fontWeight: 600 }}>{label}</span>
+    </button>
+  );
+  return (
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 50, display: 'flex', alignItems: 'flex-end' }}>
+      <div onClick={(e) => e.stopPropagation()} style={{ width: '100%', background: 'var(--glass-strong)', backdropFilter: 'blur(30px)', borderRadius: '20px 20px 0 0', padding: '20px 16px', display: 'flex', gap: 8 }}>
+        <Item icon={Vectors.FileText} label="Files" onClick={onPickFile} />
+        <Item icon={Vectors.Smiley} label="Photo" onClick={onPickImage} />
+        <Item icon={Vectors.Camera} label="Camera" onClick={onOpenCamera} />
+        <Item icon={Vectors.Instagram} label="Instagram" onClick={onPickInstagram} />
+      </div>
+    </div>
+  );
+}
+
+// Only asks for a username — the edge function does the rest.
+function InstagramModal({ open, onClose, onSubmit, loading }) {
+  const [username, setUsername] = useState('');
+  if (!open) return null;
+  return (
+    <div onClick={loading ? undefined : onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 50, display: 'flex', alignItems: 'flex-end' }}>
+      <div onClick={(e) => e.stopPropagation()} style={{ width: '100%', background: 'var(--glass-strong)', backdropFilter: 'blur(30px)', borderRadius: '20px 20px 0 0', padding: 20 }}>
+        <h3 style={{ margin: '0 0 4px', color: 'var(--ink)', display: 'flex', alignItems: 'center', gap: 8 }}>{Vectors.Instagram} Share Instagram Profile</h3>
+        <p style={{ margin: '0 0 12px', fontSize: 13, color: 'var(--dim)' }}>Just the username — we'll pull the profile card automatically.</p>
+        <div style={{ position: 'relative' }}>
+          <span style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', color: 'var(--dim)', fontWeight: 700 }}>@</span>
+          <input
+            autoFocus type="text" value={username} disabled={loading}
+            onChange={(e) => setUsername(e.target.value.replace(/^@/, '').trim())}
+            onKeyDown={(e) => { if (e.key === 'Enter' && username.trim()) onSubmit(username.trim()); }}
+            placeholder="username"
+            style={{ width: '100%', border: '1px solid var(--glass-border)', borderRadius: 12, padding: '12px 14px 12px 28px', fontSize: 15, boxSizing: 'border-box', color: 'var(--ink)', background: 'var(--glass)' }}
+          />
+        </div>
+        <button
+          onClick={() => username.trim() && onSubmit(username.trim())}
+          disabled={loading || !username.trim()}
+          style={{ width: '100%', marginTop: 12, padding: 14, borderRadius: 16, border: 'none', background: loading ? 'var(--glass-border)' : 'var(--blue)', color: '#fff', fontWeight: 700, cursor: loading ? 'default' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}
+        >
+          {loading ? (<>{Vectors.Spinner} Fetching profile…</>) : 'Share Profile'}
+        </button>
+      </div>
+    </div>
+  );
+}
+
 // Custom hook for Long Press (Admin Selection)
 function useLongPress(callback, ms = 500) {
-  const [startLongPress, setStartLongPress] = useState(false);
   const timerRef = useRef();
 
   const start = useCallback((e, msg) => {
@@ -313,7 +549,7 @@ function useLongPress(callback, ms = 500) {
     }, ms);
   }, [callback, ms]);
 
-  const stop = useCallback((e) => {
+  const stop = useCallback(() => {
     clearTimeout(timerRef.current);
   }, []);
 
@@ -342,7 +578,7 @@ function usePullToRefresh(onRefresh, scrollRef) {
     const diff = currentY - startY.current;
 
     // Trigger only if pulling DOWN and we are near the visual top of the container.
-    if (diff > 0 && e.touches[0].clientY < 200) { 
+    if (diff > 0 && e.touches[0].clientY < 200) {
       const resistance = diff * 0.4;
       setPullDistance(Math.min(resistance, 80));
     }
@@ -464,7 +700,7 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
   const [authOpen, setAuthOpen] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
-  
+
   // New Features State
   const [hasUnreadMention, setHasUnreadMention] = useState(false);
   const [latestMentionId, setLatestMentionId] = useState(null);
@@ -473,8 +709,19 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
   const [isSearching, setIsSearching] = useState(false);
   const [chatSearchQuery, setChatSearchQuery] = useState('');
 
+  // Attachment preview / caption flow
+  const [pendingFile, setPendingFile] = useState(null); // { file, previewUrl, type }
+  const [caption, setCaption] = useState('');
+  const [uploadSecondsLeft, setUploadSecondsLeft] = useState(60);
+
+  // Attachment sheet + Instagram
+  const [attachSheetOpen, setAttachSheetOpen] = useState(false);
+  const [instagramModalOpen, setInstagramModalOpen] = useState(false);
+  const [instagramLoading, setInstagramLoading] = useState(false);
+
   const scrollRef = useRef(null);
   const fileInputRef = useRef(null);
+  const cameraInputRef = useRef(null);
   const cooldownRef = useRef(null);
 
   // --------------------------------------------------------------------------
@@ -531,7 +778,7 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
             otherUser: resolvedOtherUser,
           });
           setThreadStatus('ready');
-          
+
           if (onThreadReady) {
             onThreadReady({ id: resolvedOtherUser.id, username: resolvedOtherUser.username });
           }
@@ -603,7 +850,7 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
 
     const channel = supabase.channel(`dm_messages:${activeThread.id}`)
       .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'dm_messages', filter: `thread_id=eq.${activeThread.id}` }, (payload) => {
-        
+
         const newMsg = payload.new;
         const isMentioned = userId && newMsg.mentioned_user_ids?.includes(userId);
 
@@ -641,7 +888,7 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
   // --------------------------------------------------------------------------
   const toggleSelection = (msgId) => {
     if (!isAdmin) return;
-    setSelectedMessages(prev => 
+    setSelectedMessages(prev =>
       prev.includes(msgId) ? prev.filter(id => id !== msgId) : [...prev, msgId]
     );
   };
@@ -654,21 +901,21 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
 
   const handleDeleteSelected = async () => {
     if (!isAdmin || selectedMessages.length === 0) return;
-    
+
     // Optimistic UI removal
     setMessages(prev => prev.filter(m => !selectedMessages.includes(m.id)));
-    
+
     const { error } = await supabase
       .from('dm_messages')
       .delete()
       .in('id', selectedMessages);
-      
+
     if (error) {
       console.error(error);
-      showToast("Couldn't delete those messages. Please try again.", 'error');
+      showToast(friendlyDbError(), 'error');
       fetchMessagesAndReceipts(); // Revert on failure
     }
-    
+
     setSelectedMessages([]);
   };
 
@@ -695,12 +942,12 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
   async function resolveMentionedIds(outgoingText) {
     const mentionedUsernames = [...outgoingText.matchAll(/@([a-zA-Z0-9_]+)/g)].map(m => m[1].toLowerCase());
     if (mentionedUsernames.length === 0) return [];
-    
+
     const { data } = await supabase
       .from('profiles')
       .select('id')
       .in('username', mentionedUsernames);
-      
+
     return data ? data.map(p => p.id) : [];
   }
 
@@ -710,7 +957,7 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
       .select('id')
       .eq('username', username.toLowerCase())
       .maybeSingle();
-      
+
     if (data?.id) {
       setProfileCardUserId(data.id);
     }
@@ -720,7 +967,7 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
   const renderMessageTextWithMentions = (messageText, isOwn) => {
     if (!messageText) return null;
     const parts = messageText.split(/(@[a-zA-Z0-9_]+)/g);
-    
+
     return parts.map((part, i) => {
       if (part.startsWith('@') && part.length > 1) {
         const username = part.substring(1);
@@ -728,10 +975,10 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
           <button
             key={i}
             onClick={() => handleMentionClick(username)}
-            style={{ 
+            style={{
               color: isOwn ? '#cce4ff' : 'var(--blue)',
               textDecoration: 'underline',
-              background: 'none', border: 'none', padding: 0, fontWeight: 700, cursor: 'pointer', fontSize: 'inherit' 
+              background: 'none', border: 'none', padding: 0, fontWeight: 700, cursor: 'pointer', fontSize: 'inherit'
             }}
           >
             {part}
@@ -742,6 +989,9 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
     });
   };
 
+  // --------------------------------------------------------------------------
+  // COMPOSER HELPERS
+  // --------------------------------------------------------------------------
   const startReply = useCallback((message) => {
     const isOwn = message.sender_id === userId;
     // Hide true identity if message was anon
@@ -753,6 +1003,7 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
       text: message.text,
       media_url: message.media_url,
       media_type: message.media_type,
+      instagram_username: message.instagram_username,
     });
   }, [userId, activeThread]);
 
@@ -791,58 +1042,69 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
     cooldownRef.current?.start();
   }
 
-  async function handleAttachmentSelected(e) {
+  // --------------------------------------------------------------------------
+  // ATTACHMENT PREVIEW / CAPTION FLOW
+  // --------------------------------------------------------------------------
+  function handleAttachmentSelected(e) {
     const file = e.target.files?.[0];
     e.target.value = '';
+    if (!file) return;
+    setPendingFile({ file, previewUrl: URL.createObjectURL(file), type: guessMediaType(file) });
+  }
 
-    if (!file || !userId || !activeThread || uploading) return;
+  function cancelPendingAttachment() {
+    if (pendingFile) URL.revokeObjectURL(pendingFile.previewUrl);
+    setPendingFile(null);
+    setCaption('');
+  }
 
+  async function sendPendingAttachment() {
+    if (!pendingFile || !userId || !activeThread || uploading) return;
     if (cooldownPercent > 0) {
-      showToast("Please wait a few seconds before sending another message.", 'info');
+      showToast('Please wait a few seconds before sending another message.', 'info');
       return;
     }
 
     setUploading(true);
+    setUploadSecondsLeft(60);
+    const tick = setInterval(() => setUploadSecondsLeft((s) => (s > 0 ? s - 1 : 0)), 1000);
+
+    const { file, type } = pendingFile;
     const safeName = file.name.replace(/[^a-zA-Z0-9.\-_]/g, '_');
     const path = `${userId}/dm-${Date.now()}-${safeName}`;
 
     try {
-      const { error: uploadError } = await supabase.storage.from('media').upload(path, file, { upsert: false });
-      if (uploadError) {
-        console.error(uploadError);
-        setUploading(false);
-        showToast(friendlyDbError(), 'error');
-        return;
-      }
+      const uploadPromise = supabase.storage.from('media').upload(path, file, { upsert: false, contentType: file.type || undefined });
+      const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error('TIMEOUT')), UPLOAD_TIMEOUT_MS));
+      const { error: uploadError } = await Promise.race([uploadPromise, timeoutPromise]);
+      if (uploadError) throw uploadError;
 
       const { data: publicUrlData } = supabase.storage.from('media').getPublicUrl(path);
       const publicUrl = publicUrlData?.publicUrl;
-      if (!publicUrl) {
-        setUploading(false);
-        showToast("Couldn't send that image. Please try again.", 'error');
-        return;
-      }
+      if (!publicUrl) throw new Error('NO_URL');
 
       const { error: insertError } = await supabase.from('dm_messages').insert({
         thread_id: activeThread.id,
         sender_id: userId,
+        text: caption.trim() || null,
         media_url: publicUrl,
-        media_type: guessMediaType(file),
+        media_type: type,
         reply_to_id: replyingTo?.id ?? null,
-        is_anon: false
+        is_anon: false,
       });
+      if (insertError) throw insertError;
 
-      if (insertError) {
-        console.error(insertError);
-        showToast(friendlyDbError(), 'error');
-      }
-    } catch (err) {
-      console.error(err);
-      showToast(friendlyDbError(), 'error');
-    } finally {
-      setUploading(false);
+      URL.revokeObjectURL(pendingFile.previewUrl);
+      setPendingFile(null);
+      setCaption('');
       setReplyingTo(null);
       cooldownRef.current?.start();
+    } catch (err) {
+      console.error(err);
+      showToast(err.message === 'TIMEOUT' ? "Upload timed out — check your connection and try again." : "Couldn't send that file. Please try again.", 'error');
+    } finally {
+      clearInterval(tick);
+      setUploading(false);
     }
   }
 
@@ -879,12 +1141,53 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
     setText((prev) => prev + char);
   }
 
+  // --------------------------------------------------------------------------
+  // INSTAGRAM
+  // --------------------------------------------------------------------------
+  async function handleInstagramSubmit(username) {
+    if (!userId || !activeThread) return;
+    setInstagramLoading(true);
+    const data = await scrapeInstagram(username);
+    setInstagramLoading(false);
+
+    if (!data) {
+      showToast("Couldn't find that Instagram profile. Double check the username.", 'error');
+      return;
+    }
+
+    setInstagramModalOpen(false);
+    const { error } = await supabase.from('dm_messages').insert({
+      thread_id: activeThread.id,
+      sender_id: userId,
+      instagram_username: data.username,
+      instagram_pfp_url: data.pfp_url,
+      instagram_full_name: data.full_name,
+      instagram_bio: data.bio,
+      instagram_followers: data.followers,
+      instagram_following: data.following,
+      instagram_posts: data.posts,
+      instagram_is_verified: data.is_verified,
+      instagram_is_private: data.is_private,
+      reply_to_id: replyingTo?.id ?? null,
+      is_anon: false,
+    });
+
+    if (error) {
+      console.error(error);
+      showToast(friendlyDbError(), 'error');
+      return;
+    }
+    setReplyingTo(null);
+    cooldownRef.current?.start();
+  }
+
   const filteredMessages = messages.filter((m) => {
     if (!isSearching || !chatSearchQuery.trim()) return true;
     const q = chatSearchQuery.trim().toLowerCase();
-    
-    // In DMs, sender_name isn't stored in db for dm_messages, so we can't easily search by sender_name locally 
-    // unless we resolve it on the fly, but we can search by text.
+    if (q.startsWith('@') && q.length > 1) {
+      const targetName = q.substring(1);
+      return m.instagram_username?.toLowerCase() === targetName;
+    }
     return m.text?.toLowerCase().includes(q);
   });
 
@@ -908,7 +1211,6 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
   }
 
   const otherIdentity = resolveIdentity(activeThread.otherUser);
-  let lastDayKey = null;
 
   return (
     <div className="no-copy-text" style={{ flex: 1, display: 'flex', flexDirection: 'column', position: 'relative', height: '100%', overflow: 'hidden', zIndex: 1, userSelect: 'none', WebkitUserSelect: 'none' }}>
@@ -959,7 +1261,7 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
                   <button onClick={() => { setIsSearching(true); setMenuOpen(false); }} style={{ width: '100%', padding: '10px 14px', border: 'none', background: 'transparent', color: 'var(--ink)', textAlign: 'left', borderRadius: 8, cursor: 'pointer', fontSize: 14, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8 }}>
                     {Vectors.SearchSmall} Search Chat
                   </button>
-                  <button onClick={() => { navigator.clipboard.writeText(window.location.href); setMenuOpen(false); alert('Link copied to clipboard!'); }} style={{ width: '100%', padding: '10px 14px', border: 'none', background: 'transparent', color: 'var(--ink)', textAlign: 'left', borderRadius: 8, cursor: 'pointer', fontSize: 14, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8 }}>
+                  <button onClick={() => { navigator.clipboard.writeText(window.location.href); setMenuOpen(false); showToast('Link copied to clipboard!', 'info'); }} style={{ width: '100%', padding: '10px 14px', border: 'none', background: 'transparent', color: 'var(--ink)', textAlign: 'left', borderRadius: 8, cursor: 'pointer', fontSize: 14, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8 }}>
                     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg>
                     Share link
                   </button>
@@ -997,7 +1299,7 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
       )}
 
       {/* HIDDEN PULL-TO-REFRESH SPINNER CONTAINER */}
-      <div 
+      <div
         style={{
           position: 'absolute', top: 72, left: 0, right: 0, height: 60,
           display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 5,
@@ -1029,10 +1331,10 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
       >
         {messagesLoading && <MessageSkeleton />}
 
-        {!messagesLoading && messages.length === 0 && (
+        {!messagesLoading && filteredMessages.length === 0 && (
           <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <div style={{ background: 'var(--glass-border)', padding: '8px 16px', borderRadius: 20, fontSize: 14, color: 'var(--dim)' }}>
-              Say hello to {otherIdentity.name} 👋
+              {isSearching ? 'No messages found.' : `Say hello to ${otherIdentity.name} 👋`}
             </div>
           </div>
         )}
@@ -1040,6 +1342,7 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
         {!messagesLoading && filteredMessages.map((message, index) => {
           const isOwn = userId && message.sender_id === userId;
           const isAnonMsg = message.is_anon === true;
+          const isInstagram = !!message.instagram_username;
 
           const olderMessage = filteredMessages[index + 1];
           const showDayDivider = !olderMessage || dayKey(message.created_at) !== dayKey(olderMessage.created_at);
@@ -1057,12 +1360,12 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
                   if (selectedMessages.length > 0) toggleSelection(message.id);
                 }}
               >
-                <SwipeableMessage onSwipe={() => { if(selectedMessages.length === 0) startReply(message); }} disabled={isSearching || selectedMessages.length > 0}>
-                  <div 
+                <SwipeableMessage onSwipe={() => { if (selectedMessages.length === 0) startReply(message); }} disabled={isSearching || selectedMessages.length > 0}>
+                  <div
                     id={`dm-msg-${message.id}`}
                     className={isHighlighted ? 'highlight-flash' : ''}
-                    style={{ 
-                      display: 'flex', flexDirection: isOwn ? 'row-reverse' : 'row', alignItems: 'flex-end', 
+                    style={{
+                      display: 'flex', flexDirection: isOwn ? 'row-reverse' : 'row', alignItems: 'flex-end',
                       gap: 8, marginBottom: 16, borderRadius: 16, padding: '4px 8px',
                       background: isSelected ? 'rgba(10, 132, 255, 0.15)' : 'transparent',
                       animation: 'slideUpFade 0.3s cubic-bezier(0.2, 0.8, 0.2, 1) both',
@@ -1090,9 +1393,9 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
                         </span>
                       )}
 
-                      <div style={{ maxWidth: '100%', padding: (message.media_url && !isStickerOrGif) ? '4px' : (isStickerOrGif ? 0 : '10px 16px'), borderRadius: isStickerOrGif ? 0 : 20, borderBottomRightRadius: isStickerOrGif ? 0 : (isOwn ? 4 : 20), borderBottomLeftRadius: isStickerOrGif ? 0 : (isOwn ? 20 : 4), background: isStickerOrGif ? 'transparent' : (isOwn ? BUBBLE_OWN : BUBBLE_THEM), color: isOwn ? '#fff' : 'var(--ink)', boxShadow: isStickerOrGif ? 'none' : '0 2px 10px rgba(0,0,0,0.05)' }}>
+                      <div style={{ maxWidth: '100%', padding: isInstagram ? '4px' : ((message.media_url && !isStickerOrGif) ? '4px' : (isStickerOrGif ? 0 : '10px 16px')), borderRadius: isStickerOrGif ? 0 : 20, borderBottomRightRadius: isStickerOrGif ? 0 : (isOwn ? 4 : 20), borderBottomLeftRadius: isStickerOrGif ? 0 : (isOwn ? 20 : 4), background: isStickerOrGif ? 'transparent' : (isOwn ? BUBBLE_OWN : BUBBLE_THEM), color: isOwn ? '#fff' : 'var(--ink)', boxShadow: isStickerOrGif ? 'none' : '0 2px 10px rgba(0,0,0,0.05)' }}>
                         {message.reply_to_id && (
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: 2, padding: '6px 10px', marginBottom: 8, marginTop: message.media_url ? 4 : 0, borderRadius: 10, background: isOwn ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.06)', borderLeft: `3px solid ${isOwn ? '#fff' : 'var(--blue)'}` }}>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: 2, padding: '6px 10px', marginBottom: 8, marginTop: (message.media_url || isInstagram) ? 4 : 0, borderRadius: 10, background: isOwn ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.06)', borderLeft: `3px solid ${isOwn ? '#fff' : 'var(--blue)'}` }}>
                             <span style={{ fontSize: 12, fontWeight: 700, color: isOwn ? '#fff' : 'var(--blue)' }}>
                               {repliedMessage ? (repliedMessage.is_anon ? 'Anonymous' : (repliedMessage.sender_id === userId ? 'You' : otherIdentity.name)) : 'Original'}
                             </span>
@@ -1102,23 +1405,41 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
                           </div>
                         )}
 
-                        {message.media_url ? (
-                          isStickerOrGif ? (
-                            <button onClick={() => setViewerMedia({ url: message.media_url, type: message.media_type })} disabled={selectedMessages.length > 0} style={{ border: 'none', background: 'none', padding: 0, cursor: 'pointer', display: 'block' }}>
-                              <img src={message.media_url} alt={message.media_type === 'sticker' ? 'Sticker' : 'GIF'} style={{ maxWidth: 160, maxHeight: 160, display: 'block', borderRadius: 12 }} />
-                            </button>
-                          ) : (
-                            <button onClick={() => setViewerMedia({ url: message.media_url, type: message.media_type || 'file' })} disabled={selectedMessages.length > 0} style={{ border: 'none', background: 'none', padding: 0, cursor: 'pointer', display: 'block', width: '100%' }}>
-                              {message.media_type === 'image' ? (
+                        {isInstagram ? (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: message.text ? 6 : 0 }}>
+                            <InstagramCard message={message} isOwn={isOwn} />
+                            {message.text && (
+                              <span className="no-copy-text" style={{ fontSize: 14, whiteSpace: 'pre-wrap', wordBreak: 'break-word', padding: '0 4px' }}>
+                                {renderMessageTextWithMentions(message.text, isOwn)}
+                              </span>
+                            )}
+                          </div>
+                        ) : message.media_url ? (
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: message.text ? 6 : 0 }}>
+                            {isStickerOrGif ? (
+                              <button onClick={() => setViewerMedia({ url: message.media_url, type: message.media_type })} disabled={selectedMessages.length > 0} style={{ border: 'none', background: 'none', padding: 0, cursor: 'pointer', display: 'block' }}>
+                                <img src={message.media_url} alt={message.media_type === 'sticker' ? 'Sticker' : 'GIF'} style={{ maxWidth: 160, maxHeight: 160, display: 'block', borderRadius: 12 }} />
+                              </button>
+                            ) : message.media_type === 'image' ? (
+                              <button onClick={() => setViewerMedia({ url: message.media_url, type: 'image' })} disabled={selectedMessages.length > 0} style={{ border: 'none', background: 'none', padding: 0, cursor: 'pointer', display: 'block', width: '100%' }}>
                                 <img src={message.media_url} alt="Attachment" style={{ maxWidth: 260, maxHeight: 260, borderRadius: 16, display: 'block', objectFit: 'cover' }} />
-                              ) : (
-                                <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px', background: isOwn ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.04)', borderRadius: 16 }}>
-                                  <div style={{ color: isOwn ? '#fff' : 'var(--blue)' }}>{Vectors.FileText}</div>
-                                  <span style={{ color: isOwn ? '#fff' : 'var(--ink)', fontSize: 14, fontWeight: 600 }}>Document</span>
-                                </div>
-                              )}
-                            </button>
-                          )
+                              </button>
+                            ) : message.media_type === 'video' ? (
+                              <VideoBubble src={message.media_url} />
+                            ) : message.media_type === 'audio' ? (
+                              <AudioBubble src={message.media_url} isOwn={isOwn} />
+                            ) : (
+                              <a href={message.media_url} target="_blank" rel="noopener noreferrer" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px', background: isOwn ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.04)', borderRadius: 16, textDecoration: 'none' }}>
+                                <div style={{ color: isOwn ? '#fff' : 'var(--blue)' }}>{Vectors.FileText}</div>
+                                <span style={{ color: isOwn ? '#fff' : 'var(--ink)', fontSize: 14, fontWeight: 600 }}>Document</span>
+                              </a>
+                            )}
+                            {message.text && (
+                              <span className="no-copy-text" style={{ fontSize: 14, whiteSpace: 'pre-wrap', wordBreak: 'break-word', padding: '0 4px' }}>
+                                {renderMessageTextWithMentions(message.text, isOwn)}
+                              </span>
+                            )}
+                          </div>
                         ) : (
                           <span className="no-copy-text" style={{ fontSize: 15, whiteSpace: 'pre-wrap', wordBreak: 'break-word', lineHeight: 1.4 }}>
                             {renderMessageTextWithMentions(message.text, isOwn)}
@@ -1165,7 +1486,36 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
           </div>
         ) : (
         <>
-        <div style={{ position: 'absolute', bottom: '100%', left: 0, right: 0, background: 'var(--glass-strong)', backdropFilter: 'blur(20px)', borderTop: '1px solid var(--glass-border)', display: 'flex', alignItems: 'center', padding: '10px 16px', gap: 12, transition: 'all 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.1)', transform: replyingTo ? 'translateY(0)' : 'translateY(100%)', opacity: replyingTo ? 1 : 0, visibility: replyingTo ? 'visible' : 'hidden', zIndex: 19 }}>
+        {/* Attachment preview + caption bar */}
+        {pendingFile && (
+          <div style={{ position: 'absolute', bottom: '100%', left: 0, right: 0, background: 'var(--glass-strong)', backdropFilter: 'blur(20px)', borderTop: '1px solid var(--glass-border)', padding: '12px 16px', zIndex: 21 }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 10 }}>
+              {pendingFile.type === 'image' ? (
+                <img src={pendingFile.previewUrl} alt="" style={{ width: 56, height: 56, borderRadius: 12, objectFit: 'cover' }} />
+              ) : pendingFile.type === 'video' ? (
+                <video src={pendingFile.previewUrl} style={{ width: 56, height: 56, borderRadius: 12, objectFit: 'cover' }} />
+              ) : pendingFile.type === 'audio' ? (
+                <div style={{ width: 56, height: 56, borderRadius: 12, background: 'var(--glass-border)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--blue)' }}>{Vectors.Smiley}</div>
+              ) : (
+                <div style={{ width: 56, height: 56, borderRadius: 12, background: 'var(--glass-border)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--blue)' }}>{Vectors.FileText}</div>
+              )}
+              <div style={{ flex: 1, minWidth: 0 }}>
+                <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--ink)', display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{pendingFile.file.name}</span>
+                {uploading && <span style={{ fontSize: 12, color: 'var(--dim)' }}>Uploading… {uploadSecondsLeft}s</span>}
+              </div>
+              <button onClick={cancelPendingAttachment} disabled={uploading} style={{ border: 'none', background: 'var(--glass-border)', width: 28, height: 28, borderRadius: '50%', color: 'var(--ink)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{Vectors.Close}</button>
+            </div>
+            <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
+              <input type="text" value={caption} onChange={(e) => setCaption(e.target.value)} placeholder="Add a caption…" disabled={uploading} style={{ flex: 1, border: '1px solid var(--glass-border)', outline: 'none', background: 'var(--glass)', borderRadius: 20, padding: '10px 16px', fontSize: 14, color: 'var(--ink)' }} />
+              <button type="button" onClick={sendPendingAttachment} disabled={uploading} style={{ width: 44, height: 44, borderRadius: '50%', border: 'none', background: uploading ? 'var(--glass-border)' : 'var(--blue)', color: '#fff', cursor: uploading ? 'default' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                {uploading ? Vectors.Spinner : Vectors.Send}
+              </button>
+            </div>
+          </div>
+        )}
+
+        {/* Reply preview bar */}
+        <div style={{ position: 'absolute', bottom: pendingFile ? undefined : '100%', top: pendingFile ? '100%' : undefined, left: 0, right: 0, background: 'var(--glass-strong)', backdropFilter: 'blur(20px)', borderTop: '1px solid var(--glass-border)', display: 'flex', alignItems: 'center', padding: '10px 16px', gap: 12, transition: 'all 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.1)', transform: replyingTo && !pendingFile ? 'translateY(0)' : 'translateY(100%)', opacity: replyingTo && !pendingFile ? 1 : 0, visibility: replyingTo && !pendingFile ? 'visible' : 'hidden', zIndex: 19 }}>
           <div style={{ color: 'var(--blue)' }}>{Vectors.ReplyAction}</div>
           <div style={{ width: 3, height: 34, borderRadius: 2, background: 'var(--blue)', flexShrink: 0 }} />
           <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
@@ -1177,10 +1527,30 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
 
         <form onSubmit={handleSend} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px', background: 'var(--glass-strong)', backdropFilter: 'blur(30px) saturate(200%)', borderTop: replyingTo ? 'none' : '1px solid var(--glass-border)', position: 'relative', zIndex: 20 }}>
           <EmojiGifPicker open={pickerOpen} onClose={() => setPickerOpen(false)} onEmoji={handleEmojiPicked} onMedia={handleMediaPicked} />
-          <button type="button" onClick={() => fileInputRef.current?.click()} disabled={uploading || cooldownPercent > 0 || selectedMessages.length > 0} style={{ width: 36, height: 36, borderRadius: '50%', border: 'none', background: 'transparent', color: 'var(--dim)', cursor: 'pointer', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{uploading ? Vectors.Spinner : Vectors.Attach}</button>
+          <button type="button" onClick={() => setAttachSheetOpen(true)} disabled={uploading || cooldownPercent > 0 || selectedMessages.length > 0} style={{ width: 36, height: 36, borderRadius: '50%', border: 'none', background: 'transparent', color: 'var(--dim)', cursor: 'pointer', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{uploading ? Vectors.Spinner : Vectors.Attach}</button>
           <input
             ref={fileInputRef}
             type="file"
+            onChange={handleAttachmentSelected}
+            style={{
+              position: 'absolute',
+              width: 1,
+              height: 1,
+              padding: 0,
+              margin: -1,
+              overflow: 'hidden',
+              clip: 'rect(0,0,0,0)',
+              whiteSpace: 'nowrap',
+              border: 0,
+              opacity: 0,
+              pointerEvents: 'none',
+            }}
+          />
+          <input
+            ref={cameraInputRef}
+            type="file"
+            accept="image/*,video/*"
+            capture="environment"
             onChange={handleAttachmentSelected}
             style={{
               position: 'absolute',
@@ -1203,6 +1573,16 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
         </>
         )}
       </div>
+
+      <AttachmentSheet
+        open={attachSheetOpen}
+        onClose={() => setAttachSheetOpen(false)}
+        onPickFile={() => { setAttachSheetOpen(false); fileInputRef.current?.click(); }}
+        onPickImage={() => { setAttachSheetOpen(false); fileInputRef.current?.click(); }}
+        onOpenCamera={() => { setAttachSheetOpen(false); cameraInputRef.current?.click(); }}
+        onPickInstagram={() => { setAttachSheetOpen(false); setInstagramModalOpen(true); }}
+      />
+      <InstagramModal open={instagramModalOpen} onClose={() => !instagramLoading && setInstagramModalOpen(false)} onSubmit={handleInstagramSubmit} loading={instagramLoading} />
 
       <MediaViewer mediaUrl={viewerMedia?.url} mediaType={viewerMedia?.type} open={viewerMedia !== null} onClose={() => setViewerMedia(null)} />
       <ProfileCard userId={profileCardUserId} open={!!profileCardUserId} onClose={() => setProfileCardUserId(null)} />
