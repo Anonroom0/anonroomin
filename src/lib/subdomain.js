@@ -1,3 +1,9 @@
+/**
+ * ============================================================================
+ * SUBDOMAIN & PATH ROUTING HELPERS
+ * ============================================================================
+ */
+
 const RESERVED_SEGMENTS = ['www', 'anonroom', 'localhost'];
 
 // Reserved as the FIRST path segment on the root domain, so they never get

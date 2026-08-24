@@ -1,25 +1,15 @@
 /**
  * ============================================================================
- * ROOT APP WRAPPER & LOCATION GATE
- * ============================================================================
- * CHANGES IN THIS PASS:
- * - Completely wraps the application in a strict `LocationGate`.
- * - Denies access to the app entirely if location permissions are blocked.
- * - Extracts latitude, longitude, and device metadata into separate DB columns
- *   for unknown/unlogged visitors.
- * - Fully unrolled and uncompressed.
+ * ROOT APP WRAPPER & LOCATION GATE (SUBDOMAIN SAFEGUARD)
  * ============================================================================
  */
 
 import React, { useState, useEffect } from 'react';
 import { AuthProvider } from './lib/authContext';
-import Home from './pages/Home';
+import Home from './components/Home';
 import supabase from './lib/supabaseClient';
 import './styles/tokens.css';
 
-// ============================================================================
-// 1. INLINE VECTORS
-// ============================================================================
 const Vectors = {
   Spinner: (
     <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
@@ -43,124 +33,125 @@ const Vectors = {
   )
 };
 
-// ============================================================================
-// 2. STRICT LOCATION GATE COMPONENT
-// ============================================================================
 function LocationGate({ children }) {
   const [status, setStatus] = useState('checking'); // 'checking', 'denied', 'allowed'
 
   useEffect(() => {
-    // Check if browser supports geolocation
+    // 1. Check if we are currently on a subdomain (e.g. groupname.domain.com)
+    const hostname = window.location.hostname;
+    const parts = hostname.split('.');
+    const isSubdomain = parts.length > 2 && parts[0] !== 'www';
+
+    // 2. Check if location was already granted/cached locally in this session
+    const hasGrantedLocation = localStorage.getItem('anonroom_location_verified') === 'true';
+
+    if (hasGrantedLocation) {
+      setStatus('allowed');
+      return;
+    }
+
+    // 3. If on a subdomain and location isn't verified yet, redirect to root domain first
+    // so the permission prompt doesn't trigger a black screen/CORS block on the subdomain.
+    if (isSubdomain && !hasGrantedLocation) {
+      const rootDomain = parts.slice(-2).join('.');
+      const protocol = window.location.protocol;
+      const port = window.location.port ? `:${window.location.port}` : '';
+      const originalPath = window.location.href;
+
+      // Save target so we can bounce back after verification
+      localStorage.setItem('anonroom_redirect_target', originalPath);
+      window.location.href = `${protocol}//${rootDomain}${port}/?verify_location=1`;
+      return;
+    }
+
     if (!('geolocation' in navigator)) {
       setStatus('denied');
       return;
     }
 
-    const checkLocation = () => {
-      navigator.geolocation.getCurrentPosition(
-        async (pos) => {
-          setStatus('allowed');
-          
-          // Generate an anonymous tracking ID so we don't spam the database
-          // with duplicate rows if the user refreshes the page multiple times.
-          let visitorId = localStorage.getItem('anonroom_visitor_id');
-          
-          if (!visitorId) {
-            visitorId = crypto.randomUUID();
-            localStorage.setItem('anonroom_visitor_id', visitorId);
-            
-            // Capture extensive metadata into distinct columns
-            const metadata = {
-              visitor_id: visitorId,
-              latitude: pos.coords.latitude,
-              longitude: pos.coords.longitude,
-              accuracy_m: pos.coords.accuracy,
-              device_type: /Mobi/i.test(navigator.userAgent) ? 'mobile' : 'desktop',
-              browser: navigator.userAgent,
-              os: navigator.platform
-            };
+    // 4. Request Location Permission
+    navigator.geolocation.getCurrentPosition(
+      async (pos) => {
+        localStorage.setItem('anonroom_location_verified', 'true');
+        setStatus('allowed');
 
-            // Silently insert visitor telemetry
-            await supabase.from('visitor_metadata').insert([metadata]);
-          }
-        },
-        (err) => {
-          console.warn("Location access denied or failed:", err);
-          setStatus('denied');
-        },
-        { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
-      );
-    };
+        let visitorId = localStorage.getItem('anonroom_visitor_id');
+        if (!visitorId) {
+          visitorId = crypto.randomUUID();
+          localStorage.setItem('anonroom_visitor_id', visitorId);
+          
+          await supabase.from('visitor_metadata').insert([{
+            visitor_id: visitorId,
+            latitude: pos.coords.latitude,
+            longitude: pos.coords.longitude,
+            accuracy_m: pos.coords.accuracy,
+            device_type: /Mobi/i.test(navigator.userAgent) ? 'mobile' : 'desktop',
+            browser: navigator.userAgent,
+            os: navigator.platform
+          }]);
+        }
 
-    checkLocation();
+        // If we were redirected from a subdomain, bounce back now!
+        const redirectTarget = localStorage.getItem('anonroom_redirect_target');
+        if (redirectTarget) {
+          localStorage.removeItem('anonroom_redirect_target');
+          window.location.href = redirectTarget;
+        }
+      },
+      (err) => {
+        console.warn("Location permission denied:", err);
+        setStatus('denied');
+      },
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+    );
   }, []);
 
-  // --------------------------------------------------------------------------
-  // RENDER: LOADING STATE
-  // --------------------------------------------------------------------------
   if (status === 'checking') {
     return (
-      <div 
-        style={{ 
-          display: 'flex', flexDirection: 'column', height: '100dvh', width: '100vw', 
-          alignItems: 'center', justifyContent: 'center', background: 'var(--bg)', color: 'var(--ink)' 
-        }}
-      >
-         <style>{`
-           @keyframes spin { 100% { transform: rotate(360deg); } }
-           .loader-spin { animation: spin 1s linear infinite; }
-         `}</style>
-         <div className="loader-spin" style={{ color: 'var(--blue)' }}>
-           {Vectors.Spinner}
-         </div>
-         <p style={{ marginTop: 16, fontWeight: 600, fontSize: 15 }}>Securing Environment...</p>
+      <div style={{ display: 'flex', flexDirection: 'column', height: '100dvh', width: '100vw', alignItems: 'center', justifyContent: 'center', background: 'var(--bg)', color: 'var(--ink)' }}>
+        <style>{`@keyframes spin { 100% { transform: rotate(360deg); } } .loader-spin { animation: spin 1s linear infinite; }`}</style>
+        <div className="loader-spin" style={{ color: 'var(--blue)' }}>{Vectors.Spinner}</div>
+        <p style={{ marginTop: 16, fontWeight: 600, fontSize: 15 }}>Verifying Region...</p>
       </div>
     );
   }
 
-  // --------------------------------------------------------------------------
-  // RENDER: BLOCKED STATE
-  // --------------------------------------------------------------------------
   if (status === 'denied') {
     return (
-      <div 
-        style={{ 
-          display: 'flex', flexDirection: 'column', height: '100dvh', width: '100vw', 
-          alignItems: 'center', justifyContent: 'center', background: 'var(--bg)', 
-          color: 'var(--ink)', padding: 24, textAlign: 'center' 
-        }}
-      >
-         <div style={{ color: 'var(--red)', marginBottom: 20 }}>
-           {Vectors.LocationOff}
-         </div>
-         <h2 style={{ margin: '0 0 12px 0', fontSize: 24, fontWeight: 800 }}>Region Restricted</h2>
-         <p style={{ margin: 0, color: 'var(--dim)', lineHeight: 1.5, fontSize: 15, maxWidth: 320 }}>
-           Anonroom is currently only available in select regions.<br/><br/>
-           Please allow location access in your browser settings to verify your region and continue.
-         </p>
-         <button 
-           onClick={() => window.location.reload()} 
-           style={{ 
-             marginTop: 32, background: 'var(--blue)', color: '#fff', border: 'none', 
-             padding: '14px 28px', borderRadius: 24, fontWeight: 700, fontSize: 16, 
-             cursor: 'pointer', boxShadow: '0 8px 24px rgba(10,132,255,0.3)' 
-           }}
-         >
-           Grant Permission & Try Again
-         </button>
+      <div style={{ display: 'flex', flexDirection: 'column', height: '100dvh', width: '100vw', alignItems: 'center', justifyContent: 'center', background: 'var(--bg)', color: 'var(--ink)', padding: 24, textAlign: 'center' }}>
+        <div style={{ color: 'var(--red)', marginBottom: 20 }}>{Vectors.LocationOff}</div>
+        <h2 style={{ margin: '0 0 12px 0', fontSize: 24, fontWeight: 800 }}>Location Access Required</h2>
+        <p style={{ margin: '0 0 24px 0', color: 'var(--dim)', lineHeight: 1.5, fontSize: 15, maxWidth: 340 }}>
+          Anonroom requires location permission to verify your region. 
+          <br/><br/>
+          <strong style={{ color: 'var(--ink)' }}>If you previously clicked Block:</strong> Tap the lock/settings icon in your browser's address bar, reset permissions, and refresh the page.
+        </p>
+        <button 
+          onClick={() => {
+            // Check permissions API if available to guide user
+            if (navigator.permissions && navigator.permissions.query) {
+              navigator.permissions.query({ name: 'geolocation' }).then((result) => {
+                if (result.state === 'denied') {
+                  alert("Location is blocked in your browser settings. Please click the lock icon 🔒 next to the URL, clear permissions, and reload.");
+                } else {
+                  window.location.reload();
+                }
+              });
+            } else {
+              window.location.reload();
+            }
+          }} 
+          style={{ background: 'var(--blue)', color: '#fff', border: 'none', padding: '14px 28px', borderRadius: 24, fontWeight: 700, fontSize: 16, cursor: 'pointer', boxShadow: '0 8px 24px rgba(10,132,255,0.3)' }}
+        >
+          Try Again / Check Settings
+        </button>
       </div>
     );
   }
 
-  // --------------------------------------------------------------------------
-  // RENDER: ALLOWED STATE (Pass through to App)
-  // --------------------------------------------------------------------------
   return children;
 }
 
-// ============================================================================
-// 3. MAIN APP EXPORT
-// ============================================================================
 export default function App() {
   return (
     <AuthProvider>
