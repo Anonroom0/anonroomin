@@ -6,7 +6,7 @@
 
 import React, { useState, useEffect } from 'react';
 import { AuthProvider } from './lib/authContext';
-import Home from './components/Home';
+import Home from './pages/Home';
 import supabase from './lib/supabaseClient';
 import './styles/tokens.css';
 
