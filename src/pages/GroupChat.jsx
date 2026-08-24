@@ -454,7 +454,7 @@ function InstagramCard({ message, isOwn }) {
   );
 }
 
-function AttachmentSheet({ open, onClose, onOpenCamera, onPickInstagram }) {
+function AttachmentSheet({ open, onClose, onOpenCamera, onPickInstagram, onPickConfession }) {
   if (!open) return null;
   const Item = ({ icon, label, onClick }) => (
     <button onClick={onClick} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, border: 'none', background: 'transparent', cursor: 'pointer', flex: 1 }}>
@@ -466,6 +466,7 @@ function AttachmentSheet({ open, onClose, onOpenCamera, onPickInstagram }) {
     <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 50, display: 'flex', alignItems: 'flex-end' }}>
       <div onClick={(e) => e.stopPropagation()} style={{ width: '100%', background: 'var(--glass-strong)', backdropFilter: 'blur(30px)', borderRadius: '20px 20px 0 0', padding: '20px 16px', display: 'flex', gap: 8 }}>
         <Item icon={Vectors.Camera} label="Camera" onClick={onOpenCamera} />
+        <Item icon={Vectors.Ghost} label="Confession" onClick={onPickConfession} />
         <Item icon={Vectors.Instagram} label="Instagram" onClick={onPickInstagram} />
       </div>
     </div>
@@ -1014,8 +1015,8 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
   // --------------------------------------------------------------------------
   // INSTAGRAM
   // --------------------------------------------------------------------------
-  async function handleInstagramSubmit(username) {
-  if (!userId || !activeThread) return;
+ async function handleInstagramSubmit(username) {
+  if (!session?.user || !group) return;
   setInstagramLoading(true);
   const data = await scrapeInstagram(username);
   setInstagramLoading(false);
@@ -1027,18 +1028,19 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
 
   setInstagramModalOpen(false);
 
+  const basePayload = {
+    group_id: group.id,
+    user_id: session.user.id,
+    sender_name: currentSenderName(),
+    instagram_username: data.username,
+    reply_to_id: replyingTo?.id ?? null,
+    is_anon: isAnonMode,
+  };
+
   const insertPayload = data.fallback
-    ? {
-        thread_id: activeThread.id,
-        sender_id: userId,
-        instagram_username: data.username,
-        reply_to_id: replyingTo?.id ?? null,
-        is_anon: false,
-      }
+    ? basePayload
     : {
-        thread_id: activeThread.id,
-        sender_id: userId,
-        instagram_username: data.username,
+        ...basePayload,
         instagram_pfp_url: data.pfp_url,
         instagram_full_name: data.full_name,
         instagram_bio: data.bio,
@@ -1047,11 +1049,9 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
         instagram_posts: data.posts,
         instagram_is_verified: data.is_verified,
         instagram_is_private: data.is_private,
-        reply_to_id: replyingTo?.id ?? null,
-        is_anon: false,
       };
 
-  const { error } = await supabase.from('dm_messages').insert(insertPayload);
+  const { error } = await supabase.from('group_messages').insert(insertPayload);
 
   if (error) {
     console.error(error);
@@ -1381,6 +1381,7 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
   open={attachSheetOpen}
   onClose={() => setAttachSheetOpen(false)}
   onOpenCamera={() => { setAttachSheetOpen(false); cameraInputRef.current?.click(); }}
+  onPickConfession={() => { setAttachSheetOpen(false); setConfessionModalOpen(true); }}
   onPickInstagram={() => { setAttachSheetOpen(false); setInstagramModalOpen(true); }}
 />
       <ConfessionModal open={confessionModalOpen} onClose={() => setConfessionModalOpen(false)} onSubmit={handleConfessionSubmit} />
