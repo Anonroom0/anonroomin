@@ -15,6 +15,7 @@ import React, { useEffect, useRef, useState, useCallback } from 'react';
 import supabase from '../lib/supabaseClient';
 import { useAuth } from '../lib/authContext';
 import { createCooldown } from '../lib/rateLimit';
+import { showToast, friendlyDbError } from '../lib/toast';
 import MediaViewer from './MediaViewer';
 import ProfileCard from './ProfileCard';
 import GroupCard from './GroupCard';
@@ -602,7 +603,8 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
       .in('id', selectedMessages);
       
     if (error) {
-      alert("Failed to delete messages");
+      console.error(error);
+      showToast(friendlyDbError(), 'error');
       fetchMessagesAndReceipts(); // Revert on failure
     }
     
@@ -703,7 +705,11 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
   async function handleSend(e) {
     e.preventDefault();
     const trimmed = text.trim();
-    if (!trimmed || !session?.user || !group || cooldownPercent > 0 || sending) return;
+    if (!trimmed || !session?.user || !group || sending) return;
+    if (cooldownPercent > 0) {
+      showToast("Please wait a few seconds before sending another message.", 'info');
+      return;
+    }
 
     setSending(true);
     const senderName = isAnonMode ? 'Anonymous' : (profile?.is_admin ? ADMIN_DISPLAY_NAME : (profile?.username || 'Anonymous'));
@@ -721,7 +727,8 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
 
     setSending(false);
     if (error) {
-      alert(error.message);
+      console.error(error);
+      showToast(friendlyDbError(), 'error');
       return;
     }
 
@@ -734,7 +741,11 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
   async function handleAttachmentSelected(e) {
     const file = e.target.files?.[0];
     e.target.value = '';
-    if (!file || !session?.user || !group || cooldownPercent > 0 || uploading) return;
+    if (!file || !session?.user || !group || uploading) return;
+    if (cooldownPercent > 0) {
+      showToast("Please wait a few seconds before sending another message.", 'info');
+      return;
+    }
 
     setUploading(true);
     const safeName = file.name.replace(/[^a-zA-Z0-9.\-_]/g, '_');
@@ -744,8 +755,9 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
     const { error: uploadError } = await supabase.storage.from('media').upload(path, file, { upsert: false });
 
     if (uploadError) {
+      console.error(uploadError);
       setUploading(false);
-      alert('Upload failed.');
+      showToast("Couldn't send that image. Please try again.", 'error');
       return;
     }
 
@@ -754,7 +766,7 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
 
     if (!publicUrl) {
       setUploading(false);
-      alert('Failed to resolve image URL.');
+      showToast("Couldn't send that image. Please try again.", 'error');
       return;
     }
 
@@ -776,7 +788,11 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
   }
 
   async function handleMediaPicked(url, mediaType) {
-    if (!session?.user || !group || cooldownPercent > 0 || sending) return;
+    if (!session?.user || !group || sending) return;
+    if (cooldownPercent > 0) {
+      showToast("Please wait a few seconds before sending another message.", 'info');
+      return;
+    }
     setPickerOpen(false);
 
     const senderName = isAnonMode ? 'Anonymous' : (profile?.is_admin ? ADMIN_DISPLAY_NAME : (profile?.username || 'Anonymous'));
@@ -791,7 +807,8 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
     });
 
     if (error) {
-      alert(error.message);
+      console.error(error);
+      showToast(friendlyDbError(), 'error');
       return;
     }
 
@@ -1120,7 +1137,24 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
         <form onSubmit={handleSend} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px', background: 'var(--glass-strong)', backdropFilter: 'blur(30px) saturate(200%)', borderTop: replyingTo ? 'none' : '1px solid var(--glass-border)', position: 'relative', zIndex: 20 }}>
           <EmojiGifPicker open={pickerOpen} onClose={() => setPickerOpen(false)} onEmoji={handleEmojiPicked} onMedia={handleMediaPicked} />
           <button type="button" onClick={() => fileInputRef.current?.click()} disabled={uploading || cooldownPercent > 0 || selectedMessages.length > 0} style={{ width: 36, height: 36, borderRadius: '50%', border: 'none', background: 'transparent', color: 'var(--dim)', cursor: 'pointer', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{uploading ? Vectors.Spinner : Vectors.Attach}</button>
-          <input ref={fileInputRef} type="file" hidden onChange={handleAttachmentSelected} />
+          <input
+            ref={fileInputRef}
+            type="file"
+            onChange={handleAttachmentSelected}
+            style={{
+              position: 'absolute',
+              width: 1,
+              height: 1,
+              padding: 0,
+              margin: -1,
+              overflow: 'hidden',
+              clip: 'rect(0,0,0,0)',
+              whiteSpace: 'nowrap',
+              border: 0,
+              opacity: 0,
+              pointerEvents: 'none'
+            }}
+          />
           <button type="button" onClick={() => setPickerOpen((v) => !v)} disabled={uploading || selectedMessages.length > 0} style={{ width: 36, height: 36, borderRadius: '50%', border: 'none', background: pickerOpen ? 'var(--glass-border)' : 'transparent', color: pickerOpen ? 'var(--blue)' : 'var(--dim)', cursor: 'pointer', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{Vectors.Smiley}</button>
           <input type="text" value={text} onChange={(e) => setText(e.target.value)} onFocus={() => setPickerOpen(false)} placeholder={uploading ? 'Uploading media...' : 'Message'} disabled={uploading || selectedMessages.length > 0} style={{ flex: 1, border: '1px solid var(--glass-border)', outline: 'none', background: 'var(--glass)', borderRadius: 24, padding: '12px 18px', fontSize: 15, color: 'var(--ink)', transition: 'border-color 0.2s' }} />
           <SendButton canSend={!!text.trim()} sending={sending || uploading} cooldownPercent={cooldownPercent} />

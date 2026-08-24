@@ -8,6 +8,7 @@ import React, { useState, useEffect } from 'react';
 import { AuthProvider } from './lib/authContext';
 import Home from './pages/Home';
 import supabase from './lib/supabaseClient';
+import ToastContainer from './components/ToastContainer';
 import './styles/tokens.css';
 
 const Vectors = {
@@ -33,6 +34,47 @@ const Vectors = {
   )
 };
 
+// ----------------------------------------------------------------------------
+// Cookie helpers (BUG 1 fix)
+// ----------------------------------------------------------------------------
+// localStorage is scoped per-origin, so a subdomain (general.anonroom.in)
+// never shares storage with the root domain (anonroom.in). That caused the
+// infinite redirect loop: the root domain would verify location and set a
+// localStorage flag, but the subdomain could never see it and would keep
+// bouncing the user back to root forever.
+//
+// The fix is to make cookies (scoped to a shared parent domain) the source
+// of truth, since cookies with an explicit `domain` attribute are shared
+// across all subdomains automatically. This mirrors the exact same
+// domain-detection pattern already used in src/lib/supabaseClient.js,
+// duplicated inline here so this file stays self-contained.
+
+function getCookieDomain() {
+  const hostname = window.location.hostname;
+  const isIPv4 = /^\d{1,3}(\.\d{1,3}){3}$/.test(hostname);
+
+  if (hostname.includes('anonroom.in')) {
+    return '.anonroom.in';
+  }
+  if (hostname === 'localhost' || isIPv4) {
+    return hostname;
+  }
+  // Fallback for any other environment (e.g. preview deployments):
+  // scope the cookie to the exact host rather than guessing a parent domain.
+  return hostname;
+}
+
+function setCookie(name, value, days = 365) {
+  const domain = getCookieDomain();
+  const maxAge = days * 24 * 60 * 60;
+  document.cookie = `${name}=${encodeURIComponent(value)}; path=/; domain=${domain}; max-age=${maxAge}; SameSite=Lax; Secure`;
+}
+
+function getCookie(name) {
+  const match = document.cookie.match(new RegExp('(?:^|; )' + name + '=([^;]*)'));
+  return match ? decodeURIComponent(match[1]) : null;
+}
+
 function LocationGate({ children }) {
   const [status, setStatus] = useState('checking'); // 'checking', 'denied', 'allowed'
 
@@ -43,7 +85,11 @@ function LocationGate({ children }) {
 
     const urlParams = new URLSearchParams(window.location.search);
     const redirectParam = urlParams.get('redirect');
-    const hasGrantedLocation = localStorage.getItem('anonroom_location_verified') === 'true';
+
+    // Cookie is the source of truth (shared across root + subdomains).
+    // We still also write to localStorage below as a harmless bonus, but
+    // never read it as the deciding factor anymore.
+    const hasGrantedLocation = getCookie('anonroom_location_verified') === 'true';
 
     // If we just got verified on the root domain and there's a redirect query parameter, bounce back immediately!
     if (redirectParam && hasGrantedLocation) {
@@ -56,8 +102,19 @@ function LocationGate({ children }) {
       return;
     }
 
-    // If on a subdomain and location isn't verified yet, redirect to root domain with the target URL in query params
+    // If on a subdomain and location isn't verified yet, redirect to root domain with the target URL in query params.
+    // Loop guard: if we've already attempted this redirect once in this
+    // browser session (e.g. cookies are blocked so verification can never
+    // "stick"), don't redirect again — fail safely into the denied state
+    // instead of bouncing back and forth forever.
     if (isSubdomain && !hasGrantedLocation) {
+      if (sessionStorage.getItem('anonroom_redirect_attempted') === 'true') {
+        setStatus('denied');
+        return;
+      }
+
+      sessionStorage.setItem('anonroom_redirect_attempted', 'true');
+
       const rootDomain = parts.slice(-2).join('.');
       const protocol = window.location.protocol;
       const port = window.location.port ? `:${window.location.port}` : '';
@@ -75,14 +132,22 @@ function LocationGate({ children }) {
     // Request Location Permission on Root Domain
     navigator.geolocation.getCurrentPosition(
       async (pos) => {
-        localStorage.setItem('anonroom_location_verified', 'true');
+        setCookie('anonroom_location_verified', 'true');
+        localStorage.setItem('anonroom_location_verified', 'true'); // harmless bonus, not the source of truth
         setStatus('allowed');
 
-        let visitorId = localStorage.getItem('anonroom_visitor_id');
-        if (!visitorId) {
+        let visitorId = getCookie('anonroom_visitor_id') || localStorage.getItem('anonroom_visitor_id');
+        const isNewVisitor = !visitorId;
+
+        if (isNewVisitor) {
           visitorId = crypto.randomUUID();
-          localStorage.setItem('anonroom_visitor_id', visitorId);
-          
+        }
+
+        // Keep the cookie (shared across subdomains) and localStorage in sync either way.
+        setCookie('anonroom_visitor_id', visitorId);
+        localStorage.setItem('anonroom_visitor_id', visitorId);
+
+        if (isNewVisitor) {
           await supabase.from('visitor_metadata').insert([{
             visitor_id: visitorId,
             latitude: pos.coords.latitude,
@@ -153,11 +218,45 @@ function LocationGate({ children }) {
 }
 
 export default function App() {
+  // ----------------------------------------------------------------------
+  // BUG 2 fix: JS-level pinch-zoom prevention.
+  // ----------------------------------------------------------------------
+  // `user-scalable=no` in the viewport meta tag is ignored by some
+  // browsers (notably iOS Safari) for accessibility reasons, so pinch
+  // gestures can still zoom the page. This adds a global safety net:
+  // block Safari's 'gesturestart' event, and block any multi-touch
+  // 'touchmove' (the second finger of a pinch) app-wide.
+  useEffect(() => {
+    function handleGestureStart(e) {
+      e.preventDefault();
+    }
+
+    function handleTouchMove(e) {
+      if (e.touches.length > 1) {
+        e.preventDefault();
+      }
+    }
+
+    document.addEventListener('gesturestart', handleGestureStart);
+    // Must be non-passive, or preventDefault() on touchmove is a no-op.
+    document.addEventListener('touchmove', handleTouchMove, { passive: false });
+
+    return () => {
+      document.removeEventListener('gesturestart', handleGestureStart);
+      document.removeEventListener('touchmove', handleTouchMove, { passive: false });
+    };
+  }, []);
+
   return (
-    <AuthProvider>
-      <LocationGate>
-        <Home />
-      </LocationGate>
-    </AuthProvider>
+    <>
+      {/* BUG 3 fix: mounted once, outside/above LocationGate, so toasts can
+          render even during the "Verifying Region..." or "denied" screens. */}
+      <ToastContainer />
+      <AuthProvider>
+        <LocationGate>
+          <Home />
+        </LocationGate>
+      </AuthProvider>
+    </>
   );
 }

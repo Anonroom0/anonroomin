@@ -19,6 +19,7 @@
 
 import React, { useEffect, useState, useCallback } from 'react';
 import supabase from '../lib/supabaseClient';
+import { showToast, friendlyDbError } from '../lib/toast';
 
 // ============================================================================
 // 1. CONSTANTS & CONFIGURATION
@@ -280,7 +281,9 @@ export default function GroupCard({ groupSlug, open, onClose }) {
         .then(({ data, error }) => {
           if (!isMounted) return;
           if (error) {
-            setError(error.message);
+            console.error(error);
+            showToast(friendlyDbError(), 'error');
+            setError("Something went wrong loading this group.");
           } else if (!data) {
             setError("Group not found.");
           } else {

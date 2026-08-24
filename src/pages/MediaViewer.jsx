@@ -206,6 +206,8 @@ export default function MediaViewer({ mediaUrl, mediaType, open, onClose }) {
             justifyContent: 'center',
             padding: 20,
             boxSizing: 'border-box',
+            minWidth: 0,
+            minHeight: 0,
             transform: isVisible ? 'scale(1) translateY(0)' : 'scale(0.9) translateY(20px)',
             opacity: isVisible ? 1 : 0,
             transition: `all ${ANIMATION_DURATION}ms cubic-bezier(0.175, 0.885, 0.32, 1.1)`

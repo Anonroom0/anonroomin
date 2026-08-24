@@ -18,6 +18,7 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import supabase from '../lib/supabaseClient';
 import { useAuth } from '../lib/authContext';
+import { showToast, friendlyDbError } from '../lib/toast';
 
 // ============================================================================
 // 1. CONSTANTS & CONFIGURATION
@@ -278,7 +279,7 @@ export default function EditProfile({ open, onClose }) {
 
   const handlePushToggle = async () => {
     if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
-      alert("Push notifications are not supported in your current browser.");
+      showToast("Push notifications are not supported in your current browser.", 'error');
       return;
     }
 
@@ -312,12 +313,12 @@ export default function EditProfile({ open, onClose }) {
           
           setPushEnabled(true);
         } else {
-          alert('You must allow notifications in your browser settings to enable this feature.');
+          showToast('You must allow notifications in your browser settings to enable this feature.', 'error');
         }
       }
     } catch (err) {
       console.error('Failed to toggle push notifications:', err);
-      alert('An error occurred while configuring notifications.');
+      showToast(friendlyDbError(), 'error');
     }
   };
 

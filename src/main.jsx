@@ -16,6 +16,18 @@ if ('serviceWorker' in navigator) {
   });
 }
 
+// Global double-tap-to-zoom prevention safeguard.
+// Some mobile browsers still allow zooming via a rapid double-tap even when
+// pinch-zoom is otherwise blocked elsewhere in the app.
+let lastTouchEnd = 0;
+document.addEventListener('touchend', (event) => {
+  const now = Date.now();
+  if (now - lastTouchEnd < 300) {
+    event.preventDefault();
+  }
+  lastTouchEnd = now;
+}, { passive: false });
+
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <App />

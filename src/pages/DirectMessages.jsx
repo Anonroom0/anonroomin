@@ -3,7 +3,6 @@
  * DIRECT MESSAGES MASTER VIEW (APPLE LIQUID UI & TELEGRAM PHYSICS)
  * ============================================================================
  * CHANGES IN THIS PASS:
- * - Anonymous Mode: Toggle 'Ghost' icon to hide PFP/Name (saves as is_anon).
  * - Admin Deletion: Long-press a message to select it, then delete from header.
  * - Pull-To-Refresh: Custom iOS-style spinner drops from below the header.
  * - Skeleton Loading: Beautiful shimmering placeholders before messages load.
@@ -20,6 +19,7 @@ import MediaViewer from './MediaViewer';
 import ProfileCard from './ProfileCard';
 import AuthModal from './AuthModal';
 import EmojiGifPicker from './EmojiGifPicker';
+import { showToast, friendlyDbError } from '../lib/toast';
 
 // ============================================================================
 // 1. CONSTANTS & CONFIGURATION
@@ -449,7 +449,6 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
 
   const [activeThread, setActiveThread] = useState(null);
   const [threadStatus, setThreadStatus] = useState('loading');
-  const [dbErrorDetails, setDbErrorDetails] = useState(null); 
 
   const [messages, setMessages] = useState([]);
   const [messagesLoading, setMessagesLoading] = useState(true);
@@ -470,7 +469,6 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
   const [hasUnreadMention, setHasUnreadMention] = useState(false);
   const [latestMentionId, setLatestMentionId] = useState(null);
   const [highlightedMsgId, setHighlightedMsgId] = useState(null);
-  const [isAnonMode, setIsAnonMode] = useState(false);
   const [selectedMessages, setSelectedMessages] = useState([]);
   const [isSearching, setIsSearching] = useState(false);
   const [chatSearchQuery, setChatSearchQuery] = useState('');
@@ -488,13 +486,12 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
 
     if (!userId) {
       setThreadStatus('error');
-      setDbErrorDetails("You must be logged in to view private direct messages.");
+      showToast("You must be logged in to view private direct messages.", 'error');
       return;
     }
 
     let isMounted = true;
     setThreadStatus('loading');
-    setDbErrorDetails(null);
 
     async function initializeThread() {
       try {
@@ -543,7 +540,7 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
         console.error('Failed to load thread:', err);
         if (isMounted) {
           setThreadStatus('error');
-          setDbErrorDetails(err.message || JSON.stringify(err, null, 2));
+          showToast(friendlyDbError(), 'error');
         }
       }
     }
@@ -575,7 +572,8 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
       .limit(MESSAGE_LIMIT);
 
     if (error) {
-      setDbErrorDetails(error.message || JSON.stringify(error));
+      console.error(error);
+      showToast(friendlyDbError(), 'error');
     } else if (isMounted) {
       const fetchedMessages = data || [];
       setMessages(fetchedMessages);
@@ -666,7 +664,8 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
       .in('id', selectedMessages);
       
     if (error) {
-      alert("Failed to delete messages");
+      console.error(error);
+      showToast("Couldn't delete those messages. Please try again.", 'error');
       fetchMessagesAndReceipts(); // Revert on failure
     }
     
@@ -760,7 +759,12 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
   async function handleSend(e) {
     e.preventDefault();
     const trimmed = text.trim();
-    if (!trimmed || !userId || !activeThread || cooldownPercent > 0 || sending) return;
+    if (!trimmed || !userId || !activeThread || sending) return;
+
+    if (cooldownPercent > 0) {
+      showToast("Please wait a few seconds before sending another message.", 'info');
+      return;
+    }
 
     setSending(true);
     const mentionedIds = await resolveMentionedIds(trimmed);
@@ -771,13 +775,13 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
       text: trimmed,
       reply_to_id: replyingTo?.id ?? null,
       mentioned_user_ids: mentionedIds,
-      is_anon: isAnonMode
+      is_anon: false
     });
 
     setSending(false);
     if (error) {
-      setDbErrorDetails(error.message);
-      alert(error.message);
+      console.error(error);
+      showToast(friendlyDbError(), 'error');
       return;
     }
 
@@ -790,49 +794,66 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
   async function handleAttachmentSelected(e) {
     const file = e.target.files?.[0];
     e.target.value = '';
-    if (!file || !userId || !activeThread || cooldownPercent > 0 || uploading) return;
+
+    if (!file || !userId || !activeThread || uploading) return;
+
+    if (cooldownPercent > 0) {
+      showToast("Please wait a few seconds before sending another message.", 'info');
+      return;
+    }
 
     setUploading(true);
     const safeName = file.name.replace(/[^a-zA-Z0-9.\-_]/g, '_');
     const path = `${userId}/dm-${Date.now()}-${safeName}`;
-    
-    // Explicit upload with upsert false
-    const { error: uploadError } = await supabase.storage.from('media').upload(path, file, { upsert: false });
 
-    if (uploadError) {
+    try {
+      const { error: uploadError } = await supabase.storage.from('media').upload(path, file, { upsert: false });
+      if (uploadError) {
+        console.error(uploadError);
+        setUploading(false);
+        showToast(friendlyDbError(), 'error');
+        return;
+      }
+
+      const { data: publicUrlData } = supabase.storage.from('media').getPublicUrl(path);
+      const publicUrl = publicUrlData?.publicUrl;
+      if (!publicUrl) {
+        setUploading(false);
+        showToast("Couldn't send that image. Please try again.", 'error');
+        return;
+      }
+
+      const { error: insertError } = await supabase.from('dm_messages').insert({
+        thread_id: activeThread.id,
+        sender_id: userId,
+        media_url: publicUrl,
+        media_type: guessMediaType(file),
+        reply_to_id: replyingTo?.id ?? null,
+        is_anon: false
+      });
+
+      if (insertError) {
+        console.error(insertError);
+        showToast(friendlyDbError(), 'error');
+      }
+    } catch (err) {
+      console.error(err);
+      showToast(friendlyDbError(), 'error');
+    } finally {
       setUploading(false);
-      setDbErrorDetails(uploadError.message);
-      alert('Upload failed.');
-      return;
+      setReplyingTo(null);
+      cooldownRef.current?.start();
     }
-
-    const { data: publicUrlData } = supabase.storage.from('media').getPublicUrl(path);
-    const publicUrl = publicUrlData?.publicUrl;
-
-    if (!publicUrl) {
-      setUploading(false);
-      alert('Failed to resolve image URL.');
-      return;
-    }
-
-    const { error: insertError } = await supabase.from('dm_messages').insert({
-      thread_id: activeThread.id,
-      sender_id: userId,
-      media_url: publicUrl,
-      media_type: guessMediaType(file),
-      reply_to_id: replyingTo?.id ?? null,
-      is_anon: isAnonMode
-    });
-
-    if (insertError) setDbErrorDetails(insertError.message);
-
-    setUploading(false);
-    setReplyingTo(null);
-    cooldownRef.current?.start();
   }
 
   async function handleMediaPicked(url, mediaType) {
-    if (!userId || !activeThread || cooldownPercent > 0 || sending) return;
+    if (!userId || !activeThread || sending) return;
+
+    if (cooldownPercent > 0) {
+      showToast("Please wait a few seconds before sending another message.", 'info');
+      return;
+    }
+
     setPickerOpen(false);
 
     const { error } = await supabase.from('dm_messages').insert({
@@ -841,12 +862,12 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
       media_url: url,
       media_type: mediaType,
       reply_to_id: replyingTo?.id ?? null,
-      is_anon: isAnonMode
+      is_anon: false
     });
 
     if (error) {
-      setDbErrorDetails(error.message);
-      alert(error.message);
+      console.error(error);
+      showToast(friendlyDbError(), 'error');
       return;
     }
 
@@ -879,11 +900,6 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
     return (
       <div className="no-copy-text" style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--bg)', flexDirection: 'column', gap: 16, padding: 24 }}>
         <p style={{ color: 'var(--dim)', fontWeight: 600 }}>Failed to load chat.</p>
-        {dbErrorDetails && (
-          <div style={{ background: 'rgba(255, 59, 48, 0.1)', border: '1px solid rgba(255, 59, 48, 0.3)', padding: 14, borderRadius: 12, maxWidth: 450, width: '100%', color: '#ff3b30', fontSize: 13, fontFamily: 'monospace', wordBreak: 'break-all' }}>
-            <strong>Database Error:</strong> {dbErrorDetails}
-          </div>
-        )}
         <button onClick={onBack} style={{ background: 'var(--blue)', color: '#fff', border: 'none', padding: '10px 20px', borderRadius: 12, cursor: 'pointer', fontWeight: 700 }}>
           Go Back
         </button>
@@ -934,15 +950,6 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
           </div>
 
           <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-            {/* ANONYMOUS TOGGLE */}
-            <button 
-              onClick={() => setIsAnonMode(!isAnonMode)} 
-              style={{ border: 'none', background: isAnonMode ? 'rgba(10,132,255,0.1)' : 'transparent', color: isAnonMode ? 'var(--blue)' : 'var(--dim)', cursor: 'pointer', padding: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '50%', transition: 'all 0.2s' }} 
-              title={isAnonMode ? "Anonymous Mode ON" : "Anonymous Mode OFF"}
-            >
-              {Vectors.Ghost}
-            </button>
-
             <div style={{ position: 'relative' }}>
               <button onClick={() => setMenuOpen((v) => !v)} style={{ border: 'none', background: 'transparent', color: 'var(--ink)', cursor: 'pointer', padding: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '50%' }}>
                 {Vectors.ThreeDots}
@@ -961,13 +968,6 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
             </div>
           </div>
         </header>
-      )}
-
-      {dbErrorDetails && (
-        <div style={{ background: 'rgba(255, 59, 48, 0.12)', borderBottom: '1px solid rgba(255, 59, 48, 0.3)', padding: '8px 16px', color: '#ff3b30', fontSize: 12, fontFamily: 'monospace', zIndex: 25, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-          <span><strong>DB Error:</strong> {dbErrorDetails}</span>
-          <button onClick={() => setDbErrorDetails(null)} style={{ background: 'transparent', border: 'none', color: '#ff3b30', cursor: 'pointer', fontWeight: 700 }}>✕</button>
-        </div>
       )}
 
       {isSearching && (
@@ -1178,7 +1178,24 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
         <form onSubmit={handleSend} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px', background: 'var(--glass-strong)', backdropFilter: 'blur(30px) saturate(200%)', borderTop: replyingTo ? 'none' : '1px solid var(--glass-border)', position: 'relative', zIndex: 20 }}>
           <EmojiGifPicker open={pickerOpen} onClose={() => setPickerOpen(false)} onEmoji={handleEmojiPicked} onMedia={handleMediaPicked} />
           <button type="button" onClick={() => fileInputRef.current?.click()} disabled={uploading || cooldownPercent > 0 || selectedMessages.length > 0} style={{ width: 36, height: 36, borderRadius: '50%', border: 'none', background: 'transparent', color: 'var(--dim)', cursor: 'pointer', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{uploading ? Vectors.Spinner : Vectors.Attach}</button>
-          <input ref={fileInputRef} type="file" hidden onChange={handleAttachmentSelected} />
+          <input
+            ref={fileInputRef}
+            type="file"
+            onChange={handleAttachmentSelected}
+            style={{
+              position: 'absolute',
+              width: 1,
+              height: 1,
+              padding: 0,
+              margin: -1,
+              overflow: 'hidden',
+              clip: 'rect(0,0,0,0)',
+              whiteSpace: 'nowrap',
+              border: 0,
+              opacity: 0,
+              pointerEvents: 'none',
+            }}
+          />
           <button type="button" onClick={() => setPickerOpen((v) => !v)} disabled={uploading || selectedMessages.length > 0} style={{ width: 36, height: 36, borderRadius: '50%', border: 'none', background: pickerOpen ? 'var(--glass-border)' : 'transparent', color: pickerOpen ? 'var(--blue)' : 'var(--dim)', cursor: 'pointer', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{Vectors.Smiley}</button>
           <input type="text" value={text} onChange={(e) => setText(e.target.value)} onFocus={() => setPickerOpen(false)} placeholder={uploading ? 'Uploading media...' : 'Message'} disabled={uploading || selectedMessages.length > 0} style={{ flex: 1, border: '1px solid var(--glass-border)', outline: 'none', background: 'var(--glass)', borderRadius: 24, padding: '12px 18px', fontSize: 15, color: 'var(--ink)', transition: 'border-color 0.2s' }} />
           <SendButton canSend={!!text.trim()} sending={sending || uploading} cooldownPercent={cooldownPercent} />
