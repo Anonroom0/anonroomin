@@ -2,6 +2,7 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
 import './styles/tokens.css';
+import './styles/animations.css';
 
 // Register the Service Worker for Push Notifications
 if ('serviceWorker' in navigator) {
@@ -13,6 +14,23 @@ if ('serviceWorker' in navigator) {
       .catch(err => {
         console.log('ServiceWorker registration failed: ', err);
       });
+
+    // Optional enhancement hook: if public/sw.js's notificationclick handler
+    // ever posts a message back to an already-focused client (instead of
+    // just calling client.focus()), this lets the app route client-side
+    // rather than relying on a full navigation to notification.data.url.
+    // NOTE: this is inert today — public/sw.js's notificationclick handler
+    // (its `client.url == url && 'focus' in client` branch) does not yet
+    // call client.postMessage(...) there, so this listener currently never
+    // fires. It would need a matching `client.postMessage({ type: 'notification-navigate', url })`
+    // added to that branch in sw.js to actually use this.
+    navigator.serviceWorker.addEventListener('message', (event) => {
+      if (event.data?.type === 'notification-navigate' && event.data?.url) {
+        // Hook point for client-side routing (e.g. history.pushState +
+        // whatever re-resolves App.jsx's top-level route) once sw.js
+        // actually sends this message.
+      }
+    });
   });
 }
 

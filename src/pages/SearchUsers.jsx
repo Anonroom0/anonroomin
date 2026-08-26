@@ -1,27 +1,28 @@
 /**
  * ============================================================================
- * SEARCH USERS DIRECTORY (APPLE LIQUID UI & TELEGRAM PHYSICS)
+ * SEARCH USERS DIRECTORY (GLASS UI)
  * ============================================================================
  * This component powers the realtime user directory search. It has been
- * strictly modified to act as a "dumb" list renderer that receives its
- * search query directly from the master Home.jsx sidebar, eliminating
- * the double search bar issue completely.
+ * modified to act as a "dumb" list renderer that receives its search query 
+ * directly from the master Home.jsx sidebar.
  * 
- * Corrected Features Included Inline:
- * - Removed internal input (Fixes double search bar overlap)
- * - Intelligent `@` stripping (allows users to search "@username" seamlessly)
- * - Debounced Network Requests (300ms) with memory leak cleanup
- * - Shimmering Skeleton Matrix for loading states
- * - Apple Liquid Hover Physics on list items
- * - Strict Admin Override (Gold Badges, Hidden Names)
- * - Massive Inline Vector Library (Zero external loading flashes)
+ * CHANGES IN THIS PASS:
+ * - Restyled entirely to the new dark-glass aesthetic using token variables.
+ * - Replaced local SearchSkeletonLoader with the shared <MessageSkeleton variant="search-row" />.
+ * - Replaced local LiquidAvatar with the shared <LiquidAvatar />.
+ * - Migrated animations to use the shared classes (.pop-in, .chat-row).
+ * - Kept all existing search/debounce logic untouched.
  * 
- * Dependencies: React, Supabase
+ * Dependencies: React, Supabase, Shared Components
  * ============================================================================
  */
 
-import React, { useEffect, useState, useMemo } from 'react';
+import React, { useEffect, useState } from 'react';
 import supabase from '../lib/supabaseClient';
+
+// Shared Components
+import LiquidAvatar from '../components/LiquidAvatar';
+import MessageSkeleton from '../components/MessageSkeleton';
 
 // ============================================================================
 // 1. CONSTANTS & CONFIGURATION
@@ -30,21 +31,13 @@ const ADMIN_DISPLAY_NAME = 'ADMIN';
 const DEBOUNCE_MS = 300;
 
 // ============================================================================
-// 2. MASSIVE INLINE SVG VECTOR LIBRARY (APPLE / TELEGRAM STYLE)
+// 2. INLINE SVG VECTOR LIBRARY
 // ============================================================================
-// We use inline SVGs to guarantee crisp vector rendering on all displays
-// and to avoid external loading flashes or "worst animations".
 const Vectors = {
   Search: (
     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
       <circle cx="11" cy="11" r="8" />
       <line x1="21" y1="21" x2="16.65" y2="16.65" />
-    </svg>
-  ),
-  User: (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-      <circle cx="12" cy="7" r="4" />
     </svg>
   ),
   AdminShield: (
@@ -63,37 +56,12 @@ const Vectors = {
       <line x1="21" y1="21" x2="16.65" y2="16.65" />
       <line x1="8" y1="11" x2="14" y2="11" />
     </svg>
-  ),
-  Spinner: (
-    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="spinner-animation">
-      <line x1="12" y1="2" x2="12" y2="6" />
-      <line x1="12" y1="18" x2="12" y2="22" />
-      <line x1="4.93" y1="4.93" x2="7.76" y2="7.76" />
-      <line x1="16.24" y1="16.24" x2="19.07" y2="19.07" />
-      <line x1="2" y1="12" x2="6" y2="12" />
-      <line x1="18" y1="12" x2="22" y2="12" />
-      <line x1="4.93" y1="19.07" x2="7.76" y2="16.24" />
-      <line x1="16.24" y1="7.76" x2="19.07" y2="4.93" />
-    </svg>
   )
 };
 
 // ============================================================================
-// 3. UTILITY FUNCTIONS & STYLES
+// 3. UTILITY FUNCTIONS
 // ============================================================================
-
-/**
- * Gets capitalized initials for avatar generation.
- * Handles single names, double names, and trailing spaces securely.
- */
-function getInitials(username) {
-  if (!username) return '?';
-  const parts = username.trim().split(' ');
-  if (parts.length >= 2) {
-    return (parts[0][0] + parts[1][0]).toUpperCase();
-  }
-  return username.slice(0, 2).toUpperCase();
-}
 
 /**
  * Enforces strict global admin overrides.
@@ -104,144 +72,19 @@ function resolveIdentity(user) {
   if (user?.is_admin) {
     return { 
       name: ADMIN_DISPLAY_NAME, 
-      avatarUrl: null, 
-      isAdmin: true 
+      avatar_url: null, 
+      is_admin: true 
     };
   }
   return { 
     name: user?.username || 'Unknown User', 
-    avatarUrl: user?.avatar_url || null, 
-    isAdmin: false 
+    avatar_url: user?.avatar_url || null, 
+    is_admin: false 
   };
 }
 
-/**
- * Global Keyframes for List Physics and Skeletons
- * Rendered inline to guarantee availability without external CSS linking
- */
-const GlobalKeyframes = () => (
-  <style>{`
-    @keyframes list-pop-in {
-      0% { opacity: 0; transform: scale(0.96) translateY(10px); }
-      100% { opacity: 1; transform: scale(1) translateY(0); }
-    }
-    @keyframes shimmer {
-      0% { background-position: -1000px 0; }
-      100% { background-position: 1000px 0; }
-    }
-    .shimmer-box {
-      animation: shimmer 2s infinite linear;
-      background: linear-gradient(to right, rgba(0,0,0,0.04) 4%, rgba(0,0,0,0.08) 25%, rgba(0,0,0,0.04) 36%);
-      background-size: 1000px 100%;
-    }
-    .dark .shimmer-box {
-      background: linear-gradient(to right, rgba(255,255,255,0.04) 4%, rgba(255,255,255,0.08) 25%, rgba(255,255,255,0.04) 36%);
-      background-size: 1000px 100%;
-    }
-    .spinner-animation {
-      animation: spin 1s linear infinite;
-    }
-    @keyframes spin {
-      100% { transform: rotate(360deg); }
-    }
-    .search-row {
-      transition: all 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
-    }
-    .search-row:active {
-      transform: scale(0.97);
-    }
-  `}</style>
-);
-
 // ============================================================================
-// 4. UI SUB-COMPONENTS
-// ============================================================================
-
-/**
- * Highly detailed skeleton loader for Search results.
- * Staggers the opacity to create a depth-of-field loading effect.
- */
-function SearchSkeletonLoader() {
-  const skeletons = Array(6).fill(0);
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 4, width: '100%', padding: '0 8px' }}>
-      {skeletons.map((_, i) => (
-        <div 
-          key={i} 
-          style={{ 
-            display: 'flex', alignItems: 'center', gap: 14, 
-            padding: '10px 8px', opacity: 1 - (i * 0.12) 
-          }}
-        >
-          {/* Avatar Skeleton */}
-          <div className="shimmer-box" style={{ width: 48, height: 48, borderRadius: '50%' }} />
-          
-          {/* Text Skeletons */}
-          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 8 }}>
-            <div className="shimmer-box" style={{ width: '45%', height: 14, borderRadius: 4 }} />
-            <div className="shimmer-box" style={{ width: '25%', height: 12, borderRadius: 4 }} />
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-/**
- * Avatar Renderer enforcing Admin rules and Apple gradients.
- * Generates identical deterministic colors based on the username hash.
- */
-function LiquidAvatar({ identity, size = 48 }) {
-  const containerStyle = {
-    width: size, height: size, borderRadius: '50%', flexShrink: 0,
-    display: 'flex', alignItems: 'center', justifyContent: 'center',
-    overflow: 'hidden', boxShadow: 'inset 0 0 0 1px rgba(0,0,0,0.05)',
-  };
-
-  // Admin Override
-  if (identity.isAdmin) {
-    return (
-      <div style={{ 
-        ...containerStyle, 
-        background: 'linear-gradient(135deg, #FFD700 0%, #FFA500 100%)', 
-        color: '#fff', fontSize: size * 0.35, fontWeight: 800, letterSpacing: 0.5 
-      }}>
-        ADM
-      </div>
-    );
-  }
-
-  // Image Override
-  if (identity.avatarUrl) {
-    return (
-      <div style={containerStyle}>
-        <img src={identity.avatarUrl} alt={identity.name} style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-      </div>
-    );
-  }
-
-  // Liquid Gradient Hash
-  const colors = [
-    'linear-gradient(135deg, #ff5e62 0%, #ff9966 100%)',
-    'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
-    'linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)',
-    'linear-gradient(135deg, #fa709a 0%, #fee140 100%)',
-    'linear-gradient(135deg, #a18cd1 0%, #fbc2eb 100%)'
-  ];
-  const colorIndex = (identity.name || '').length % colors.length;
-
-  return (
-    <div style={{ 
-      ...containerStyle, background: colors[colorIndex], 
-      color: '#ffffff', fontWeight: 700, fontSize: size * 0.4 
-    }}>
-      {getInitials(identity.name)}
-    </div>
-  );
-}
-
-// ============================================================================
-// 5. MAIN COMPONENT
+// 4. MAIN COMPONENT
 // ============================================================================
 
 /**
@@ -261,7 +104,7 @@ export default function SearchUsers({ externalTerm, onSelectUser }) {
   // NETWORK & DEBOUNCE LOGIC
   // --------------------------------------------------------------------------
   useEffect(() => {
-    // NEW: Safely trim the term AND strip out any leading '@' symbol 
+    // Safely trim the term AND strip out any leading '@' symbol 
     // so users can search for "@username" seamlessly.
     const trimmed = externalTerm?.trim().replace(/^@/, '');
 
@@ -310,7 +153,6 @@ export default function SearchUsers({ externalTerm, onSelectUser }) {
   // --------------------------------------------------------------------------
   return (
     <div style={{ display: 'flex', flexDirection: 'column', width: '100%' }}>
-      <GlobalKeyframes />
 
       {/* 
         ======================================================================
@@ -324,10 +166,10 @@ export default function SearchUsers({ externalTerm, onSelectUser }) {
             justifyContent: 'center', padding: '60px 20px', color: 'var(--dim)' 
           }}
         >
-          <div style={{ marginBottom: 16, opacity: 0.8, animation: 'list-pop-in 0.6s cubic-bezier(0.2, 0.8, 0.2, 1)' }}>
+          <div className="pop-in" style={{ marginBottom: 16, opacity: 0.8 }}>
             {Vectors.Search}
           </div>
-          <p style={{ margin: 0, fontSize: 16, fontWeight: 600 }}>Global Search</p>
+          <p style={{ margin: 0, fontSize: 16, fontWeight: 600, color: 'var(--paper)' }}>Global Search</p>
           <p style={{ margin: '6px 0 0 0', fontSize: 14, textAlign: 'center', opacity: 0.8, lineHeight: 1.4 }}>
             Find users by username to start<br/>a secure private chat.
           </p>
@@ -339,7 +181,7 @@ export default function SearchUsers({ externalTerm, onSelectUser }) {
         STATE: LOADING (Debouncing or Fetching)
         ======================================================================
       */}
-      {loading && <SearchSkeletonLoader />}
+      {loading && <MessageSkeleton variant="search-row" count={6} />}
 
       {/* 
         ======================================================================
@@ -348,16 +190,16 @@ export default function SearchUsers({ externalTerm, onSelectUser }) {
       */}
       {externalTerm?.trim() && searched && !loading && results.length === 0 && (
         <div 
+          className="pop-in"
           style={{ 
             display: 'flex', flexDirection: 'column', alignItems: 'center', 
-            justifyContent: 'center', padding: '60px 20px', color: 'var(--dim)', 
-            animation: 'list-pop-in 0.4s cubic-bezier(0.2, 0.8, 0.2, 1)' 
+            justifyContent: 'center', padding: '60px 20px', color: 'var(--dim)'
           }}
         >
           <div style={{ marginBottom: 16 }}>{Vectors.EmptyState}</div>
-          <p style={{ margin: 0, fontSize: 16, fontWeight: 600 }}>No results found</p>
+          <p style={{ margin: 0, fontSize: 16, fontWeight: 600, color: 'var(--paper)' }}>No results found</p>
           <p style={{ margin: '6px 0 0 0', fontSize: 14, textAlign: 'center', opacity: 0.8, lineHeight: 1.4 }}>
-            Nobody found matching<br/>"<span style={{ fontWeight: 700 }}>{externalTerm.trim()}</span>".
+            Nobody found matching<br/>"<span style={{ fontWeight: 700, color: 'var(--paper)' }}>{externalTerm.trim()}</span>".
           </p>
         </div>
       )}
@@ -390,19 +232,18 @@ export default function SearchUsers({ externalTerm, onSelectUser }) {
               <button
                 key={user.id}
                 onClick={() => onSelectUser(user.id)}
-                className="search-row"
+                className="chat-row pop-in"
                 style={{
                   display: 'flex', alignItems: 'center', gap: 14, padding: '10px 12px',
                   border: 'none', background: 'transparent', textAlign: 'left', cursor: 'pointer',
                   width: '100%', borderRadius: 16,
-                  animation: 'list-pop-in 0.4s cubic-bezier(0.2, 0.8, 0.2, 1) both',
                   animationDelay
                 }}
-                onMouseEnter={(e) => e.currentTarget.style.background = 'rgba(0,0,0,0.04)'}
+                onMouseEnter={(e) => e.currentTarget.style.background = 'var(--glass-white)'}
                 onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
               >
                 {/* Avatar Column */}
-                <LiquidAvatar identity={identity} />
+                <LiquidAvatar identity={identity} kind="user" size={48} />
                 
                 {/* User Info Column */}
                 <div 
@@ -415,20 +256,20 @@ export default function SearchUsers({ externalTerm, onSelectUser }) {
                     <span 
                       style={{ 
                         fontSize: 16, fontWeight: 600, 
-                        color: identity.isAdmin ? '#FF8C00' : 'var(--ink)',
+                        color: identity.is_admin ? '#FFD700' : 'var(--paper)',
                         whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis'
                       }}
                     >
                       {identity.name}
                     </span>
                     {/* Inject Gold Shield Vector next to name if Admin */}
-                    {identity.isAdmin && (
-                      <span style={{ color: '#FF8C00', display: 'flex', alignItems: 'center' }}>
+                    {identity.is_admin && (
+                      <span style={{ color: '#FFD700', display: 'flex', alignItems: 'center' }}>
                         {Vectors.AdminShield}
                       </span>
                     )}
                   </div>
-                  <span style={{ fontSize: 13, color: 'var(--blue)', fontWeight: 500 }}>
+                  <span style={{ fontSize: 13, color: 'var(--dim)', fontWeight: 500 }}>
                     Tap to view profile
                   </span>
                 </div>

@@ -1,153 +1,115 @@
 /**
  * ============================================================================
- * ROOT APP WRAPPER & LOCATION GATE (SUBDOMAIN SAFEGUARD FIX)
+ * ROOT APP WRAPPER & ROUTE DISPATCH
+ * ============================================================================
+ * Top-level component: mounts the global toast host, the auth provider, and
+ * dispatches to one of three top-level views based on the current URL —
+ * <Home/> (default), <QuestionThread/> (/q/<id>), or <ConfessionsFeed/>
+ * (/confessions) — via src/lib/subdomain.js's getQuestionIdFromPath() /
+ * isConfessionsFeedPath(). Both of the latter two must be reachable by a
+ * fully anonymous, unauthenticated visitor, so they're dispatched the same
+ * way <Home/> is: never gated behind a login prompt, and never gated behind
+ * location permission.
+ *
+ * CHANGES IN THIS PASS:
+ * - LocationGate's BLOCKING behavior is gone entirely: no more 'checking' /
+ *   'denied' full-screen takeover states, and no more forced
+ *   navigator.geolocation.getCurrentPosition() call on mount. Whatever the
+ *   route resolves to now renders immediately, regardless of location
+ *   permission state.
+ * - Replaced with <LocationBanner/>: a small, dismissible, non-blocking
+ *   glass-panel banner that only requests location when the visitor taps
+ *   "Allow". "Not now" just hides it and remembers that dismissal in
+ *   localStorage so it doesn't re-nag on every load.
+ * - The old inline cookie/visitor-id duplication is gone; location-grant
+ *   bookkeeping now goes through src/lib/visitorId.js's getCookie/setCookie/
+ *   getOrCreateVisitorId() instead.
+ * - The subdomain -> root "bounce to root domain just to ask for location"
+ *   redirect is deleted outright. A group subdomain (or any route) now
+ *   renders its real content immediately; the location cookie is shared
+ *   across subdomains simply because setCookie() (see visitorId.js) already
+ *   scopes it to the shared parent domain, so granting it anywhere on
+ *   *.anonroom.in still covers the whole app without a redirect round-trip.
+ * - Added routing branches for /q/<id> (QuestionThread) and /confessions
+ *   (ConfessionsFeed).
+ *
+ * Dependencies: React, AuthProvider, Supabase, ToastContainer,
+ * src/lib/subdomain.js, src/lib/visitorId.js, Home, QuestionThread,
+ * ConfessionsFeed
  * ============================================================================
  */
 
 import React, { useState, useEffect } from 'react';
 import { AuthProvider } from './lib/authContext';
 import Home from './pages/Home';
+import QuestionThread from './pages/QuestionThread';
+import ConfessionsFeed from './pages/ConfessionsFeed';
 import supabase from './lib/supabaseClient';
 import ToastContainer from './components/ToastContainer';
+import { getQuestionIdFromPath, isConfessionsFeedPath } from './lib/subdomain';
+import { getCookie, setCookie, getOrCreateVisitorId } from './lib/visitorId';
 import './styles/tokens.css';
 
+const LOCATION_VERIFIED_COOKIE = 'anonroom_location_verified';
+const LOCATION_BANNER_DISMISSED_KEY = 'anonroom_location_banner_dismissed';
+// Matches the storage key visitorId.js writes internally — read directly
+// here (rather than adding a new export) purely to answer "does a visitor
+// id already exist" so the metadata row below is only inserted once.
+const VISITOR_ID_STORAGE_KEY = 'anonroom_visitor_id';
+
 const Vectors = {
-  Spinner: (
-    <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-      <line x1="12" y1="2" x2="12" y2="6" />
-      <line x1="12" y1="18" x2="12" y2="22" />
-      <line x1="4.93" y1="4.93" x2="7.76" y2="7.76" />
-      <line x1="16.24" y1="16.24" x2="19.07" y2="19.07" />
-      <line x1="2" y1="12" x2="6" y2="12" />
-      <line x1="18" y1="12" x2="22" y2="12" />
-      <line x1="4.93" y1="19.07" x2="7.76" y2="16.24" />
-      <line x1="16.24" y1="7.76" x2="19.07" y2="4.93" />
-    </svg>
-  ),
-  LocationOff: (
-    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M16.2 16.2A8.43 8.43 0 0 0 19 11c0-4.4-3.6-8-8-8a8.43 8.43 0 0 0-5.2 2.8" />
-      <path d="M12 11a3 3 0 0 1-3-3" />
-      <path d="M4.6 4.6l14.8 14.8" />
-      <path d="M21 21l-18-18" />
+  Pin: (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0z" />
+      <circle cx="12" cy="10" r="3" />
     </svg>
   )
 };
 
 // ----------------------------------------------------------------------------
-// Cookie helpers (BUG 1 fix)
+// LOCATION BANNER (non-blocking)
 // ----------------------------------------------------------------------------
-// localStorage is scoped per-origin, so a subdomain (general.anonroom.in)
-// never shares storage with the root domain (anonroom.in). That caused the
-// infinite redirect loop: the root domain would verify location and set a
-// localStorage flag, but the subdomain could never see it and would keep
-// bouncing the user back to root forever.
-//
-// The fix is to make cookies (scoped to a shared parent domain) the source
-// of truth, since cookies with an explicit `domain` attribute are shared
-// across all subdomains automatically. This mirrors the exact same
-// domain-detection pattern already used in src/lib/supabaseClient.js,
-// duplicated inline here so this file stays self-contained.
-
-function getCookieDomain() {
-  const hostname = window.location.hostname;
-  const isIPv4 = /^\d{1,3}(\.\d{1,3}){3}$/.test(hostname);
-
-  if (hostname.includes('anonroom.in')) {
-    return '.anonroom.in';
-  }
-  if (hostname === 'localhost' || isIPv4) {
-    return hostname;
-  }
-  // Fallback for any other environment (e.g. preview deployments):
-  // scope the cookie to the exact host rather than guessing a parent domain.
-  return hostname;
-}
-
-function setCookie(name, value, days = 365) {
-  const domain = getCookieDomain();
-  const maxAge = days * 24 * 60 * 60;
-  document.cookie = `${name}=${encodeURIComponent(value)}; path=/; domain=${domain}; max-age=${maxAge}; SameSite=Lax; Secure`;
-}
-
-function getCookie(name) {
-  const match = document.cookie.match(new RegExp('(?:^|; )' + name + '=([^;]*)'));
-  return match ? decodeURIComponent(match[1]) : null;
-}
-
-function LocationGate({ children }) {
-  const [status, setStatus] = useState('checking'); // 'checking', 'denied', 'allowed'
+// Renders nothing once the visitor has either granted location or
+// dismissed the banner (this session's localStorage flag), and never
+// blocks the route underneath it from rendering while it decides.
+function LocationBanner() {
+  const [visible, setVisible] = useState(false);
+  const [requesting, setRequesting] = useState(false);
 
   useEffect(() => {
-    const hostname = window.location.hostname;
-    const parts = hostname.split('.');
-    const isSubdomain = parts.length > 2 && parts[0] !== 'www';
+    const alreadyGranted = getCookie(LOCATION_VERIFIED_COOKIE) === 'true';
+    const alreadyDismissed = localStorage.getItem(LOCATION_BANNER_DISMISSED_KEY) === 'true';
+    setVisible(!alreadyGranted && !alreadyDismissed);
+  }, []);
 
-    const urlParams = new URLSearchParams(window.location.search);
-    const redirectParam = urlParams.get('redirect');
+  function handleDismiss() {
+    localStorage.setItem(LOCATION_BANNER_DISMISSED_KEY, 'true');
+    setVisible(false);
+  }
 
-    // Cookie is the source of truth (shared across root + subdomains).
-    // We still also write to localStorage below as a harmless bonus, but
-    // never read it as the deciding factor anymore.
-    const hasGrantedLocation = getCookie('anonroom_location_verified') === 'true';
-
-    // If we just got verified on the root domain and there's a redirect query parameter, bounce back immediately!
-    if (redirectParam && hasGrantedLocation) {
-      window.location.href = decodeURIComponent(redirectParam);
-      return;
-    }
-
-    if (hasGrantedLocation) {
-      setStatus('allowed');
-      return;
-    }
-
-    // If on a subdomain and location isn't verified yet, redirect to root domain with the target URL in query params.
-    // Loop guard: if we've already attempted this redirect once in this
-    // browser session (e.g. cookies are blocked so verification can never
-    // "stick"), don't redirect again — fail safely into the denied state
-    // instead of bouncing back and forth forever.
-    if (isSubdomain && !hasGrantedLocation) {
-      if (sessionStorage.getItem('anonroom_redirect_attempted') === 'true') {
-        setStatus('denied');
-        return;
-      }
-
-      sessionStorage.setItem('anonroom_redirect_attempted', 'true');
-
-      const rootDomain = parts.slice(-2).join('.');
-      const protocol = window.location.protocol;
-      const port = window.location.port ? `:${window.location.port}` : '';
-      const currentUrl = encodeURIComponent(window.location.href);
-
-      window.location.href = `${protocol}//${rootDomain}${port}/?redirect=${currentUrl}`;
-      return;
-    }
-
+  function handleAllow() {
     if (!('geolocation' in navigator)) {
-      setStatus('denied');
+      // No geolocation support at all: nothing to request, just stop nagging.
+      handleDismiss();
       return;
     }
 
-    // Request Location Permission on Root Domain
+    setRequesting(true);
+
     navigator.geolocation.getCurrentPosition(
       async (pos) => {
-        setCookie('anonroom_location_verified', 'true');
-        localStorage.setItem('anonroom_location_verified', 'true'); // harmless bonus, not the source of truth
-        setStatus('allowed');
+        setCookie(LOCATION_VERIFIED_COOKIE, 'true');
+        localStorage.setItem(LOCATION_VERIFIED_COOKIE, 'true'); // harmless bonus, not the source of truth
 
-        let visitorId = getCookie('anonroom_visitor_id') || localStorage.getItem('anonroom_visitor_id');
-        const isNewVisitor = !visitorId;
+        // Determine "new visitor" BEFORE minting/reading via
+        // getOrCreateVisitorId(), so the metadata insert below only ever
+        // fires once per visitor, exactly like the old inline logic did.
+        const hadVisitorId = Boolean(
+          getCookie(VISITOR_ID_STORAGE_KEY) || localStorage.getItem(VISITOR_ID_STORAGE_KEY)
+        );
+        const visitorId = getOrCreateVisitorId();
 
-        if (isNewVisitor) {
-          visitorId = crypto.randomUUID();
-        }
-
-        // Keep the cookie (shared across subdomains) and localStorage in sync either way.
-        setCookie('anonroom_visitor_id', visitorId);
-        localStorage.setItem('anonroom_visitor_id', visitorId);
-
-        if (isNewVisitor) {
+        if (!hadVisitorId) {
           await supabase.from('visitor_metadata').insert([{
             visitor_id: visitorId,
             latitude: pos.coords.latitude,
@@ -159,67 +121,132 @@ function LocationGate({ children }) {
           }]);
         }
 
-        // If a redirect param exists in the root domain query string, bounce back now!
-        if (redirectParam) {
-          window.location.href = decodeURIComponent(redirectParam);
-        }
+        setRequesting(false);
+        setVisible(false);
       },
       (err) => {
-        console.warn("Location permission denied:", err);
-        setStatus('denied');
+        console.warn('Location permission denied or unavailable:', err);
+        setRequesting(false);
+        // Denying isn't the same as dismissing — leave the banner up so the
+        // visitor can still tap "Not now" or retry "Allow" later, rather
+        // than silently persisting a denial we never asked to remember.
       },
       { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
     );
-  }, []);
-
-  if (status === 'checking') {
-    return (
-      <div style={{ display: 'flex', flexDirection: 'column', height: '100dvh', width: '100vw', alignItems: 'center', justifyContent: 'center', background: 'var(--bg)', color: 'var(--ink)' }}>
-        <style>{`@keyframes spin { 100% { transform: rotate(360deg); } } .loader-spin { animation: spin 1s linear infinite; }`}</style>
-        <div className="loader-spin" style={{ color: 'var(--blue)' }}>{Vectors.Spinner}</div>
-        <p style={{ marginTop: 16, fontWeight: 600, fontSize: 15 }}>Verifying Region...</p>
-      </div>
-    );
   }
 
-  if (status === 'denied') {
-    return (
-      <div style={{ display: 'flex', flexDirection: 'column', height: '100dvh', width: '100vw', alignItems: 'center', justifyContent: 'center', background: 'var(--bg)', color: 'var(--ink)', padding: 24, textAlign: 'center' }}>
-        <div style={{ color: 'var(--red)', marginBottom: 20 }}>{Vectors.LocationOff}</div>
-        <h2 style={{ margin: '0 0 12px 0', fontSize: 24, fontWeight: 800 }}>Location Access Required</h2>
-        <p style={{ margin: '0 0 24px 0', color: 'var(--dim)', lineHeight: 1.5, fontSize: 15, maxWidth: 340 }}>
-          Anonroom requires location permission to verify your region. 
-          <br/><br/>
-          <strong style={{ color: 'var(--ink)' }}>If you previously clicked Block:</strong> Tap the lock/settings icon in your browser's address bar, reset permissions, and refresh the page.
+  if (!visible) return null;
+
+  return (
+    <div
+      className="pop-in"
+      style={{
+        position: 'fixed',
+        left: 16,
+        right: 16,
+        bottom: 16,
+        zIndex: 5000,
+        maxWidth: 420,
+        margin: '0 auto',
+        display: 'flex',
+        alignItems: 'center',
+        gap: 12,
+        padding: '14px 16px',
+        borderRadius: 20,
+        background: 'var(--glass-white)',
+        border: '1px solid var(--glass-border)',
+        backdropFilter: 'blur(20px) saturate(115%)',
+        WebkitBackdropFilter: 'blur(20px) saturate(115%)',
+        boxShadow: '0 6px 18px rgba(0,0,0,0.35)',
+        color: 'var(--paper)'
+      }}
+    >
+      <div
+        style={{
+          flexShrink: 0,
+          width: 36,
+          height: 36,
+          borderRadius: '50%',
+          background: 'var(--glass-border)',
+          color: 'var(--signal)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center'
+        }}
+      >
+        {Vectors.Pin}
+      </div>
+
+      <div style={{ flex: 1, minWidth: 0 }}>
+        <p style={{ margin: 0, fontSize: 14, fontWeight: 600, lineHeight: 1.3 }}>
+          Enable location for a better experience
         </p>
-        <button 
-          onClick={() => {
-            if (navigator.permissions && navigator.permissions.query) {
-              navigator.permissions.query({ name: 'geolocation' }).then((result) => {
-                if (result.state === 'denied') {
-                  alert("Location is blocked in your browser settings. Please click the lock icon 🔒 next to the URL, clear permissions, and reload.");
-                } else {
-                  window.location.reload();
-                }
-              });
-            } else {
-              window.location.reload();
-            }
-          }} 
-          style={{ background: 'var(--blue)', color: '#fff', border: 'none', padding: '14px 28px', borderRadius: 24, fontWeight: 700, fontSize: 16, cursor: 'pointer', boxShadow: '0 8px 24px rgba(10,132,255,0.3)' }}
+      </div>
+
+      <div style={{ display: 'flex', gap: 8, flexShrink: 0 }}>
+        <button
+          onClick={handleDismiss}
+          disabled={requesting}
+          style={{
+            background: 'transparent',
+            border: 'none',
+            color: 'var(--dim)',
+            fontWeight: 600,
+            fontSize: 13,
+            padding: '8px 10px',
+            borderRadius: 14,
+            cursor: requesting ? 'default' : 'pointer'
+          }}
         >
-          Try Again / Check Settings
+          Not now
+        </button>
+        <button
+          onClick={handleAllow}
+          disabled={requesting}
+          style={{
+            background: 'var(--ember)',
+            border: 'none',
+            color: '#fff',
+            fontWeight: 700,
+            fontSize: 13,
+            padding: '8px 16px',
+            borderRadius: 14,
+            cursor: requesting ? 'default' : 'pointer',
+            opacity: requesting ? 0.7 : 1
+          }}
+        >
+          {requesting ? 'Checking…' : 'Allow'}
         </button>
       </div>
-    );
+    </div>
+  );
+}
+
+// ----------------------------------------------------------------------------
+// TOP-LEVEL ROUTE DISPATCH
+// ----------------------------------------------------------------------------
+// Plain reads of window.location, resolved once per full page load — the
+// same "no client router" model the rest of the app uses (see
+// getGroupSlugFromHost() / getDmUsernameFromPath() in Home.jsx). /q/<id> and
+// /confessions both need to be visible to a signed-out visitor, so they're
+// dispatched at this same top level rather than nested inside any
+// login-required or location-gated branch.
+function resolveTopLevelView() {
+  if (isConfessionsFeedPath()) {
+    return <ConfessionsFeed />;
   }
 
-  return children;
+  const questionId = getQuestionIdFromPath();
+  if (questionId) {
+    return <QuestionThread questionId={questionId} />;
+  }
+
+  return <Home />;
 }
 
 export default function App() {
   // ----------------------------------------------------------------------
-  // BUG 2 fix: JS-level pinch-zoom prevention.
+  // JS-level pinch-zoom prevention.
   // ----------------------------------------------------------------------
   // `user-scalable=no` in the viewport meta tag is ignored by some
   // browsers (notably iOS Safari) for accessibility reasons, so pinch
@@ -249,14 +276,13 @@ export default function App() {
 
   return (
     <>
-      {/* BUG 3 fix: mounted once, outside/above LocationGate, so toasts can
-          render even during the "Verifying Region..." or "denied" screens. */}
+      {/* Mounted once, above everything else, so toasts can render no
+          matter which top-level view is active. */}
       <ToastContainer />
       <AuthProvider>
-        <LocationGate>
-          <Home />
-        </LocationGate>
+        {resolveTopLevelView()}
       </AuthProvider>
+      <LocationBanner />
     </>
   );
 }

@@ -1,17 +1,19 @@
 /**
  * ============================================================================
- * MASTER LAYOUT (APPLE LIQUID UI & TELEGRAM PHYSICS)
+ * MASTER LAYOUT (GLASS UI)
  * ============================================================================
- * This component handles the core desktop/mobile master-detail routing.
+ * This component handles the core desktop/mobile master-detail routing and
+ * rendering the primary user interfaces.
  *
  * CHANGES IN THIS PASS:
- * - Custom iOS-style Pull-to-Refresh: Spinner slides from behind the search header.
- * - Push Notification Prompt: Asks users for notification permissions on first load.
- * - Locked homescreen to be completely unscrollable/unzoomable (100dvh, overflow hidden).
- * - Full Sidebar Unread Mention Badges (`@`) for groups and DM rows.
- * - All code fully unrolled and un-compressed.
+ * - Restyled entirely to the new dark-glass aesthetic using token variables.
+ * - Split sidebar into "Chats" and "Ask Me" tabs.
+ * - Added StoriesBar integration below the search input.
+ * - Replaced local skeleton and avatar with consolidated shared components.
+ * - Replaced inline push setup with `src/lib/pushNotifications.js`.
+ * - Added "Ask Me" tab with QuestionCard mapping and inline QuestionThread.
  *
- * Dependencies: React, Supabase, AuthContext
+ * Dependencies: React, Supabase, AuthContext, Shared Components
  * ============================================================================
  */
 
@@ -26,15 +28,27 @@ import {
   buildDmPath,
   ROOT_PATH,
 } from '../lib/subdomain';
+import { subscribeToPush } from '../lib/pushNotifications';
 
 import AuthModal from './AuthModal';
 import SearchUsers from './SearchUsers';
 import ProfileCard from './ProfileCard';
 import DirectMessages from './DirectMessages';
-import GroupChat from './GroupChat'; 
+import GroupChat from './GroupChat';
 import EditProfile from './EditProfile';
 
+// Shared Components
+import LiquidAvatar from '../components/LiquidAvatar';
+import MessageSkeleton from '../components/MessageSkeleton';
+import StoriesBar from '../components/StoriesBar';
+import StoryViewer from '../components/StoryViewer';
+import CreateQuestionModal from '../components/CreateQuestionModal';
+import QuestionCard from '../components/QuestionCard';
+import QuestionThread from '../components/QuestionThread';
+import ShareStorySheet from '../components/ShareStorySheet';
+
 import '../styles/tokens.css';
+import '../styles/animations.css';
 
 // ============================================================================
 // 1. CONSTANTS & CONFIGURATION
@@ -43,7 +57,7 @@ const ADMIN_DISPLAY_NAME = 'ADMIN';
 const MOBILE_BREAKPOINT_PX = 768;
 
 // ============================================================================
-// 2. MASSIVE INLINE SVG VECTOR LIBRARY (APPLE / TELEGRAM STYLE)
+// 2. INLINE SVG ICONS
 // ============================================================================
 const Icons = {
   Menu: (
@@ -87,13 +101,6 @@ const Icons = {
 // 3. UTILITY & PHYSICS FUNCTIONS
 // ============================================================================
 
-function getInitials(name) {
-  if (!name) return '?';
-  const parts = name.trim().split(' ');
-  if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
-  return name.slice(0, 2).toUpperCase();
-}
-
 function formatTelegramTime(dateString) {
   if (!dateString) return '';
   const date = new Date(dateString);
@@ -112,18 +119,15 @@ function formatTelegramTime(dateString) {
 
 function displayIdentity(user) {
   if (user?.is_admin) {
-    return { name: ADMIN_DISPLAY_NAME, avatarUrl: null, isAdmin: true };
+    return { name: ADMIN_DISPLAY_NAME, avatar_url: null, is_admin: true };
   }
   return { 
     name: user?.username || 'Deleted User', 
-    avatarUrl: user?.avatar_url || null, 
-    isAdmin: false 
+    avatar_url: user?.avatar_url || null, 
+    is_admin: false 
   };
 }
 
-/**
- * Custom React Hook for iOS-style Pull-to-Refresh Physics
- */
 function usePullToRefresh(onRefresh, scrollRef) {
   const [pullDistance, setPullDistance] = useState(0);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -139,22 +143,20 @@ function usePullToRefresh(onRefresh, scrollRef) {
     if (startY.current === null) return;
     const currentY = e.touches[0].clientY;
     const diff = currentY - startY.current;
-
-    // Apply friction to the pull down
     if (diff > 0 && scrollRef.current && scrollRef.current.scrollTop === 0) {
       const resistance = diff * 0.4; 
-      setPullDistance(Math.min(resistance, 80)); // Cap the pull visual at 80px
+      setPullDistance(Math.min(resistance, 80)); 
     }
   };
 
   const handleTouchEnd = async () => {
     if (pullDistance > 60 && !isRefreshing) {
       setIsRefreshing(true);
-      setPullDistance(50); // Hold spinner position while refreshing
+      setPullDistance(50);
       await onRefresh();
       setIsRefreshing(false);
     }
-    setPullDistance(0); // Snap back
+    setPullDistance(0); 
     startY.current = null;
   };
 
@@ -165,99 +167,42 @@ function usePullToRefresh(onRefresh, scrollRef) {
 // 4. UI SUB-COMPONENTS
 // ============================================================================
 
-function LiquidBackgroundEffects() {
+function DarkGlassBackground() {
   return (
     <div 
       aria-hidden="true" 
-      style={{ position: 'fixed', inset: 0, overflow: 'hidden', zIndex: -1, pointerEvents: 'none', background: 'var(--bg)' }}
+      style={{ position: 'fixed', inset: 0, overflow: 'hidden', zIndex: -1, pointerEvents: 'none', background: 'var(--ink)' }}
     >
       <div 
         style={{
           position: 'absolute', top: '-15%', left: '-10%', width: '60vw', height: '60vw',
-          borderRadius: '50%', background: 'radial-gradient(circle, rgba(10,132,255,0.18), transparent 60%)',
-          animation: 'floatApple 22s ease-in-out infinite', filter: 'blur(40px)'
+          borderRadius: '50%', background: 'radial-gradient(circle, var(--ink-2), transparent 60%)',
+          animation: 'floatOrb 22s ease-in-out infinite', filter: 'blur(40px)'
         }} 
       />
       <div 
         style={{
           position: 'absolute', bottom: '-20%', right: '-10%', width: '70vw', height: '70vw',
-          borderRadius: '50%', background: 'radial-gradient(circle, rgba(94,92,230,0.15), transparent 60%)',
-          animation: 'floatApple 28s ease-in-out infinite reverse', filter: 'blur(50px)'
+          borderRadius: '50%', background: 'radial-gradient(circle, var(--ink-2), transparent 60%)',
+          animation: 'floatOrb 28s ease-in-out infinite reverse', filter: 'blur(50px)'
         }} 
       />
       <style>{`
-        @keyframes floatApple {
-          0% { transform: translate(0, 0) scale(1) rotate(0deg); }
-          33% { transform: translate(4%, -6%) scale(1.05) rotate(4deg); }
-          66% { transform: translate(-3%, 4%) scale(0.95) rotate(-3deg); }
-          100% { transform: translate(0, 0) scale(1) rotate(0deg); }
+        @keyframes floatOrb {
+          0% { transform: translate(0, 0) scale(1); }
+          33% { transform: translate(4%, -6%) scale(1.05); }
+          66% { transform: translate(-3%, 4%) scale(0.95); }
+          100% { transform: translate(0, 0) scale(1); }
         }
         .chat-row { transition: background 0.15s ease-in-out, transform 0.1s ease-in-out; }
         .chat-row:active { transform: scale(0.98); }
         @keyframes spin-fast { 100% { transform: rotate(360deg); } }
         .refresh-spin { animation: spin-fast 0.8s linear infinite; }
-        @keyframes slide-up-modal { 
-          0% { transform: translateY(100%); opacity: 0; } 
-          100% { transform: translateY(0); opacity: 1; } 
-        }
       `}</style>
     </div>
   );
 }
 
-function ListSkeletonLoader() {
-  const skeletons = Array(8).fill(0);
-  return (
-    <div style={{ padding: '0 8px', width: '100%', boxSizing: 'border-box' }}>
-      {skeletons.map((_, i) => (
-        <div key={i} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 8px', opacity: 1 - (i * 0.1) }}>
-          <div style={{ width: 48, height: 48, borderRadius: '50%', background: 'var(--glass-border)', animation: 'pulse 1.5s infinite ease-in-out' }} />
-          <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 8 }}>
-            <div style={{ width: '40%', height: 14, borderRadius: 4, background: 'var(--glass-border)', animation: 'pulse 1.5s infinite ease-in-out' }} />
-            <div style={{ width: '70%', height: 12, borderRadius: 4, background: 'var(--glass-border)', animation: 'pulse 1.5s infinite ease-in-out 0.2s' }} />
-          </div>
-        </div>
-      ))}
-      <style>{`
-        @keyframes pulse { 0%, 100% { opacity: 0.5; } 50% { opacity: 0.2; } }
-      `}</style>
-    </div>
-  );
-}
-
-function LiquidAvatar({ identity, size = 48, isGroup = false }) {
-  const containerStyle = {
-    width: size, height: size, borderRadius: '50%', flexShrink: 0,
-    display: 'flex', alignItems: 'center', justifyContent: 'center',
-    overflow: 'hidden', boxShadow: 'inset 0 0 0 1px var(--glass-border)',
-    userSelect: 'none'
-  };
-
-  if (identity.isAdmin && !isGroup) {
-    return (
-      <div style={{ ...containerStyle, background: 'linear-gradient(135deg, #FFD700 0%, #FFA500 100%)', color: '#fff', fontSize: size * 0.3, fontWeight: 800 }}>
-        ADM
-      </div>
-    );
-  }
-
-  if (identity.avatarUrl) {
-    return (
-      <div style={containerStyle}>
-        <img src={identity.avatarUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-      </div>
-    );
-  }
-
-  const colors = ['#ff5e62', '#4facfe', '#43e97b', '#fa709a', '#a18cd1'];
-  const colorIndex = (identity.name || '').length % colors.length;
-
-  return (
-    <div style={{ ...containerStyle, background: colors[colorIndex], color: '#ffffff', fontWeight: 700, fontSize: size * 0.4 }}>
-      {isGroup ? '#' : getInitials(identity.name)}
-    </div>
-  );
-}
 // ============================================================================
 // 5. MAIN HOME COMPONENT (MASTER/DETAIL)
 // ============================================================================
@@ -286,6 +231,7 @@ export default function Home() {
   const [activeChatType, setActiveChatType] = useState(null); 
   const [activeChatSource, setActiveChatSource] = useState(null);
   
+  const [activeTab, setActiveTab] = useState('chats'); // 'chats' | 'ask_me'
   const [searchQuery, setSearchQuery] = useState('');
   const [searchFocused, setSearchFocused] = useState(false);
   const showSearch = searchFocused || searchQuery.trim().length > 0;
@@ -295,10 +241,17 @@ export default function Home() {
   const [editProfileOpen, setEditProfileOpen] = useState(false);
   const [profileCardUserId, setProfileCardUserId] = useState(null);
   const [showPushPrompt, setShowPushPrompt] = useState(false);
+  const [viewingStory, setViewingStory] = useState(null);
+  
+  // Ask Me modaling
+  const [createQuestionOpen, setCreateQuestionOpen] = useState(false);
+  const [createQuestionType, setCreateQuestionType] = useState(null);
+  const [sharingQuestion, setSharingQuestion] = useState(null);
 
   // Data Stores
   const [threads, setThreads] = useState([]);
   const [groups, setGroups] = useState([]);
+  const [myQuestions, setMyQuestions] = useState([]);
   const [loadingList, setLoadingList] = useState(true);
 
   const scrollRef = useRef(null);
@@ -309,8 +262,7 @@ export default function Home() {
   const fetchData = useCallback(async () => {
     let isMounted = true;
     
-    // Only show full skeleton load if it's the very first load (prevents flashing on pull-to-refresh)
-    if (groups.length === 0 && threads.length === 0) {
+    if (groups.length === 0 && threads.length === 0 && myQuestions.length === 0) {
       setLoadingList(true);
     }
 
@@ -326,8 +278,9 @@ export default function Home() {
 
       // 2. Fetch User DMs and Read Receipts for Unread Mentions
       let finalThreads = [];
+      let finalQuestions = [];
+      
       if (userId) {
-        // Fetch Read Receipts for Groups
         const { data: groupReceipts } = await supabase
           .from('group_read_receipts')
           .select('group_id, last_read_at')
@@ -335,7 +288,6 @@ export default function Home() {
         
         const groupReceiptsMap = Object.fromEntries((groupReceipts || []).map(r => [r.group_id, r.last_read_at]));
 
-        // Check unread mentions for each group
         finalGroups = await Promise.all(finalGroups.map(async (g) => {
           const lastRead = groupReceiptsMap[g.id] || '1970-01-01T00:00:00.000Z';
           const { count } = await supabase
@@ -348,7 +300,6 @@ export default function Home() {
           return { ...g, unread_mention: count && count > 0 };
         }));
 
-        // Fetch DM Threads
         const { data: threadRows, error: threadsError } = await supabase
           .from('dm_threads')
           .select('id, user_a, user_b, created_at')
@@ -357,7 +308,6 @@ export default function Home() {
 
         if (threadsError) throw threadsError;
 
-        // Fetch DM Read Receipts
         const { data: dmReceipts } = await supabase
           .from('dm_read_receipts')
           .select('thread_id, last_read_at')
@@ -395,24 +345,35 @@ export default function Home() {
             unread_mention: count && count > 0
           };
         }));
+
+        // 3. Fetch Questions authored by the user for Ask Me Tab
+        const { data: questionsData, error: questionsError } = await supabase
+          .from('questions')
+          .select('*')
+          .eq('author_id', userId)
+          .order('created_at', { ascending: false });
+          
+        if (!questionsError && questionsData) {
+          finalQuestions = questionsData;
+        }
       }
 
       if (isMounted) {
         setGroups(finalGroups);
         setThreads(finalThreads);
+        setMyQuestions(finalQuestions);
       }
     } catch (err) {
       console.error("Data fetching error:", err.message);
     } finally {
       if (isMounted) setLoadingList(false);
     }
-  }, [userId, groups.length, threads.length]);
+  }, [userId, groups.length, threads.length, myQuestions.length]);
 
   useEffect(() => {
     fetchData();
   }, [fetchData]);
 
-  // Hook into our custom Pull-To-Refresh physics
   const { pullDistance, isRefreshing, handleTouchStart, handleTouchMove, handleTouchEnd } = usePullToRefresh(fetchData, scrollRef);
 
   // --------------------------------------------------------------------------
@@ -422,7 +383,6 @@ export default function Home() {
     if (userId && 'Notification' in window) {
       const hasPrompted = localStorage.getItem('anonroom_push_prompted');
       if (!hasPrompted && Notification.permission === 'default') {
-        // Delay prompt slightly to not overwhelm user on immediate login
         const timer = setTimeout(() => setShowPushPrompt(true), 2500);
         return () => clearTimeout(timer);
       }
@@ -434,23 +394,7 @@ export default function Home() {
     setShowPushPrompt(false);
     
     try {
-      const permission = await Notification.requestPermission();
-      if (permission === 'granted') {
-        const registration = await navigator.serviceWorker.ready;
-        // NOTE: A real VAPID key is required for actual delivery, this sets up the DB subscription
-        const sub = await registration.pushManager.subscribe({
-          userVisibleOnly: true,
-          applicationServerKey: 'BLANK_VAPID_KEY_PLACEHOLDER_REPLACE_LATER' 
-        });
-        const subJSON = sub.toJSON();
-        
-        await supabase.from('push_subscriptions').insert({
-          user_id: userId,
-          endpoint: subJSON.endpoint,
-          p256dh: subJSON.keys.p256dh,
-          auth: subJSON.keys.auth
-        });
-      }
+      await subscribeToPush(userId);
     } catch (err) {
       console.warn("Push setup failed or user denied:", err);
     }
@@ -480,7 +424,6 @@ export default function Home() {
 
       const dmUsername = getDmUsernameFromPath();
       if (dmUsername) {
-        // STRICT LOWERCASE LOOKUP
         const { data, error } = await supabase
           .from('profiles')
           .select('id, username')
@@ -494,7 +437,6 @@ export default function Home() {
           setActiveChatType('dm');
           setActiveChatSource('path');
         } else {
-          // SILENT INVALID URL FALLBACK: User does not exist, redirect strictly to Home with ZERO alerts.
           window.history.replaceState({}, '', ROOT_PATH);
           setActiveChatId(null);
           setActiveChatType(null);
@@ -507,8 +449,8 @@ export default function Home() {
     return () => { cancelled = true; };
   }, []);
 
-  function handleOpenChat(id, type, username) {
-    if (type === 'dm' && !userId) {
+  function handleOpenChat(id, type, metaContext) {
+    if ((type === 'dm' || type === 'question') && !userId) {
       setAuthOpen(true);
       return;
     }
@@ -518,7 +460,9 @@ export default function Home() {
     setSearchQuery('');
 
     if (type === 'dm') {
-      window.history.pushState({}, '', username ? buildDmPath(username) : ROOT_PATH);
+      window.history.pushState({}, '', metaContext ? buildDmPath(metaContext) : ROOT_PATH);
+    } else if (type === 'question') {
+      window.history.pushState({}, '', `/q/${id}`);
     }
   }
 
@@ -538,7 +482,7 @@ export default function Home() {
   }
 
   const profileIdentity = session 
-    ? { name: profile?.username || 'You', avatarUrl: profile?.avatar_url || null, isAdmin: false } 
+    ? { name: profile?.username || 'You', avatar_url: profile?.avatar_url || null, is_admin: false } 
     : null;
 
   const isChatActive = activeChatId !== null;
@@ -552,9 +496,9 @@ export default function Home() {
       style={{ 
         display: 'flex', 
         width: '100vw', 
-        height: '100dvh', // STRICT DYNAMIC HEIGHT
+        height: '100dvh',
         maxHeight: '100dvh',
-        overflow: 'hidden', // PREVENTS ENTIRE SCREEN FROM SCROLLING
+        overflow: 'hidden',
         position: 'fixed',
         inset: 0,
         userSelect: 'none', 
@@ -562,16 +506,15 @@ export default function Home() {
         msUserSelect: 'none'
       }}
     >
-      <LiquidBackgroundEffects />
+      <DarkGlassBackground />
 
       {/* 
         ======================================================================
-        LEFT PANEL: TELEGRAM SIDEBAR
+        LEFT PANEL: MASTER LIST
         ======================================================================
       */}
       {(!isMobile || !isChatActive) && (
         <div 
-          className="glass-panel"
           style={{ 
             display: 'flex', 
             flexDirection: 'column',
@@ -580,18 +523,19 @@ export default function Home() {
             height: '100dvh', 
             borderRight: '1px solid var(--glass-border)', 
             zIndex: 10, 
-            borderRadius: 0,
+            background: 'var(--glass-white)',
+            backdropFilter: 'blur(20px) saturate(115%)',
+            WebkitBackdropFilter: 'blur(20px) saturate(115%)',
             position: 'relative'
           }}
         >
-          {/* HEADER (Z-INDEX 20 TO COVER PULL-TO-REFRESH SPINNER) */}
+          {/* HEADER */}
           <div 
             style={{ 
               padding: '14px 16px', 
               display: 'flex', 
               alignItems: 'center', 
               gap: 12, 
-              background: 'var(--glass-strong)', 
               borderBottom: '1px solid var(--glass-border)',
               zIndex: 20,
               position: 'relative'
@@ -620,19 +564,18 @@ export default function Home() {
                 placeholder="Search..." 
                 style={{ 
                   width: '100%', 
-                  border: 'none', 
-                  background: 'var(--glass-border)', 
+                  border: '1px solid var(--glass-border)', 
+                  background: 'var(--ink-2)', 
                   padding: '10px 36px 10px 42px', 
                   borderRadius: 14, 
                   fontSize: 16, 
-                  color: 'var(--ink)', 
+                  color: 'var(--paper)', 
                   outline: 'none', 
                   transition: 'background 0.2s', 
                   boxSizing: 'border-box' 
                 }} 
               />
               
-              {/* CLEAR SEARCH BUTTON */}
               {searchQuery.length > 0 && (
                 <button
                   onClick={() => setSearchQuery('')}
@@ -641,9 +584,9 @@ export default function Home() {
                     right: 10, 
                     top: '50%', 
                     transform: 'translateY(-50%)',
-                    background: 'var(--glass)', 
+                    background: 'var(--glass-border)', 
                     border: 'none', 
-                    color: 'var(--dim)',
+                    color: 'var(--paper)',
                     borderRadius: '50%', 
                     width: 22, 
                     height: 22, 
@@ -660,7 +603,6 @@ export default function Home() {
               )}
             </div>
 
-            {/* Profile Avatar Button moved to the right */}
             <button 
               onClick={() => session ? setEditProfileOpen(true) : setAuthOpen(true)} 
               style={{ 
@@ -684,7 +626,7 @@ export default function Home() {
                   style={{ 
                     width: '100%', 
                     height: '100%', 
-                    background: 'var(--blue)', 
+                    background: 'var(--ember)', 
                     color: '#fff', 
                     display: 'flex', 
                     alignItems: 'center', 
@@ -698,11 +640,63 @@ export default function Home() {
             </button>
           </div>
 
-          {/* HIDDEN PULL-TO-REFRESH SPINNER CONTAINER */}
+          <div style={{ padding: '12px 16px 4px', zIndex: 15 }}>
+            <StoriesBar onOpenStory={(storyData) => setViewingStory(storyData)} />
+          </div>
+
+          {/* SEGMENTED CONTROL */}
+          <div style={{ padding: '8px 16px 12px', borderBottom: '1px solid var(--glass-border)' }}>
+            <div 
+              style={{ 
+                display: 'flex', 
+                background: 'var(--ink-2)', 
+                borderRadius: 20, 
+                padding: 4,
+                boxShadow: 'inset 0 0 0 1px var(--glass-border)'
+              }}
+            >
+              <button 
+                onClick={() => setActiveTab('chats')} 
+                style={{ 
+                  flex: 1, 
+                  padding: '8px 0', 
+                  borderRadius: 16, 
+                  border: 'none', 
+                  background: activeTab === 'chats' ? 'var(--glass-white)' : 'transparent', 
+                  color: activeTab === 'chats' ? 'var(--paper)' : 'var(--dim)',
+                  fontWeight: 600, 
+                  fontSize: 14,
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease'
+                }}
+              >
+                Chats
+              </button>
+              <button 
+                onClick={() => setActiveTab('ask_me')} 
+                style={{ 
+                  flex: 1, 
+                  padding: '8px 0', 
+                  borderRadius: 16, 
+                  border: 'none', 
+                  background: activeTab === 'ask_me' ? 'var(--glass-white)' : 'transparent', 
+                  color: activeTab === 'ask_me' ? 'var(--paper)' : 'var(--dim)',
+                  fontWeight: 600, 
+                  fontSize: 14,
+                  cursor: 'pointer',
+                  transition: 'all 0.2s ease'
+                }}
+              >
+                Ask Me
+              </button>
+            </div>
+          </div>
+
+          {/* PULL-TO-REFRESH SPINNER */}
           <div 
             style={{
               position: 'absolute',
-              top: 72, // Just below the header
+              top: 150, 
               left: 0,
               right: 0,
               height: 60,
@@ -713,7 +707,7 @@ export default function Home() {
               transform: `translateY(${Math.min(pullDistance - 60, 0)}px)`,
               opacity: pullDistance > 10 ? 1 : 0,
               transition: isRefreshing ? 'transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1)' : 'none',
-              color: 'var(--blue)'
+              color: 'var(--ember)'
             }}
           >
             <div 
@@ -724,7 +718,7 @@ export default function Home() {
             </div>
           </div>
 
-          {/* SCROLLING LIST WITH TOUCH PHYSICS */}
+          {/* SCROLLING LIST */}
           <div 
             ref={scrollRef}
             onTouchStart={handleTouchStart}
@@ -753,249 +747,174 @@ export default function Home() {
               </div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column' }}>
-                {loadingList && <ListSkeletonLoader />}
+                {loadingList && <MessageSkeleton variant="list-row" count={6} />}
 
-                {!loadingList && groups.length > 0 && (
+                {/* ---------------- CHATS TAB ---------------- */}
+                {!loadingList && activeTab === 'chats' && (
                   <>
-                    <div 
-                      style={{ 
-                        fontSize: 13, 
-                        fontWeight: 700, 
-                        textTransform: 'uppercase', 
-                        letterSpacing: 0.5, 
-                        color: 'var(--dim)', 
-                        padding: '18px 16px 6px' 
-                      }}
-                    >
-                      Groups
-                    </div>
-                    {groups.map((group) => {
-                      const isActive = activeChatId === group.slug && activeChatType === 'group';
-                      const identity = { name: group.name, avatarUrl: group.cover_url, isAdmin: false };
-                      
-                      return (
-                        <button 
-                          key={group.id} 
-                          className="chat-row"
-                          onClick={() => handleOpenGroup(group.slug)} 
-                          style={{ 
-                            display: 'flex', 
-                            alignItems: 'center', 
-                            gap: 12, 
-                            padding: '10px 16px', 
-                            border: 'none', 
-                            textAlign: 'left', 
-                            cursor: 'pointer', 
-                            width: '100%', 
-                            background: isActive ? 'var(--blue)' : 'transparent', 
-                            color: isActive ? '#fff' : 'var(--ink)' 
-                          }}
-                        >
-                          <LiquidAvatar identity={identity} size={50} isGroup={true} />
+                    {groups.length > 0 && (
+                      <>
+                        <div style={{ fontSize: 13, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5, color: 'var(--dim)', padding: '18px 16px 6px' }}>
+                          Groups
+                        </div>
+                        {groups.map((group) => {
+                          const isActive = activeChatId === group.slug && activeChatType === 'group';
+                          const identity = { name: group.name, avatar_url: group.cover_url, is_admin: false };
                           
-                          <div 
-                            style={{ 
-                              flex: 1, 
-                              minWidth: 0, 
-                              borderBottom: isActive ? 'none' : '1px solid var(--glass-border)', 
-                              paddingBottom: 12, 
-                              paddingTop: 2, 
-                              display: 'flex', 
-                              alignItems: 'center' 
-                            }}
-                          >
-                            <div style={{ flex: 1, overflow: 'hidden' }}>
-                              <span 
-                                style={{ 
-                                  fontWeight: 600, 
-                                  fontSize: 16, 
-                                  display: 'block', 
-                                  whiteSpace: 'nowrap', 
-                                  overflow: 'hidden', 
-                                  textOverflow: 'ellipsis' 
-                                }}
-                              >
-                                {group.name}
-                              </span>
-                              <span 
-                                style={{ 
-                                  fontSize: 14, 
-                                  color: isActive ? 'rgba(255,255,255,0.8)' : 'var(--dim)', 
-                                  display: 'block', 
-                                  textOverflow: 'ellipsis', 
-                                  overflow: 'hidden', 
-                                  whiteSpace: 'nowrap' 
-                                }}
-                              >
-                                {group.description || 'Public Channel'}
-                              </span>
-                            </div>
-                            
-                            {/* UNREAD MENTION BADGE UI FOR GROUPS */}
-                            {group.unread_mention && (
-                              <div 
-                                style={{ 
-                                  width: 22, 
-                                  height: 22, 
-                                  borderRadius: '50%', 
-                                  background: 'var(--blue)', 
-                                  color: '#fff', 
-                                  fontSize: 12, 
-                                  fontWeight: 700, 
-                                  display: 'flex', 
-                                  alignItems: 'center', 
-                                  justifyContent: 'center', 
-                                  flexShrink: 0, 
-                                  marginLeft: 8 
-                                }}
-                              >
-                                @
-                              </div>
-                            )}
-                          </div>
-                        </button>
-                      );
-                    })}
-                  </>
-                )}
-
-                {!loadingList && userId && threads.length > 0 && (
-                  <>
-                    <div 
-                      style={{ 
-                        fontSize: 13, 
-                        fontWeight: 700, 
-                        textTransform: 'uppercase', 
-                        letterSpacing: 0.5, 
-                        color: 'var(--dim)', 
-                        padding: '24px 16px 6px' 
-                      }}
-                    >
-                      Chats
-                    </div>
-                    {threads.map((thread) => {
-                      const otherId = thread.user_a === userId ? thread.user_b : thread.user_a;
-                      const isActive = activeChatId === otherId && activeChatType === 'dm';
-                      const identity = displayIdentity(thread.otherUser); 
-                      
-                      return (
-                        <button 
-                          key={thread.id} 
-                          className="chat-row"
-                          onClick={() => handleOpenChat(otherId, 'dm', thread.otherUser?.username)} 
-                          style={{ 
-                            display: 'flex', 
-                            alignItems: 'center', 
-                            gap: 12, 
-                            padding: '10px 16px', 
-                            border: 'none', 
-                            textAlign: 'left', 
-                            cursor: 'pointer', 
-                            width: '100%', 
-                            background: isActive ? 'var(--blue)' : 'transparent', 
-                            color: isActive ? '#fff' : 'var(--ink)' 
-                          }}
-                        >
-                          <LiquidAvatar identity={identity} size={50} />
-                          
-                          <div 
-                            style={{ 
-                              flex: 1, 
-                              minWidth: 0, 
-                              borderBottom: isActive ? 'none' : '1px solid var(--glass-border)', 
-                              paddingBottom: 12, 
-                              paddingTop: 2 
-                            }}
-                          >
-                            <div 
+                          return (
+                            <button 
+                              key={group.id} 
+                              className="chat-row"
+                              onClick={() => handleOpenGroup(group.slug)} 
                               style={{ 
-                                display: 'flex', 
-                                justifyContent: 'space-between', 
-                                alignItems: 'center', 
-                                marginBottom: 4 
+                                display: 'flex', alignItems: 'center', gap: 12, padding: '10px 16px', 
+                                border: 'none', textAlign: 'left', cursor: 'pointer', width: '100%', 
+                                background: isActive ? 'var(--glass-white)' : 'transparent', 
+                                color: 'var(--paper)' 
                               }}
                             >
-                              <span 
-                                style={{ 
-                                  fontWeight: 600, 
-                                  fontSize: 16, 
-                                  display: 'flex', 
-                                  alignItems: 'center', 
-                                  gap: 4, 
-                                  whiteSpace: 'nowrap', 
-                                  overflow: 'hidden', 
-                                  textOverflow: 'ellipsis' 
-                                }}
-                              >
-                                {identity.name}
-                                {identity.isAdmin && <span style={{ color: isActive ? '#fff' : '#FF8C00' }}>{Icons.AdminShield}</span>}
-                              </span>
-                              <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0, paddingLeft: 8 }}>
-                                
-                                {/* UNREAD MENTION BADGE UI FOR DMS */}
-                                {thread.unread_mention && (
-                                  <div 
-                                    style={{ 
-                                      width: 18, 
-                                      height: 18, 
-                                      borderRadius: '50%', 
-                                      background: 'var(--blue)', 
-                                      color: '#fff', 
-                                      fontSize: 11, 
-                                      fontWeight: 700, 
-                                      display: 'flex', 
-                                      alignItems: 'center', 
-                                      justifyContent: 'center' 
-                                    }}
-                                  >
+                              <LiquidAvatar identity={identity} size={50} kind="group" />
+                              <div style={{ flex: 1, minWidth: 0, borderBottom: isActive ? 'none' : '1px solid var(--glass-border)', paddingBottom: 12, paddingTop: 2, display: 'flex', alignItems: 'center' }}>
+                                <div style={{ flex: 1, overflow: 'hidden' }}>
+                                  <span style={{ fontWeight: 600, fontSize: 16, display: 'block', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                    {group.name}
+                                  </span>
+                                  <span style={{ fontSize: 14, color: 'var(--dim)', display: 'block', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
+                                    {group.description || 'Public Channel'}
+                                  </span>
+                                </div>
+                                {group.unread_mention && (
+                                  <div style={{ width: 22, height: 22, borderRadius: '50%', background: 'var(--ember)', color: '#fff', fontSize: 12, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginLeft: 8 }}>
                                     @
                                   </div>
                                 )}
-                                <span style={{ fontSize: 12, color: isActive ? 'rgba(255,255,255,0.7)' : 'var(--dim)' }}>
-                                  {formatTelegramTime(thread.created_at)}
-                                </span>
                               </div>
-                            </div>
-                            <span 
+                            </button>
+                          );
+                        })}
+                      </>
+                    )}
+
+                    {userId && threads.length > 0 && (
+                      <>
+                        <div style={{ fontSize: 13, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5, color: 'var(--dim)', padding: '24px 16px 6px' }}>
+                          Chats
+                        </div>
+                        {threads.map((thread) => {
+                          const otherId = thread.user_a === userId ? thread.user_b : thread.user_a;
+                          const isActive = activeChatId === otherId && activeChatType === 'dm';
+                          const identity = displayIdentity(thread.otherUser); 
+                          
+                          return (
+                            <button 
+                              key={thread.id} 
+                              className="chat-row"
+                              onClick={() => handleOpenChat(otherId, 'dm', thread.otherUser?.username)} 
                               style={{ 
-                                fontSize: 14, 
-                                color: isActive ? 'rgba(255,255,255,0.8)' : 'var(--dim)', 
-                                display: 'block', 
-                                textOverflow: 'ellipsis', 
-                                overflow: 'hidden', 
-                                whiteSpace: 'nowrap' 
+                                display: 'flex', alignItems: 'center', gap: 12, padding: '10px 16px', 
+                                border: 'none', textAlign: 'left', cursor: 'pointer', width: '100%', 
+                                background: isActive ? 'var(--glass-white)' : 'transparent', 
+                                color: 'var(--paper)' 
                               }}
                             >
-                              Tap to view messages
-                            </span>
-                          </div>
+                              <LiquidAvatar identity={identity} size={50} />
+                              <div style={{ flex: 1, minWidth: 0, borderBottom: isActive ? 'none' : '1px solid var(--glass-border)', paddingBottom: 12, paddingTop: 2 }}>
+                                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4 }}>
+                                  <span style={{ fontWeight: 600, fontSize: 16, display: 'flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                                    {identity.name}
+                                    {identity.is_admin && <span style={{ color: '#FFD700' }}>{Icons.AdminShield}</span>}
+                                  </span>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0, paddingLeft: 8 }}>
+                                    {thread.unread_mention && (
+                                      <div style={{ width: 18, height: 18, borderRadius: '50%', background: 'var(--ember)', color: '#fff', fontSize: 11, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                        @
+                                      </div>
+                                    )}
+                                    <span style={{ fontSize: 12, color: 'var(--dim)' }}>
+                                      {formatTelegramTime(thread.created_at)}
+                                    </span>
+                                  </div>
+                                </div>
+                                <span style={{ fontSize: 14, color: 'var(--dim)', display: 'block', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>
+                                  Tap to view messages
+                                </span>
+                              </div>
+                            </button>
+                          );
+                        })}
+                      </>
+                    )}
+
+                    {!userId && (
+                      <div style={{ padding: '40px 20px', textAlign: 'center', color: 'var(--dim)' }}>
+                        <p style={{ fontSize: 15, marginBottom: 16, fontWeight: 500 }}>
+                          Sign in to view your private chats.
+                        </p>
+                        <button 
+                          onClick={() => setAuthOpen(true)} 
+                          style={{ background: 'var(--ember)', color: '#fff', border: 'none', padding: '12px 24px', borderRadius: 20, fontWeight: 700, fontSize: 15, cursor: 'pointer', boxShadow: '0 8px 24px rgba(255,107,53,0.3)' }}
+                        >
+                          Sign In
                         </button>
-                      );
-                    })}
+                      </div>
+                    )}
                   </>
                 )}
 
-                {!loadingList && !userId && (
-                  <div style={{ padding: '40px 20px', textAlign: 'center', color: 'var(--dim)' }}>
-                    <p style={{ fontSize: 15, marginBottom: 16, fontWeight: 500 }}>
-                      Sign in to view your private chats.
-                    </p>
-                    <button 
-                      onClick={() => setAuthOpen(true)} 
-                      style={{ 
-                        background: 'var(--blue)', 
-                        color: '#fff', 
-                        border: 'none', 
-                        padding: '12px 24px', 
-                        borderRadius: 20, 
-                        fontWeight: 700, 
-                        fontSize: 15, 
-                        cursor: 'pointer', 
-                        boxShadow: '0 8px 24px rgba(10,132,255,0.3)' 
-                      }}
-                    >
-                      Sign In
-                    </button>
+                {/* ---------------- ASK ME TAB ---------------- */}
+                {!loadingList && activeTab === 'ask_me' && (
+                  <div style={{ padding: '16px' }}>
+                    <div style={{ display: 'flex', gap: 12, marginBottom: 24 }}>
+                      <button 
+                        onClick={() => {
+                          setCreateQuestionType('personal');
+                          setCreateQuestionOpen(true);
+                        }}
+                        style={{
+                          flex: 1, padding: '16px', borderRadius: 20, border: 'none',
+                          background: 'var(--ember)', color: '#fff', fontSize: 15, fontWeight: 700,
+                          cursor: 'pointer', boxShadow: '0 6px 18px rgba(0,0,0,0.35)'
+                        }}
+                      >
+                        Personal
+                      </button>
+                      <button 
+                        onClick={() => {
+                          setCreateQuestionType('general');
+                          setCreateQuestionOpen(true);
+                        }}
+                        style={{
+                          flex: 1, padding: '16px', borderRadius: 20, border: '1px solid var(--glass-border)',
+                          background: 'var(--ink-2)', color: 'var(--paper)', fontSize: 15, fontWeight: 700,
+                          cursor: 'pointer', boxShadow: '0 6px 18px rgba(0,0,0,0.35)'
+                        }}
+                      >
+                        General
+                      </button>
+                    </div>
+
+                    <div style={{ fontSize: 13, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5, color: 'var(--dim)', marginBottom: 16 }}>
+                      My Questions
+                    </div>
+
+                    {!userId ? (
+                       <div style={{ padding: '20px 0', textAlign: 'center', color: 'var(--dim)' }}>
+                         Sign in to view questions asked to you.
+                       </div>
+                    ) : myQuestions.length === 0 ? (
+                      <div style={{ padding: '20px 0', textAlign: 'center', color: 'var(--dim)', fontSize: 14 }}>
+                        You haven't created any questions yet.
+                      </div>
+                    ) : (
+                      myQuestions.map(q => (
+                        <QuestionCard 
+                          key={q.id} 
+                          question={q} 
+                          onOpen={() => handleOpenChat(q.id, 'question')}
+                          onShare={() => setSharingQuestion(q)}
+                        />
+                      ))
+                    )}
                   </div>
                 )}
               </div>
@@ -1006,12 +925,11 @@ export default function Home() {
 
       {/* 
         ======================================================================
-        RIGHT PANEL: TELEGRAM MASTER CHAT VIEW
+        RIGHT PANEL: MASTER DETAIL VIEW
         ======================================================================
       */}
       {(!isMobile || isChatActive) && (
         <div 
-          className={isMobile ? 'mobile-chat-page glass-strong' : 'glass-strong'}
           style={{ 
             flex: 1, 
             display: 'flex', 
@@ -1020,8 +938,9 @@ export default function Home() {
             width: isMobile ? '100%' : undefined, 
             height: '100dvh', 
             borderRadius: 0, 
-            zIndex: 1, 
-            boxShadow: '-4px 0 24px rgba(0,0,0,0.03)' 
+            zIndex: 1,
+            background: isMobile ? 'var(--ink)' : 'transparent',
+            boxShadow: '-4px 0 24px rgba(0,0,0,0.2)' 
           }}
         >
           {activeChatId ? (
@@ -1035,7 +954,7 @@ export default function Home() {
                   }
                 }}
               />
-            ) : (
+            ) : activeChatType === 'group' ? (
               <GroupChat 
                 groupSlug={activeChatId} 
                 onBack={closeActiveChat}
@@ -1045,39 +964,26 @@ export default function Home() {
                   }
                 }}
               />
-            )
+            ) : activeChatType === 'question' ? (
+              <QuestionThread 
+                questionId={activeChatId}
+                onBack={closeActiveChat}
+              />
+            ) : null
           ) : (
-            <div 
-              style={{ 
-                flex: 1, 
-                display: 'flex', 
-                flexDirection: 'column', 
-                alignItems: 'center', 
-                justifyContent: 'center', 
-                color: 'var(--dim)', 
-                userSelect: 'none' 
-              }}
-            >
+            <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: 'var(--dim)' }}>
               <div style={{ marginBottom: 20, animation: 'pop-in 0.6s cubic-bezier(0.2, 0.8, 0.2, 1)' }}>
                 {Icons.EmptyChat}
               </div>
-              <p 
-                style={{ 
-                  fontSize: 15, 
-                  fontWeight: 600, 
-                  background: 'var(--glass-border)', 
-                  padding: '8px 20px', 
-                  borderRadius: 24 
-                }}
-              >
-                Select a chat to start messaging
+              <p style={{ fontSize: 15, fontWeight: 600, background: 'var(--glass-border)', padding: '8px 20px', borderRadius: 24, color: 'var(--paper)' }}>
+                Select a chat or question to view
               </p>
             </div>
           )}
         </div>
       )}
 
-      {/* PUSH NOTIFICATION PROMPT MODAL */}
+      {/* NOTIFICATION PROMPT MODAL */}
       {showPushPrompt && (
         <div 
           style={{ 
@@ -1088,27 +994,30 @@ export default function Home() {
         >
           <div 
             style={{ 
-              width: '100%', maxWidth: 400, background: 'var(--glass-strong)', 
-              borderRadius: '24px 24px 0 0', padding: '32px 24px 40px',
-              boxShadow: '0 -10px 40px rgba(0,0,0,0.2)', textAlign: 'center',
+              width: '100%', maxWidth: 400, background: 'var(--ink-2)', 
+              borderRadius: '28px 28px 0 0', padding: '32px 24px 40px',
+              border: '1px solid var(--glass-border)', borderBottom: 'none',
+              boxShadow: '0 -10px 40px rgba(0,0,0,0.5)', textAlign: 'center',
               animation: 'slide-up-modal 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.05)'
             }}
           >
-            <div style={{ color: 'var(--blue)', marginBottom: 16 }}>{Icons.Bell}</div>
-            <h2 style={{ margin: '0 0 12px 0', fontSize: 22, fontWeight: 800 }}>Enable Notifications</h2>
+            <div style={{ color: 'var(--ember)', marginBottom: 16, display: 'inline-flex', padding: 12, background: 'var(--glass-white)', borderRadius: '50%' }}>
+              {Icons.Bell}
+            </div>
+            <h2 style={{ margin: '0 0 12px 0', fontSize: 22, fontWeight: 800, color: 'var(--paper)' }}>Enable Notifications</h2>
             <p style={{ margin: '0 0 24px 0', color: 'var(--dim)', fontSize: 15, lineHeight: 1.4 }}>
-              Get instantly notified when someone mentions you or sends a private message.
+              Get instantly notified about new messages, mentions, and replies.
             </p>
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               <button 
                 onClick={handleEnablePush}
-                style={{ background: 'var(--blue)', color: '#fff', border: 'none', padding: '14px', borderRadius: 16, fontWeight: 700, fontSize: 16, cursor: 'pointer' }}
+                style={{ background: 'var(--ember)', color: '#fff', border: 'none', padding: '16px', borderRadius: 20, fontWeight: 700, fontSize: 16, cursor: 'pointer' }}
               >
                 Turn On Notifications
               </button>
               <button 
                 onClick={handleDismissPush}
-                style={{ background: 'transparent', color: 'var(--dim)', border: 'none', padding: '14px', borderRadius: 16, fontWeight: 600, fontSize: 15, cursor: 'pointer' }}
+                style={{ background: 'transparent', color: 'var(--dim)', border: 'none', padding: '16px', borderRadius: 20, fontWeight: 600, fontSize: 15, cursor: 'pointer' }}
               >
                 Not Now
               </button>
@@ -1117,6 +1026,7 @@ export default function Home() {
         </div>
       )}
 
+      {/* ALL OVERLAYS & MODALS */}
       <AuthModal 
         open={authOpen} 
         onClose={() => setAuthOpen(false)} 
@@ -1138,6 +1048,30 @@ export default function Home() {
           handleOpenChat(id, 'dm');
         }} 
       />
+
+      <CreateQuestionModal
+        open={createQuestionOpen}
+        onClose={() => setCreateQuestionOpen(false)}
+        initialType={createQuestionType}
+        onCreated={(question) => {
+          setMyQuestions(prev => [question, ...prev]);
+        }}
+      />
+
+      {sharingQuestion && (
+        <ShareStorySheet
+          open={!!sharingQuestion}
+          onClose={() => setSharingQuestion(null)}
+          question={sharingQuestion}
+        />
+      )}
+
+      {viewingStory && (
+        <StoryViewer
+          story={viewingStory}
+          onClose={() => setViewingStory(null)}
+        />
+      )}
     </div>
   );
 }

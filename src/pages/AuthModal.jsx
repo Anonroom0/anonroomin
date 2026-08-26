@@ -1,159 +1,85 @@
 /**
  * ============================================================================
- * AUTHENTICATION MODAL (APPLE LIQUID UI & TELEGRAM PHYSICS)
+ * AUTHENTICATION MODAL (GLASS UI)
  * ============================================================================
  * This component handles the complete authentication flow: Sign In, Sign Up,
- * Password Reset, and OTP Verification. It utilizes Apple-style glassmorphism, 
- * fluid tab transitions, and precise micro-interactions for a premium feel.
+ * Password Reset, and OTP Verification. Restyled to use dark glass tokens and
+ * shared animation/utility classes.
  * 
  * Corrected Features Included Inline:
  * - Pre-checks `profiles` table for username availability before triggering signup.
  * - Enforced strict lowercase usernames on registration for universal uniqueness.
  * - Password Visibility Toggles (Eye / EyeOff) implemented natively.
  * - Forgot Password / Reset Password flow added.
- * - Removed backdrop auto-close (must click 'X' to close) when submitting.
  * - DB errors are masked with user-friendly messages for security.
- * - Liquid Glassmorphism Modal & Overlay.
- * - Advanced OTP Input Matrix with focus bounce physics.
+ * - Liquid Glassmorphism Modal & Overlay via `animations.css` classes.
+ * - Advanced OTP Input Matrix physics using standard transitions.
  * - Smooth Telegram sliding segmented controls.
- * - Fully unminified, enterprise-grade formatting.
  * 
- * Dependencies: React, Supabase
+ * Dependencies: React, Supabase, AuthContext, GlassToggle
  * ============================================================================
  */
 
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import supabase from '../lib/supabaseClient';
 import { useAuth } from '../lib/authContext';
+import GlassToggle from '../components/GlassToggle';
 
 // ============================================================================
 // 1. CONSTANTS & CONFIGURATION
 // ============================================================================
 const RESEND_COOLDOWN_S = 30;
-const ANIMATION_DURATION = 400; // ms for fluid liquid transitions
+const ANIMATION_DURATION = 400; // ms for fluid liquid transitions (matches unmount delay)
 
 // ============================================================================
-// 2. MASSIVE INLINE SVG VECTOR LIBRARY
+// 2. INLINE SVG VECTOR LIBRARY
 // ============================================================================
 const Vectors = {
   Close: (
-    <svg 
-      width="24" 
-      height="24" 
-      viewBox="0 0 24 24" 
-      fill="none" 
-      stroke="currentColor" 
-      strokeWidth="2.5" 
-      strokeLinecap="round" 
-      strokeLinejoin="round"
-    >
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
       <line x1="18" y1="6" x2="6" y2="18" />
       <line x1="6" y1="6" x2="18" y2="18" />
     </svg>
   ),
   Mail: (
-    <svg 
-      width="20" 
-      height="20" 
-      viewBox="0 0 24 24" 
-      fill="none" 
-      stroke="currentColor" 
-      strokeWidth="2" 
-      strokeLinecap="round" 
-      strokeLinejoin="round"
-    >
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" />
       <polyline points="22,6 12,13 2,6" />
     </svg>
   ),
   Lock: (
-    <svg 
-      width="20" 
-      height="20" 
-      viewBox="0 0 24 24" 
-      fill="none" 
-      stroke="currentColor" 
-      strokeWidth="2" 
-      strokeLinecap="round" 
-      strokeLinejoin="round"
-    >
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
       <path d="M7 11V7a5 5 0 0 1 10 0v4" />
     </svg>
   ),
   User: (
-    <svg 
-      width="20" 
-      height="20" 
-      viewBox="0 0 24 24" 
-      fill="none" 
-      stroke="currentColor" 
-      strokeWidth="2" 
-      strokeLinecap="round" 
-      strokeLinejoin="round"
-    >
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
       <circle cx="12" cy="7" r="4" />
     </svg>
   ),
   Eye: (
-    <svg 
-      width="20" 
-      height="20" 
-      viewBox="0 0 24 24" 
-      fill="none" 
-      stroke="currentColor" 
-      strokeWidth="2" 
-      strokeLinecap="round" 
-      strokeLinejoin="round"
-    >
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
       <circle cx="12" cy="12" r="3" />
     </svg>
   ),
   EyeOff: (
-    <svg 
-      width="20" 
-      height="20" 
-      viewBox="0 0 24 24" 
-      fill="none" 
-      stroke="currentColor" 
-      strokeWidth="2" 
-      strokeLinecap="round" 
-      strokeLinejoin="round"
-    >
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
       <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" />
       <line x1="1" y1="1" x2="23" y2="23" />
     </svg>
   ),
   Alert: (
-    <svg 
-      width="20" 
-      height="20" 
-      viewBox="0 0 24 24" 
-      fill="none" 
-      stroke="currentColor" 
-      strokeWidth="2.5" 
-      strokeLinecap="round" 
-      strokeLinejoin="round"
-    >
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
       <circle cx="12" cy="12" r="10" />
       <line x1="12" y1="8" x2="12" y2="12" />
       <line x1="12" y1="16" x2="12.01" y2="16" />
     </svg>
   ),
   Spinner: (
-    <svg 
-      width="24" 
-      height="24" 
-      viewBox="0 0 24 24" 
-      fill="none" 
-      stroke="currentColor" 
-      strokeWidth="2.5" 
-      strokeLinecap="round" 
-      strokeLinejoin="round" 
-      className="spinner-animation"
-    >
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="refresh-spin">
       <line x1="12" y1="2" x2="12" y2="6" />
       <line x1="12" y1="18" x2="12" y2="22" />
       <line x1="4.93" y1="4.93" x2="7.76" y2="7.76" />
@@ -165,31 +91,13 @@ const Vectors = {
     </svg>
   ),
   CheckCircle: (
-    <svg 
-      width="48" 
-      height="48" 
-      viewBox="0 0 24 24" 
-      fill="none" 
-      stroke="currentColor" 
-      strokeWidth="2.5" 
-      strokeLinecap="round" 
-      strokeLinejoin="round"
-    >
+    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
       <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
       <polyline points="22 4 12 14.01 9 11.01" />
     </svg>
   ),
   ArrowLeft: (
-    <svg 
-      width="20" 
-      height="20" 
-      viewBox="0 0 24 24" 
-      fill="none" 
-      stroke="currentColor" 
-      strokeWidth="2.5" 
-      strokeLinecap="round" 
-      strokeLinejoin="round"
-    >
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
       <line x1="19" y1="12" x2="5" y2="12" />
       <polyline points="12 19 5 12 12 5" />
     </svg>
@@ -247,65 +155,7 @@ function captureProfileMetadata() {
 }
 
 // ============================================================================
-// 4. UI SUB-COMPONENTS
-// ============================================================================
-
-const GlobalKeyframes = () => (
-  <style>{`
-    @keyframes modal-pop-in {
-      0% { opacity: 0; transform: scale(0.92) translateY(20px); }
-      100% { opacity: 1; transform: scale(1) translateY(0); }
-    }
-    @keyframes shake-error {
-      0%, 100% { transform: translateX(0); }
-      20%, 60% { transform: translateX(-6px); }
-      40%, 80% { transform: translateX(6px); }
-    }
-    @keyframes otp-bounce {
-      0% { transform: translateY(0) scale(1); }
-      50% { transform: translateY(-4px) scale(1.02); }
-      100% { transform: translateY(0) scale(1); }
-    }
-    .spinner-animation {
-      animation: spin 1s linear infinite;
-    }
-    @keyframes spin {
-      100% { transform: rotate(360deg); }
-    }
-    .liquid-input-wrapper:focus-within svg.input-icon {
-      color: var(--blue) !important;
-      transform: scale(1.1);
-    }
-  `}</style>
-);
-
-function AppleToggle({ checked, onChange }) {
-  return (
-    <div
-      role="switch"
-      aria-checked={checked}
-      onClick={onChange}
-      style={{
-        width: 44, height: 24, borderRadius: 12, cursor: 'pointer', flexShrink: 0,
-        background: checked ? 'var(--green)' : 'var(--glass-border)',
-        transition: 'background 250ms cubic-bezier(0.2, 0.8, 0.2, 1)',
-        position: 'relative', boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.1)'
-      }}
-    >
-      <div
-        style={{
-          position: 'absolute', top: 2, left: checked ? 22 : 2,
-          width: 20, height: 20, borderRadius: '50%', background: '#fff',
-          transition: 'left 250ms cubic-bezier(0.34, 1.56, 0.64, 1)',
-          boxShadow: '0 2px 5px rgba(0,0,0,0.2)'
-        }}
-      />
-    </div>
-  );
-}
-
-// ============================================================================
-// 5. MAIN AUTH MODAL COMPONENT
+// 4. MAIN AUTH MODAL COMPONENT
 // ============================================================================
 
 export default function AuthModal({ open, onClose, initialTab = 'signin', onVerified }) {
@@ -329,7 +179,6 @@ export default function AuthModal({ open, onClose, initialTab = 'signin', onVeri
   
   const [focusedField, setFocusedField] = useState(null);
   const [error, setError] = useState('');
-  const [shake, setShake] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
@@ -338,7 +187,6 @@ export default function AuthModal({ open, onClose, initialTab = 'signin', onVeri
       setTab(initialTab);
       setStage('form');
       setError('');
-      setShake(false);
     } else {
       setIsVisible(false);
       setTimeout(() => {
@@ -369,10 +217,6 @@ export default function AuthModal({ open, onClose, initialTab = 'signin', onVeri
 
   const triggerError = useCallback((msg) => {
     setError(msg);
-    setShake(true);
-    setTimeout(() => {
-      setShake(false);
-    }, 500); 
   }, []);
 
   const handleClose = useCallback(() => {
@@ -631,396 +475,406 @@ export default function AuthModal({ open, onClose, initialTab = 'signin', onVeri
 
   const getInputWrapperStyle = (fieldName) => ({
     display: 'flex', alignItems: 'center', gap: 12,
-    background: 'var(--glass)',
+    background: 'var(--ink-2)',
     border: '1px solid',
-    borderColor: focusedField === fieldName ? 'var(--blue)' : 'var(--glass-border)',
+    borderColor: focusedField === fieldName ? 'var(--ember)' : 'var(--glass-border)',
     borderRadius: 16, padding: '4px 16px',
-    boxShadow: focusedField === fieldName ? '0 0 0 4px rgba(10,132,255,0.15)' : 'inset 0 2px 4px rgba(0,0,0,0.02)',
+    boxShadow: focusedField === fieldName ? '0 0 0 4px color-mix(in srgb, var(--ember) 15%, transparent)' : 'inset 0 1px 3px rgba(0,0,0,0.1)',
     transition: 'all 0.2s cubic-bezier(0.2, 0.8, 0.2, 1)',
   });
 
   const getInputFieldStyle = () => ({
     flex: 1, border: 'none', background: 'transparent', outline: 'none',
-    fontSize: 16, color: 'var(--ink)', padding: '10px 0', width: '100%',
+    fontSize: 16, color: 'var(--paper)', padding: '10px 0', width: '100%',
   });
 
   if (!open && !isVisible) return null;
 
   return (
-    <>
-      <GlobalKeyframes />
+    <div
+      onClick={handleBackdropClick}
+      className={`backdrop-fade ${isVisible ? 'is-visible' : ''}`}
+      style={{
+        position: 'fixed', inset: 0, zIndex: 1000,
+        display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20
+      }}
+    >
       <div
-        onClick={handleBackdropClick}
+        onClick={(e) => e.stopPropagation()}
+        className={isVisible ? 'pop-in' : ''}
         style={{
-          position: 'fixed', inset: 0, zIndex: 1000,
-          background: 'rgba(0,0,0,0.5)',
-          backdropFilter: isVisible ? 'blur(20px)' : 'blur(0px)',
-          WebkitBackdropFilter: isVisible ? 'blur(20px)' : 'blur(0px)',
-          display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20,
-          opacity: isVisible ? 1 : 0,
-          transition: `all ${ANIMATION_DURATION}ms cubic-bezier(0.2, 0.8, 0.2, 1)`,
+          width: '100%', maxWidth: 420, position: 'relative',
+          background: 'var(--glass-white)',
+          backdropFilter: 'blur(20px) saturate(115%)',
+          WebkitBackdropFilter: 'blur(20px) saturate(115%)',
+          border: '1px solid var(--glass-border)',
+          borderRadius: 28, padding: 32,
+          boxShadow: '0 6px 18px rgba(0,0,0,0.35)',
         }}
       >
-        <div
-          onClick={(e) => e.stopPropagation()}
+        
+        <button
+          onClick={handleClose}
+          aria-label="Close"
           style={{
-            width: '100%', maxWidth: 420, position: 'relative',
-            background: 'var(--glass-strong)',
-            backdropFilter: 'blur(40px) saturate(200%)',
-            WebkitBackdropFilter: 'blur(40px) saturate(200%)',
-            border: '1px solid var(--glass-border)',
-            borderRadius: 28, padding: 32,
-            boxShadow: '0 24px 60px rgba(0,0,0,0.15)',
-            transform: isVisible ? 'scale(1) translateY(0)' : 'scale(0.96) translateY(20px)',
-            opacity: isVisible ? 1 : 0,
-            transition: `all ${ANIMATION_DURATION}ms cubic-bezier(0.2, 0.8, 0.2, 1)`,
-            animation: shake ? 'shake-error 0.5s cubic-bezier(.36,.07,.19,.97) both' : 'none'
+            position: 'absolute', top: 16, right: 16, width: 32, height: 32, borderRadius: '50%',
+            border: 'none', background: 'transparent', color: 'var(--dim)',
+            cursor: submitting ? 'default' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
+            transition: 'background 0.2s, color 0.2s', opacity: submitting ? 0.5 : 1
           }}
+          disabled={submitting}
         >
-          
-          <button
-            onClick={handleClose}
-            aria-label="Close"
-            style={{
-              position: 'absolute', top: 16, right: 16, width: 32, height: 32, borderRadius: '50%',
-              border: 'none', background: 'transparent', color: 'var(--dim)',
-              cursor: submitting ? 'default' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
-              transition: 'background 0.2s, color 0.2s', opacity: submitting ? 0.5 : 1
-            }}
-            disabled={submitting}
-          >
-            {Vectors.Close}
-          </button>
+          {Vectors.Close}
+        </button>
 
-          {stage === 'form' && (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
-              
-              <div style={{ textAlign: 'center', position: 'relative' }}>
-                {tab === 'forgot' && (
-                  <button 
-                    onClick={() => switchTab('signin')} 
-                    disabled={submitting}
-                    style={{ 
-                      position: 'absolute', left: -16, top: '50%', transform: 'translateY(-50%)',
-                      border: 'none', background: 'transparent', color: 'var(--blue)', 
-                      padding: 8, cursor: submitting ? 'default' : 'pointer', display: 'flex', 
-                      alignItems: 'center', opacity: submitting ? 0.5 : 1 
-                    }}
-                    aria-label="Back to Sign In"
-                  >
-                    {Vectors.ArrowLeft}
-                  </button>
-                )}
-                <h2 style={{ margin: '0 0 8px 0', fontSize: 24, fontWeight: 800, color: 'var(--ink)', letterSpacing: '-0.5px' }}>
-                  {tab === 'signin' ? 'Welcome Back' : tab === 'signup' ? 'Join Anonroom' : 'Reset Password'}
-                </h2>
-                <p style={{ margin: 0, fontSize: 15, color: 'var(--dim)', lineHeight: 1.4 }}>
-                  {tab === 'signin' ? 'Sign in to continue bridging the gap.' : tab === 'signup' ? 'Create an anonymous identity.' : 'Enter your email to receive a reset link.'}
-                </p>
-              </div>
-
-              {tab !== 'forgot' && (
-                <div style={{ position: 'relative', display: 'flex', background: 'var(--glass-border)', borderRadius: 16, padding: 4, boxShadow: 'inset 0 1px 4px rgba(0,0,0,0.04)' }}>
-                  <div 
-                    style={{
-                      position: 'absolute', top: 4, bottom: 4, width: 'calc(50% - 4px)',
-                      left: tab === 'signin' ? 4 : 'calc(50% + 0px)',
-                      background: 'var(--glass-strong)', borderRadius: 12,
-                      transition: 'left 300ms cubic-bezier(0.2, 0.8, 0.2, 1)',
-                      boxShadow: '0 2px 8px rgba(0,0,0,0.1)'
-                    }} 
-                  />
-                  
-                  <button
-                    onClick={() => switchTab('signin')}
-                    style={{
-                      flex: 1, zIndex: 1, padding: '10px 0', border: 'none', background: 'transparent',
-                      fontWeight: 600, fontSize: 15, borderRadius: 12,
-                      color: tab === 'signin' ? 'var(--ink)' : 'var(--dim)', cursor: 'pointer'
-                    }}
-                  >
-                    Sign In
-                  </button>
-                  <button
-                    onClick={() => switchTab('signup')}
-                    style={{
-                      flex: 1, zIndex: 1, padding: '10px 0', border: 'none', background: 'transparent',
-                      fontWeight: 600, fontSize: 15, borderRadius: 12,
-                      color: tab === 'signup' ? 'var(--ink)' : 'var(--dim)', cursor: 'pointer'
-                    }}
-                  >
-                    Create Account
-                  </button>
-                </div>
-              )}
-
-              {/* FORMS */}
-              {tab === 'signin' ? (
-                <form onSubmit={handleSignIn} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                  <div className="liquid-input-wrapper" style={getInputWrapperStyle('email')}>
-                    <div className="input-icon" style={{ color: 'var(--dim)', transition: 'all 0.2s' }}>{Vectors.Mail}</div>
-                    <input
-                      type="email" placeholder="Email Address" value={email} required
-                      onChange={(e) => setEmail(e.target.value)}
-                      onFocus={() => setFocusedField('email')}
-                      onBlur={() => setFocusedField(null)}
-                      style={getInputFieldStyle()}
-                    />
-                  </div>
-                  
-                  <div className="liquid-input-wrapper" style={getInputWrapperStyle('password')}>
-                    <div className="input-icon" style={{ color: 'var(--dim)', transition: 'all 0.2s' }}>{Vectors.Lock}</div>
-                    <input
-                      type={showPassword ? "text" : "password"} placeholder="Password" value={password} required
-                      onChange={(e) => setPassword(e.target.value)}
-                      onFocus={() => setFocusedField('password')}
-                      onBlur={() => setFocusedField(null)}
-                      style={getInputFieldStyle()}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword(!showPassword)}
-                      tabIndex="-1"
-                      style={{ border: 'none', background: 'transparent', color: showPassword ? 'var(--blue)' : 'var(--dim)', cursor: 'pointer', padding: 0, display: 'flex', transition: 'color 0.2s' }}
-                    >
-                      {showPassword ? Vectors.EyeOff : Vectors.Eye}
-                    </button>
-                  </div>
-
-                  <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: -4 }}>
-                    <button 
-                      type="button" 
-                      onClick={() => switchTab('forgot')}
-                      disabled={submitting}
-                      style={{ border: 'none', background: 'transparent', color: 'var(--blue)', fontSize: 14, fontWeight: 600, cursor: submitting ? 'default' : 'pointer', opacity: submitting ? 0.5 : 1, padding: 0 }}
-                    >
-                      Forgot Password?
-                    </button>
-                  </div>
-
-                  {error && (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--red)', fontSize: 14, fontWeight: 500, background: 'rgba(255,59,48,0.1)', padding: '10px 14px', borderRadius: 12 }}>
-                      {Vectors.Alert}
-                      <span>{error}</span>
-                    </div>
-                  )}
-
-                  <button
-                    type="submit" disabled={submitting}
-                    style={{
-                      marginTop: 8, padding: '16px 0', borderRadius: 16, border: 'none',
-                      background: 'var(--blue)', color: '#fff', fontWeight: 700, fontSize: 16, 
-                      cursor: submitting ? 'default' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-                      opacity: submitting ? 0.7 : 1, boxShadow: submitting ? 'none' : '0 8px 24px rgba(10, 132, 255, 0.3)'
-                    }}
-                  >
-                    {submitting ? <>{Vectors.Spinner} Authenticating...</> : 'Sign In'}
-                  </button>
-                </form>
-              ) : tab === 'forgot' ? (
-                <form onSubmit={handleResetPassword} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                  <div className="liquid-input-wrapper" style={getInputWrapperStyle('email')}>
-                    <div className="input-icon" style={{ color: 'var(--dim)', transition: 'all 0.2s' }}>{Vectors.Mail}</div>
-                    <input
-                      type="email" placeholder="Email Address" value={email} required
-                      onChange={(e) => setEmail(e.target.value)}
-                      onFocus={() => setFocusedField('email')}
-                      onBlur={() => setFocusedField(null)}
-                      style={getInputFieldStyle()}
-                    />
-                  </div>
-
-                  {error && (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--red)', fontSize: 14, fontWeight: 500, background: 'rgba(255,59,48,0.1)', padding: '10px 14px', borderRadius: 12 }}>
-                      {Vectors.Alert}
-                      <span>{error}</span>
-                    </div>
-                  )}
-
-                  <button
-                    type="submit" disabled={submitting}
-                    style={{
-                      marginTop: 8, padding: '16px 0', borderRadius: 16, border: 'none',
-                      background: 'var(--blue)', color: '#fff', fontWeight: 700, fontSize: 16, 
-                      cursor: submitting ? 'default' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-                      opacity: submitting ? 0.7 : 1, boxShadow: submitting ? 'none' : '0 8px 24px rgba(10, 132, 255, 0.3)'
-                    }}
-                  >
-                    {submitting ? <>{Vectors.Spinner} Sending...</> : 'Send Reset Link'}
-                  </button>
-                </form>
-              ) : (
-                <form onSubmit={handleSignUp} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
-                  <div className="liquid-input-wrapper" style={getInputWrapperStyle('username')}>
-                    <div className="input-icon" style={{ color: 'var(--dim)', transition: 'all 0.2s' }}>{Vectors.User}</div>
-                    <input
-                      type="text" placeholder="Anonymous Username" value={username} required
-                      onChange={(e) => setUsername(e.target.value)}
-                      onFocus={() => setFocusedField('username')}
-                      onBlur={() => setFocusedField(null)}
-                      style={getInputFieldStyle()}
-                    />
-                  </div>
-
-                  <div className="liquid-input-wrapper" style={getInputWrapperStyle('email')}>
-                    <div className="input-icon" style={{ color: 'var(--dim)', transition: 'all 0.2s' }}>{Vectors.Mail}</div>
-                    <input
-                      type="email" placeholder="Email Address (Kept Private)" value={email} required
-                      onChange={(e) => setEmail(e.target.value)}
-                      onFocus={() => setFocusedField('email')}
-                      onBlur={() => setFocusedField(null)}
-                      style={getInputFieldStyle()}
-                    />
-                  </div>
-                  
-                  <div className="liquid-input-wrapper" style={getInputWrapperStyle('password')}>
-                    <div className="input-icon" style={{ color: 'var(--dim)', transition: 'all 0.2s' }}>{Vectors.Lock}</div>
-                    <input
-                      type={showPassword ? "text" : "password"} placeholder="Create Password" value={password} required
-                      onChange={(e) => setPassword(e.target.value)}
-                      onFocus={() => setFocusedField('password')}
-                      onBlur={() => setFocusedField(null)}
-                      style={getInputFieldStyle()}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowPassword(!showPassword)}
-                      tabIndex="-1"
-                      style={{ border: 'none', background: 'transparent', color: showPassword ? 'var(--blue)' : 'var(--dim)', cursor: 'pointer', padding: 0, display: 'flex', transition: 'color 0.2s' }}
-                    >
-                      {showPassword ? Vectors.EyeOff : Vectors.Eye}
-                    </button>
-                  </div>
-
-                  <div className="liquid-input-wrapper" style={getInputWrapperStyle('confirmPassword')}>
-                    <div className="input-icon" style={{ color: 'var(--dim)', transition: 'all 0.2s' }}>{Vectors.Lock}</div>
-                    <input
-                      type={showConfirmPassword ? "text" : "password"} placeholder="Confirm Password" value={confirmPassword} required
-                      onChange={(e) => setConfirmPassword(e.target.value)}
-                      onFocus={() => setFocusedField('confirmPassword')}
-                      onBlur={() => setFocusedField(null)}
-                      style={getInputFieldStyle()}
-                    />
-                    <button
-                      type="button"
-                      onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                      tabIndex="-1"
-                      style={{ border: 'none', background: 'transparent', color: showConfirmPassword ? 'var(--blue)' : 'var(--dim)', cursor: 'pointer', padding: 0, display: 'flex', transition: 'color 0.2s' }}
-                    >
-                      {showConfirmPassword ? Vectors.EyeOff : Vectors.Eye}
-                    </button>
-                  </div>
-
-                  <label style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 4, cursor: 'pointer' }}>
-                    <AppleToggle checked={acceptedTerms} onChange={() => setAcceptedTerms(!acceptedTerms)} />
-                    <span style={{ fontSize: 13, color: 'var(--dim)', lineHeight: 1.4 }}>
-                      I agree to the <span style={{ color: 'var(--blue)' }}>Terms</span> and <span style={{ color: 'var(--blue)' }}>Privacy Policy</span>.
-                    </span>
-                  </label>
-
-                  {error && (
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--red)', fontSize: 14, fontWeight: 500, background: 'rgba(255,59,48,0.1)', padding: '10px 14px', borderRadius: 12 }}>
-                      {Vectors.Alert}
-                      <span>{error}</span>
-                    </div>
-                  )}
-
-                  <button
-                    type="submit" disabled={submitting}
-                    style={{
-                      marginTop: 8, padding: '16px 0', borderRadius: 16, border: 'none',
-                      background: 'var(--blue)', color: '#fff', fontWeight: 700, fontSize: 16, 
-                      cursor: submitting ? 'default' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-                      opacity: submitting ? 0.7 : 1, boxShadow: submitting ? 'none' : '0 8px 24px rgba(10, 132, 255, 0.3)'
-                    }}
-                  >
-                    {submitting ? <>{Vectors.Spinner} Checking Username...</> : 'Create Account'}
-                  </button>
-                </form>
-              )}
-            </div>
-          )}
-
-          {stage === 'otp' && (
-            <form onSubmit={handleVerifyOtp} style={{ display: 'flex', flexDirection: 'column', gap: 28 }}>
-              <div style={{ textAlign: 'center' }}>
-                <div style={{ width: 64, height: 64, borderRadius: '50%', background: 'rgba(10,132,255,0.1)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--blue)', margin: '0 auto 16px' }}>
-                  {Vectors.Mail}
-                </div>
-                <h2 style={{ margin: '0 0 8px 0', fontSize: 24, fontWeight: 800, color: 'var(--ink)' }}>
-                  Check Your Email
-                </h2>
-                <p style={{ margin: 0, fontSize: 15, color: 'var(--dim)', lineHeight: 1.5 }}>
-                  Enter the 6-digit verification code sent to <br/>
-                  <span style={{ color: 'var(--ink)', fontWeight: 600 }}>{email}</span>
-                </p>
-              </div>
-
-              <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }} onPaste={handleOtpPaste}>
-                {otp.map((digit, i) => (
-                  <input
-                    key={i}
-                    ref={(el) => (otpRefs.current[i] = el)}
-                    value={digit}
-                    onChange={(e) => handleOtpChange(i, e.target.value)}
-                    onKeyDown={(e) => handleOtpKeyDown(i, e)}
-                    onFocus={() => setFocusedField(`otp-${i}`)}
-                    onBlur={() => setFocusedField(null)}
-                    inputMode="numeric" maxLength={1}
-                    style={{
-                      width: 48, height: 56, textAlign: 'center', fontSize: 24, fontWeight: 700,
-                      background: 'var(--glass)', padding: 0, outline: 'none',
-                      color: 'var(--ink)', borderRadius: 14, border: '1px solid',
-                      borderColor: focusedField === `otp-${i}` || digit ? 'var(--blue)' : 'var(--glass-border)',
-                      transition: 'border-color 0.2s, box-shadow 0.2s',
-                      boxShadow: focusedField === `otp-${i}` ? '0 0 0 4px rgba(10,132,255,0.15)' : 'none'
-                    }}
-                  />
-                ))}
-              </div>
-
-              {error && (
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, color: 'var(--red)', fontSize: 14, fontWeight: 500 }}>
-                  {Vectors.Alert}
-                  <span>{error}</span>
-                </div>
-              )}
-
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-                <button
-                  type="submit" disabled={submitting}
-                  style={{
-                    padding: '16px 0', borderRadius: 16, border: 'none',
-                    background: 'var(--blue)', color: '#fff', fontWeight: 700, fontSize: 16, 
-                    cursor: submitting ? 'default' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
-                    opacity: submitting ? 0.7 : 1, boxShadow: submitting ? 'none' : '0 8px 24px rgba(10, 132, 255, 0.3)'
+        {stage === 'form' && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 24 }}>
+            
+            <div style={{ textAlign: 'center', position: 'relative' }}>
+              {tab === 'forgot' && (
+                <button 
+                  onClick={() => switchTab('signin')} 
+                  disabled={submitting}
+                  style={{ 
+                    position: 'absolute', left: -16, top: '50%', transform: 'translateY(-50%)',
+                    border: 'none', background: 'transparent', color: 'var(--ember)', 
+                    padding: 8, cursor: submitting ? 'default' : 'pointer', display: 'flex', 
+                    alignItems: 'center', opacity: submitting ? 0.5 : 1 
                   }}
+                  aria-label="Back to Sign In"
                 >
-                  {submitting ? <>{Vectors.Spinner} Verifying...</> : 'Verify & Continue'}
+                  {Vectors.ArrowLeft}
                 </button>
-
-                <button
-                  type="button" onClick={handleResend} disabled={resendCooldown > 0 || submitting}
-                  style={{ background: 'none', border: 'none', fontSize: 14, fontWeight: 600, cursor: resendCooldown > 0 ? 'default' : 'pointer', textAlign: 'center', padding: '12px 0', color: resendCooldown > 0 ? 'var(--dim)' : 'var(--blue)', transition: 'color 0.2s' }}
-                >
-                  {resendCooldown > 0 ? `Resend code in ${resendCooldown}s` : 'Resend Verification Code'}
-                </button>
-              </div>
-            </form>
-          )}
-
-          {stage === 'success' && (
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '40px 0' }}>
-              <div style={{ color: 'var(--green)', marginBottom: 20 }}>{Vectors.CheckCircle}</div>
-              <h2 style={{ margin: '0 0 8px 0', fontSize: 24, fontWeight: 800, color: 'var(--ink)' }}>Success</h2>
-              <p style={{ margin: 0, fontSize: 15, color: 'var(--dim)' }}>
-                {tab === 'forgot' ? 'Check your email for the reset link.' : 'Redirecting you to Anonroom...'}
+              )}
+              <h2 style={{ margin: '0 0 8px 0', fontSize: 24, fontWeight: 800, color: 'var(--paper)', letterSpacing: '-0.5px' }}>
+                {tab === 'signin' ? 'Welcome Back' : tab === 'signup' ? 'Join Anonroom' : 'Reset Password'}
+              </h2>
+              <p style={{ margin: 0, fontSize: 15, color: 'var(--dim)', lineHeight: 1.4 }}>
+                {tab === 'signin' ? 'Sign in to continue bridging the gap.' : tab === 'signup' ? 'Create an anonymous identity.' : 'Enter your email to receive a reset link.'}
               </p>
             </div>
-          )}
 
-        </div>
+            {tab !== 'forgot' && (
+              <div style={{ position: 'relative', display: 'flex', background: 'var(--ink-2)', borderRadius: 16, padding: 4, boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.1)', border: '1px solid var(--glass-border)' }}>
+                <div 
+                  style={{
+                    position: 'absolute', top: 4, bottom: 4, width: 'calc(50% - 4px)',
+                    left: tab === 'signin' ? 4 : 'calc(50% + 2px)',
+                    background: 'var(--glass-white)', borderRadius: 12,
+                    transition: 'left 300ms cubic-bezier(0.2, 0.8, 0.2, 1)',
+                    border: '1px solid var(--glass-border)'
+                  }} 
+                />
+                
+                <button
+                  onClick={() => switchTab('signin')}
+                  style={{
+                    flex: 1, zIndex: 1, padding: '10px 0', border: 'none', background: 'transparent',
+                    fontWeight: 600, fontSize: 15, borderRadius: 12,
+                    color: tab === 'signin' ? 'var(--paper)' : 'var(--dim)', cursor: 'pointer',
+                    transition: 'color 0.2s'
+                  }}
+                >
+                  Sign In
+                </button>
+                <button
+                  onClick={() => switchTab('signup')}
+                  style={{
+                    flex: 1, zIndex: 1, padding: '10px 0', border: 'none', background: 'transparent',
+                    fontWeight: 600, fontSize: 15, borderRadius: 12,
+                    color: tab === 'signup' ? 'var(--paper)' : 'var(--dim)', cursor: 'pointer',
+                    transition: 'color 0.2s'
+                  }}
+                >
+                  Create Account
+                </button>
+              </div>
+            )}
+
+            {/* FORMS */}
+            {tab === 'signin' ? (
+              <form onSubmit={handleSignIn} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                <div style={getInputWrapperStyle('email')}>
+                  <div style={{ color: focusedField === 'email' ? 'var(--ember)' : 'var(--dim)', transform: focusedField === 'email' ? 'scale(1.1)' : 'scale(1)', transition: 'all 0.2s' }}>
+                    {Vectors.Mail}
+                  </div>
+                  <input
+                    type="email" placeholder="Email Address" value={email} required
+                    onChange={(e) => setEmail(e.target.value)}
+                    onFocus={() => setFocusedField('email')}
+                    onBlur={() => setFocusedField(null)}
+                    style={getInputFieldStyle()}
+                  />
+                </div>
+                
+                <div style={getInputWrapperStyle('password')}>
+                  <div style={{ color: focusedField === 'password' ? 'var(--ember)' : 'var(--dim)', transform: focusedField === 'password' ? 'scale(1.1)' : 'scale(1)', transition: 'all 0.2s' }}>
+                    {Vectors.Lock}
+                  </div>
+                  <input
+                    type={showPassword ? "text" : "password"} placeholder="Password" value={password} required
+                    onChange={(e) => setPassword(e.target.value)}
+                    onFocus={() => setFocusedField('password')}
+                    onBlur={() => setFocusedField(null)}
+                    style={getInputFieldStyle()}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    tabIndex="-1"
+                    style={{ border: 'none', background: 'transparent', color: showPassword ? 'var(--ember)' : 'var(--dim)', cursor: 'pointer', padding: 0, display: 'flex', transition: 'color 0.2s' }}
+                  >
+                    {showPassword ? Vectors.EyeOff : Vectors.Eye}
+                  </button>
+                </div>
+
+                <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: -4 }}>
+                  <button 
+                    type="button" 
+                    onClick={() => switchTab('forgot')}
+                    disabled={submitting}
+                    style={{ border: 'none', background: 'transparent', color: 'var(--ember)', fontSize: 14, fontWeight: 600, cursor: submitting ? 'default' : 'pointer', opacity: submitting ? 0.5 : 1, padding: 0 }}
+                  >
+                    Forgot Password?
+                  </button>
+                </div>
+
+                {error && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--ember)', fontSize: 14, fontWeight: 500, background: 'color-mix(in srgb, var(--ember) 16%, transparent)', padding: '10px 14px', borderRadius: 12 }}>
+                    {Vectors.Alert}
+                    <span>{error}</span>
+                  </div>
+                )}
+
+                <button
+                  type="submit" disabled={submitting}
+                  className={!submitting ? 'chat-row' : ''}
+                  style={{
+                    marginTop: 8, padding: '16px 0', borderRadius: 16, border: 'none',
+                    background: submitting ? 'var(--glass-border)' : 'var(--ember)', color: '#fff', fontWeight: 700, fontSize: 16, 
+                    cursor: submitting ? 'default' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                    transition: 'background 0.2s'
+                  }}
+                >
+                  {submitting ? <>{Vectors.Spinner} Authenticating...</> : 'Sign In'}
+                </button>
+              </form>
+            ) : tab === 'forgot' ? (
+              <form onSubmit={handleResetPassword} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                <div style={getInputWrapperStyle('email')}>
+                  <div style={{ color: focusedField === 'email' ? 'var(--ember)' : 'var(--dim)', transform: focusedField === 'email' ? 'scale(1.1)' : 'scale(1)', transition: 'all 0.2s' }}>
+                    {Vectors.Mail}
+                  </div>
+                  <input
+                    type="email" placeholder="Email Address" value={email} required
+                    onChange={(e) => setEmail(e.target.value)}
+                    onFocus={() => setFocusedField('email')}
+                    onBlur={() => setFocusedField(null)}
+                    style={getInputFieldStyle()}
+                  />
+                </div>
+
+                {error && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--ember)', fontSize: 14, fontWeight: 500, background: 'color-mix(in srgb, var(--ember) 16%, transparent)', padding: '10px 14px', borderRadius: 12 }}>
+                    {Vectors.Alert}
+                    <span>{error}</span>
+                  </div>
+                )}
+
+                <button
+                  type="submit" disabled={submitting}
+                  className={!submitting ? 'chat-row' : ''}
+                  style={{
+                    marginTop: 8, padding: '16px 0', borderRadius: 16, border: 'none',
+                    background: submitting ? 'var(--glass-border)' : 'var(--ember)', color: '#fff', fontWeight: 700, fontSize: 16, 
+                    cursor: submitting ? 'default' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                    transition: 'background 0.2s'
+                  }}
+                >
+                  {submitting ? <>{Vectors.Spinner} Sending...</> : 'Send Reset Link'}
+                </button>
+              </form>
+            ) : (
+              <form onSubmit={handleSignUp} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
+                <div style={getInputWrapperStyle('username')}>
+                  <div style={{ color: focusedField === 'username' ? 'var(--ember)' : 'var(--dim)', transform: focusedField === 'username' ? 'scale(1.1)' : 'scale(1)', transition: 'all 0.2s' }}>
+                    {Vectors.User}
+                  </div>
+                  <input
+                    type="text" placeholder="Anonymous Username" value={username} required
+                    onChange={(e) => setUsername(e.target.value)}
+                    onFocus={() => setFocusedField('username')}
+                    onBlur={() => setFocusedField(null)}
+                    style={getInputFieldStyle()}
+                  />
+                </div>
+
+                <div style={getInputWrapperStyle('email')}>
+                  <div style={{ color: focusedField === 'email' ? 'var(--ember)' : 'var(--dim)', transform: focusedField === 'email' ? 'scale(1.1)' : 'scale(1)', transition: 'all 0.2s' }}>
+                    {Vectors.Mail}
+                  </div>
+                  <input
+                    type="email" placeholder="Email Address (Kept Private)" value={email} required
+                    onChange={(e) => setEmail(e.target.value)}
+                    onFocus={() => setFocusedField('email')}
+                    onBlur={() => setFocusedField(null)}
+                    style={getInputFieldStyle()}
+                  />
+                </div>
+                
+                <div style={getInputWrapperStyle('password')}>
+                  <div style={{ color: focusedField === 'password' ? 'var(--ember)' : 'var(--dim)', transform: focusedField === 'password' ? 'scale(1.1)' : 'scale(1)', transition: 'all 0.2s' }}>
+                    {Vectors.Lock}
+                  </div>
+                  <input
+                    type={showPassword ? "text" : "password"} placeholder="Create Password" value={password} required
+                    onChange={(e) => setPassword(e.target.value)}
+                    onFocus={() => setFocusedField('password')}
+                    onBlur={() => setFocusedField(null)}
+                    style={getInputFieldStyle()}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowPassword(!showPassword)}
+                    tabIndex="-1"
+                    style={{ border: 'none', background: 'transparent', color: showPassword ? 'var(--ember)' : 'var(--dim)', cursor: 'pointer', padding: 0, display: 'flex', transition: 'color 0.2s' }}
+                  >
+                    {showPassword ? Vectors.EyeOff : Vectors.Eye}
+                  </button>
+                </div>
+
+                <div style={getInputWrapperStyle('confirmPassword')}>
+                  <div style={{ color: focusedField === 'confirmPassword' ? 'var(--ember)' : 'var(--dim)', transform: focusedField === 'confirmPassword' ? 'scale(1.1)' : 'scale(1)', transition: 'all 0.2s' }}>
+                    {Vectors.Lock}
+                  </div>
+                  <input
+                    type={showConfirmPassword ? "text" : "password"} placeholder="Confirm Password" value={confirmPassword} required
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    onFocus={() => setFocusedField('confirmPassword')}
+                    onBlur={() => setFocusedField(null)}
+                    style={getInputFieldStyle()}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                    tabIndex="-1"
+                    style={{ border: 'none', background: 'transparent', color: showConfirmPassword ? 'var(--ember)' : 'var(--dim)', cursor: 'pointer', padding: 0, display: 'flex', transition: 'color 0.2s' }}
+                  >
+                    {showConfirmPassword ? Vectors.EyeOff : Vectors.Eye}
+                  </button>
+                </div>
+
+                <label style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 4, cursor: 'pointer' }}>
+                  <GlassToggle checked={acceptedTerms} onChange={setAcceptedTerms} />
+                  <span style={{ fontSize: 13, color: 'var(--dim)', lineHeight: 1.4 }}>
+                    I agree to the <span style={{ color: 'var(--ember)' }}>Terms</span> and <span style={{ color: 'var(--ember)' }}>Privacy Policy</span>.
+                  </span>
+                </label>
+
+                {error && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--ember)', fontSize: 14, fontWeight: 500, background: 'color-mix(in srgb, var(--ember) 16%, transparent)', padding: '10px 14px', borderRadius: 12 }}>
+                    {Vectors.Alert}
+                    <span>{error}</span>
+                  </div>
+                )}
+
+                <button
+                  type="submit" disabled={submitting}
+                  className={!submitting ? 'chat-row' : ''}
+                  style={{
+                    marginTop: 8, padding: '16px 0', borderRadius: 16, border: 'none',
+                    background: submitting ? 'var(--glass-border)' : 'var(--ember)', color: '#fff', fontWeight: 700, fontSize: 16, 
+                    cursor: submitting ? 'default' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                    transition: 'background 0.2s'
+                  }}
+                >
+                  {submitting ? <>{Vectors.Spinner} Checking Username...</> : 'Create Account'}
+                </button>
+              </form>
+            )}
+          </div>
+        )}
+
+        {stage === 'otp' && (
+          <form onSubmit={handleVerifyOtp} style={{ display: 'flex', flexDirection: 'column', gap: 28 }}>
+            <div style={{ textAlign: 'center' }}>
+              <div style={{ width: 64, height: 64, borderRadius: '50%', background: 'var(--glass-border)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--ember)', margin: '0 auto 16px' }}>
+                {Vectors.Mail}
+              </div>
+              <h2 style={{ margin: '0 0 8px 0', fontSize: 24, fontWeight: 800, color: 'var(--paper)' }}>
+                Check Your Email
+              </h2>
+              <p style={{ margin: 0, fontSize: 15, color: 'var(--dim)', lineHeight: 1.5 }}>
+                Enter the 6-digit verification code sent to <br/>
+                <span style={{ color: 'var(--paper)', fontWeight: 600 }}>{email}</span>
+              </p>
+            </div>
+
+            <div style={{ display: 'flex', gap: 10, justifyContent: 'center' }} onPaste={handleOtpPaste}>
+              {otp.map((digit, i) => (
+                <input
+                  key={i}
+                  ref={(el) => (otpRefs.current[i] = el)}
+                  value={digit}
+                  onChange={(e) => handleOtpChange(i, e.target.value)}
+                  onKeyDown={(e) => handleOtpKeyDown(i, e)}
+                  onFocus={() => setFocusedField(`otp-${i}`)}
+                  onBlur={() => setFocusedField(null)}
+                  inputMode="numeric" maxLength={1}
+                  style={{
+                    width: 48, height: 56, textAlign: 'center', fontSize: 24, fontWeight: 700,
+                    background: 'var(--ink-2)', padding: 0, outline: 'none',
+                    color: 'var(--paper)', borderRadius: 14, border: '1px solid',
+                    borderColor: focusedField === `otp-${i}` || digit ? 'var(--ember)' : 'var(--glass-border)',
+                    transition: 'border-color 0.2s, box-shadow 0.2s',
+                    boxShadow: focusedField === `otp-${i}` ? '0 0 0 4px color-mix(in srgb, var(--ember) 15%, transparent)' : 'none'
+                  }}
+                />
+              ))}
+            </div>
+
+            {error && (
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, color: 'var(--ember)', fontSize: 14, fontWeight: 500 }}>
+                {Vectors.Alert}
+                <span>{error}</span>
+              </div>
+            )}
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+              <button
+                type="submit" disabled={submitting}
+                className={!submitting ? 'chat-row' : ''}
+                style={{
+                  padding: '16px 0', borderRadius: 16, border: 'none',
+                  background: submitting ? 'var(--glass-border)' : 'var(--ember)', color: '#fff', fontWeight: 700, fontSize: 16, 
+                  cursor: submitting ? 'default' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
+                  transition: 'background 0.2s'
+                }}
+              >
+                {submitting ? <>{Vectors.Spinner} Verifying...</> : 'Verify & Continue'}
+              </button>
+
+              <button
+                type="button" onClick={handleResend} disabled={resendCooldown > 0 || submitting}
+                style={{ background: 'none', border: 'none', fontSize: 14, fontWeight: 600, cursor: resendCooldown > 0 ? 'default' : 'pointer', textAlign: 'center', padding: '12px 0', color: resendCooldown > 0 ? 'var(--dim)' : 'var(--ember)', transition: 'color 0.2s' }}
+              >
+                {resendCooldown > 0 ? `Resend code in ${resendCooldown}s` : 'Resend Verification Code'}
+              </button>
+            </div>
+          </form>
+        )}
+
+        {stage === 'success' && (
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '40px 0' }}>
+            <div style={{ color: 'var(--signal)', marginBottom: 20 }}>{Vectors.CheckCircle}</div>
+            <h2 style={{ margin: '0 0 8px 0', fontSize: 24, fontWeight: 800, color: 'var(--paper)' }}>Success</h2>
+            <p style={{ margin: 0, fontSize: 15, color: 'var(--dim)' }}>
+              {tab === 'forgot' ? 'Check your email for the reset link.' : 'Redirecting you to Anonroom...'}
+            </p>
+          </div>
+        )}
+
       </div>
-    </>
+    </div>
   );
 }

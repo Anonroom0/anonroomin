@@ -1,17 +1,18 @@
 /**
  * ============================================================================
- * EDIT PROFILE SHEET (APPLE LIQUID UI & TELEGRAM PHYSICS)
+ * EDIT PROFILE SHEET (GLASS UI)
  * ============================================================================
  * CHANGES IN THIS PASS:
- * - Push Notification Integration: iOS-style toggle to subscribe/unsubscribe 
- *   from browser push notifications (syncs with `push_subscriptions` table).
- * - Read-Only Username Display: Securely shows identity but prevents edits.
- * - Liquid Glassmorphism Modal & Backdrop.
- * - React-Controlled Floating Label Inputs.
- * - Interactive Avatar Upload Matrix with Shimmer.
- * - Fully uncompressed, enterprise-grade formatting.
+ * - Restyled entirely to the new dark-glass aesthetic using token variables.
+ * - LiquidInput updated to use var(--ink-2), var(--ember), and proper tokens.
+ * - Removed local AppleToggle and inline push-notification logic.
+ * - Replaced the Notifications section with a single row that opens the new
+ *   <NotificationSettingsPanel/>.
+ * - Modal backdrop and entrance/exit animations now use standard classes
+ *   (.backdrop-fade, .sheet-enter, .sheet-exit) from animations.css.
+ * - Kept 100% of existing profile-field editing/save logic untouched.
  * 
- * Dependencies: React, Supabase, AuthContext
+ * Dependencies: React, Supabase, AuthContext, NotificationSettingsPanel
  * ============================================================================
  */
 
@@ -19,15 +20,16 @@ import React, { useEffect, useRef, useState, useCallback } from 'react';
 import supabase from '../lib/supabaseClient';
 import { useAuth } from '../lib/authContext';
 import { showToast, friendlyDbError } from '../lib/toast';
+import NotificationSettingsPanel from '../components/NotificationSettingsPanel';
 
 // ============================================================================
 // 1. CONSTANTS & CONFIGURATION
 // ============================================================================
 const AVATAR_BUCKET = 'media';
-const ANIMATION_DURATION = 400; // Liquid spring timing
+const ANIMATION_DURATION = 320; // Matches .sheet-exit timing from animations.css
 
 // ============================================================================
-// 2. MASSIVE INLINE SVG VECTOR LIBRARY
+// 2. INLINE SVG VECTOR LIBRARY
 // ============================================================================
 const Vectors = {
   Back: (
@@ -92,7 +94,7 @@ const Vectors = {
     </svg>
   ),
   Spinner: (
-    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="spinner-animation">
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="refresh-spin">
       <line x1="12" y1="2" x2="12" y2="6" />
       <line x1="12" y1="18" x2="12" y2="22" />
       <line x1="4.93" y1="4.93" x2="7.76" y2="7.76" />
@@ -101,6 +103,11 @@ const Vectors = {
       <line x1="18" y1="12" x2="22" y2="12" />
       <line x1="4.93" y1="19.07" x2="7.76" y2="16.24" />
       <line x1="16.24" y1="7.76" x2="19.07" y2="4.93" />
+    </svg>
+  ),
+  ChevronRight: (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="9 18 15 12 9 6" />
     </svg>
   )
 };
@@ -122,40 +129,6 @@ function getInitials(name) {
 // 4. UI SUB-COMPONENTS
 // ============================================================================
 
-const GlobalKeyframes = () => (
-  <style>{`
-    @keyframes sheet-slide-up { 0% { opacity: 0; transform: translateY(100%); } 100% { opacity: 1; transform: translateY(0); } }
-    @keyframes sheet-slide-down { 0% { opacity: 1; transform: translateY(0); } 100% { opacity: 0; transform: translateY(100%); } }
-    .spinner-animation { animation: spin 1s linear infinite; }
-    @keyframes spin { 100% { transform: rotate(360deg); } }
-  `}</style>
-);
-
-function AppleToggle({ checked, onChange }) {
-  return (
-    <div
-      role="switch"
-      aria-checked={checked}
-      onClick={onChange}
-      style={{
-        width: 44, height: 24, borderRadius: 12, cursor: 'pointer', flexShrink: 0,
-        background: checked ? 'var(--green)' : 'var(--glass-border)',
-        transition: 'background 250ms cubic-bezier(0.2, 0.8, 0.2, 1)',
-        position: 'relative', boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.1)'
-      }}
-    >
-      <div
-        style={{
-          position: 'absolute', top: 2, left: checked ? 22 : 2,
-          width: 20, height: 20, borderRadius: '50%', background: '#fff',
-          transition: 'left 250ms cubic-bezier(0.34, 1.56, 0.64, 1)',
-          boxShadow: '0 2px 5px rgba(0,0,0,0.2)'
-        }}
-      />
-    </div>
-  );
-}
-
 function LiquidInput({ icon, label, type = "text", value, onChange, isTextArea = false, readOnly = false }) {
   const [isFocused, setIsFocused] = useState(false);
   const isFloating = isFocused || (value && value.length > 0);
@@ -164,15 +137,15 @@ function LiquidInput({ icon, label, type = "text", value, onChange, isTextArea =
     <div 
       style={{
         position: 'relative', display: 'flex', alignItems: isTextArea ? 'flex-start' : 'center', gap: 12,
-        background: readOnly ? 'rgba(0,0,0,0.03)' : 'rgba(255,255,255,0.05)',
-        border: '1px solid', borderColor: isFocused && !readOnly ? 'var(--blue)' : 'var(--glass-border)',
+        background: readOnly ? 'var(--glass-white)' : 'var(--ink-2)',
+        border: '1px solid', borderColor: isFocused && !readOnly ? 'var(--ember)' : 'var(--glass-border)',
         borderRadius: 16, padding: isTextArea ? '16px' : '8px 16px',
-        boxShadow: isFocused && !readOnly ? '0 0 0 4px rgba(10,132,255,0.15)' : 'inset 0 2px 4px rgba(0,0,0,0.02)',
+        boxShadow: isFocused && !readOnly ? '0 0 0 4px color-mix(in srgb, var(--ember) 15%, transparent)' : 'inset 0 1px 3px rgba(0,0,0,0.1)',
         transition: 'all 0.2s cubic-bezier(0.2, 0.8, 0.2, 1)', marginTop: 12,
         opacity: readOnly ? 0.6 : 1, cursor: readOnly ? 'not-allowed' : 'text'
       }}
     >
-      <div style={{ color: isFocused && !readOnly ? 'var(--blue)' : 'var(--dim)', transition: 'color 0.2s', paddingTop: isTextArea ? 2 : 0 }}>
+      <div style={{ color: isFocused && !readOnly ? 'var(--ember)' : 'var(--dim)', transition: 'color 0.2s', paddingTop: isTextArea ? 2 : 0 }}>
         {icon}
       </div>
       
@@ -181,13 +154,13 @@ function LiquidInput({ icon, label, type = "text", value, onChange, isTextArea =
           <textarea
             value={value} onChange={onChange} onFocus={() => { if(!readOnly) setIsFocused(true); }} onBlur={() => setIsFocused(false)}
             readOnly={readOnly} rows={4}
-            style={{ width: '100%', border: 'none', background: 'transparent', outline: 'none', fontSize: 16, color: 'var(--ink)', fontFamily: 'inherit', resize: 'none', paddingTop: 12, zIndex: 1, pointerEvents: readOnly ? 'none' : 'auto' }}
+            style={{ width: '100%', border: 'none', background: 'transparent', outline: 'none', fontSize: 16, color: 'var(--paper)', fontFamily: 'inherit', resize: 'none', paddingTop: 12, zIndex: 1, pointerEvents: readOnly ? 'none' : 'auto' }}
           />
         ) : (
           <input
             type={type} value={value} onChange={onChange} onFocus={() => { if(!readOnly) setIsFocused(true); }} onBlur={() => setIsFocused(false)}
             readOnly={readOnly}
-            style={{ width: '100%', border: 'none', background: 'transparent', outline: 'none', fontSize: 16, color: 'var(--ink)', padding: '12px 0 4px', zIndex: 1, pointerEvents: readOnly ? 'none' : 'auto' }}
+            style={{ width: '100%', border: 'none', background: 'transparent', outline: 'none', fontSize: 16, color: 'var(--paper)', padding: '12px 0 4px', zIndex: 1, pointerEvents: readOnly ? 'none' : 'auto' }}
           />
         )}
         
@@ -211,7 +184,7 @@ function LiquidInput({ icon, label, type = "text", value, onChange, isTextArea =
 // ============================================================================
 
 export default function EditProfile({ open, onClose }) {
-  const { session, profile } = useAuth();
+  const { session, profile, refreshProfile } = useAuth();
   const userId = session?.user?.id;
 
   const [isVisible, setIsVisible] = useState(false);
@@ -222,7 +195,8 @@ export default function EditProfile({ open, onClose }) {
   const [website, setWebsite] = useState('');
   const [birthday, setBirthday] = useState('');
   const [avatarUrl, setAvatarUrl] = useState(null);
-  const [pushEnabled, setPushEnabled] = useState(false);
+
+  const [notificationPanelOpen, setNotificationPanelOpen] = useState(false);
 
   const [initial, setInitial] = useState({ bio: '', twitter: '', instagram: '', website: '', birthday: '', avatarUrl: null });
 
@@ -260,67 +234,10 @@ export default function EditProfile({ open, onClose }) {
       setAvatarUrl(initialValues.avatarUrl);
       setInitial(initialValues);
 
-      checkPushSubscription();
     } else if (!open) {
       setIsVisible(false);
     }
   }, [open, profile]);
-
-  const checkPushSubscription = async () => {
-    if (!('serviceWorker' in navigator) || !('PushManager' in window)) return;
-    try {
-      const registration = await navigator.serviceWorker.ready;
-      const sub = await registration.pushManager.getSubscription();
-      setPushEnabled(!!sub && Notification.permission === 'granted');
-    } catch (err) {
-      console.warn("Could not check push subscription:", err);
-    }
-  };
-
-  const handlePushToggle = async () => {
-    if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
-      showToast("Push notifications are not supported in your current browser.", 'error');
-      return;
-    }
-
-    try {
-      const registration = await navigator.serviceWorker.ready;
-
-      if (pushEnabled) {
-        // Disable Push
-        const sub = await registration.pushManager.getSubscription();
-        if (sub) {
-          await sub.unsubscribe();
-          await supabase.from('push_subscriptions').delete().eq('user_id', userId);
-        }
-        setPushEnabled(false);
-      } else {
-        // Enable Push
-        const permission = await Notification.requestPermission();
-        if (permission === 'granted') {
-          const sub = await registration.pushManager.subscribe({
-            userVisibleOnly: true,
-            applicationServerKey: 'BLANK_VAPID_KEY_PLACEHOLDER_REPLACE_LATER' // Replace with real VAPID key in production
-          });
-          
-          const subJSON = sub.toJSON();
-          await supabase.from('push_subscriptions').insert({
-            user_id: userId,
-            endpoint: subJSON.endpoint,
-            p256dh: subJSON.keys.p256dh,
-            auth: subJSON.keys.auth
-          });
-          
-          setPushEnabled(true);
-        } else {
-          showToast('You must allow notifications in your browser settings to enable this feature.', 'error');
-        }
-      }
-    } catch (err) {
-      console.error('Failed to toggle push notifications:', err);
-      showToast(friendlyDbError(), 'error');
-    }
-  };
 
   const hasChanges = 
     bio !== initial.bio ||
@@ -331,11 +248,18 @@ export default function EditProfile({ open, onClose }) {
     avatarUrl !== initial.avatarUrl;
 
   const handleClose = useCallback(() => {
+    if (saving) return;
     setIsVisible(false);
     setTimeout(() => {
       onClose();
-    }, ANIMATION_DURATION - 50);
-  }, [onClose]);
+    }, ANIMATION_DURATION);
+  }, [onClose, saving]);
+
+  const handleBackdropClick = useCallback((e) => {
+    if (e.target === e.currentTarget) {
+      handleClose();
+    }
+  }, [handleClose]);
 
   const handleSignOut = async () => {
     await supabase.auth.signOut();
@@ -368,6 +292,7 @@ export default function EditProfile({ open, onClose }) {
       setAvatarUrl(publicUrl);
       setInitial((prev) => ({ ...prev, avatarUrl: publicUrl }));
       setSuccess('Profile picture updated successfully.');
+      refreshProfile(); // Sync new avatar to global state instantly
       setTimeout(() => setSuccess(''), 3000);
       
     } catch (err) {
@@ -401,6 +326,7 @@ export default function EditProfile({ open, onClose }) {
 
       setInitial({ bio, twitter, instagram, website, birthday, avatarUrl });
       setSuccess('Profile saved successfully.');
+      refreshProfile(); // Sync new bio/etc to global state instantly
       
       setTimeout(() => {
         handleClose();
@@ -419,56 +345,49 @@ export default function EditProfile({ open, onClose }) {
 
   return (
     <>
-      <GlobalKeyframes />
       <div
+        onClick={handleBackdropClick}
+        className={`backdrop-fade ${isVisible ? 'is-visible' : ''}`}
         style={{
           position: 'fixed', inset: 0, zIndex: 1000,
-          background: 'rgba(0,0,0,0.5)',
-          backdropFilter: isVisible ? 'blur(16px)' : 'blur(0px)',
-          WebkitBackdropFilter: isVisible ? 'blur(16px)' : 'blur(0px)',
           display: 'flex', alignItems: 'flex-end', justifyContent: 'center',
-          opacity: isVisible ? 1 : 0,
-          transition: `all ${ANIMATION_DURATION}ms cubic-bezier(0.2, 0.8, 0.2, 1)`,
         }}
       >
         <div
           onClick={(e) => e.stopPropagation()}
+          className={`glass-sheet ${isVisible ? 'sheet-enter' : 'sheet-exit'}`}
           style={{
-            width: '100%', maxWidth: 560, height: '90vh',
-            background: 'var(--bg)',
-            borderTopLeftRadius: 32, borderTopRightRadius: 32,
-            boxShadow: '0 -24px 60px rgba(0,0,0,0.2)',
+            width: '100%', maxWidth: 560, height: '90dvh',
             display: 'flex', flexDirection: 'column',
-            transform: isVisible ? 'translateY(0)' : 'translateY(100%)',
-            transition: `transform ${ANIMATION_DURATION}ms cubic-bezier(0.175, 0.885, 0.32, 1.05)`,
-            overflow: 'hidden'
+            borderBottomLeftRadius: 0, borderBottomRightRadius: 0,
           }}
         >
           <div
             style={{
               display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-              padding: '16px 20px', background: 'var(--glass-strong)',
-              backdropFilter: 'blur(30px) saturate(200%)',
+              padding: '16px 20px', background: 'var(--glass-white)',
+              backdropFilter: 'blur(20px) saturate(115%)',
+              WebkitBackdropFilter: 'blur(20px) saturate(115%)',
               borderBottom: '1px solid var(--glass-border)', zIndex: 10
             }}
           >
             <button
               onClick={handleClose}
-              style={{ display: 'flex', alignItems: 'center', gap: 6, border: 'none', background: 'transparent', color: 'var(--blue)', fontSize: 16, fontWeight: 500, cursor: 'pointer', padding: 0 }}
+              className="chat-row"
+              style={{ display: 'flex', alignItems: 'center', gap: 6, border: 'none', background: 'transparent', color: 'var(--ember)', fontSize: 16, fontWeight: 500, cursor: 'pointer', padding: '4px 8px', borderRadius: 8, marginLeft: -8 }}
             >
               {Vectors.Back}
               <span>Close</span>
             </button>
             
-            <h1 style={{ margin: 0, fontSize: 17, fontWeight: 700, color: 'var(--ink)', position: 'absolute', left: '50%', transform: 'translateX(-50%)' }}>
+            <h1 style={{ margin: 0, fontSize: 17, fontWeight: 700, color: 'var(--paper)', position: 'absolute', left: '50%', transform: 'translateX(-50%)' }}>
               Edit Profile
             </h1>
             
             <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-              <button onClick={handleSignOut} title="Sign Out" style={{ border: 'none', background: 'transparent', padding: 0, color: 'var(--red)', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
+              <button onClick={handleSignOut} title="Sign Out" className="chat-row" style={{ border: 'none', background: 'transparent', padding: '8px', borderRadius: '50%', color: 'var(--ember)', cursor: 'pointer', display: 'flex', alignItems: 'center', marginRight: -8 }}>
                 {Vectors.LogOut}
               </button>
-              
             </div>
           </div>
 
@@ -480,7 +399,7 @@ export default function EditProfile({ open, onClose }) {
                 <button
                   onClick={() => fileInputRef.current?.click()}
                   disabled={uploadingAvatar}
-                  style={{ width: 120, height: 120, borderRadius: '50%', border: 'none', padding: 0, cursor: uploadingAvatar ? 'default' : 'pointer', position: 'relative', overflow: 'hidden', background: 'var(--blue)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 12px 32px rgba(10,132,255,0.25)', transition: 'transform 0.2s' }}
+                  style={{ width: 120, height: 120, borderRadius: '50%', border: 'none', padding: 0, cursor: uploadingAvatar ? 'default' : 'pointer', position: 'relative', overflow: 'hidden', background: 'var(--ember)', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 6px 18px rgba(0,0,0,0.35)', transition: 'transform 0.2s' }}
                 >
                   {avatarUrl ? (
                     <img src={avatarUrl} alt="Your Avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
@@ -504,19 +423,25 @@ export default function EditProfile({ open, onClose }) {
                 </div>
               </div>
 
-              {/* 3. PUSH NOTIFICATIONS */}
+              {/* 3. NOTIFICATIONS DELEGATION */}
               <div>
                 <h3 style={{ margin: '0 0 8px 12px', fontSize: 13, fontWeight: 600, color: 'var(--dim)', textTransform: 'uppercase', letterSpacing: 0.5 }}>Notifications</h3>
-                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 16px', background: 'rgba(255,255,255,0.05)', borderRadius: 16, border: '1px solid var(--glass-border)' }}>
+                <button
+                  onClick={() => setNotificationPanelOpen(true)}
+                  className="chat-row"
+                  style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 16px', background: 'var(--glass-white)', borderRadius: 16, border: '1px solid var(--glass-border)', width: '100%', cursor: 'pointer', textAlign: 'left' }}
+                >
                   <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                    <div style={{ color: pushEnabled ? 'var(--blue)' : 'var(--dim)' }}>{Vectors.Bell}</div>
+                    <div style={{ color: 'var(--ember)' }}>{Vectors.Bell}</div>
                     <div style={{ display: 'flex', flexDirection: 'column' }}>
-                      <span style={{ fontSize: 16, fontWeight: 500, color: 'var(--ink)' }}>Push Notifications</span>
-                      <span style={{ fontSize: 13, color: 'var(--dim)' }}>Receive alerts for mentions and DMs</span>
+                      <span style={{ fontSize: 16, fontWeight: 500, color: 'var(--paper)' }}>Notification Settings</span>
+                      <span style={{ fontSize: 13, color: 'var(--dim)' }}>Manage what AnonRoom can notify you about</span>
                     </div>
                   </div>
-                  <AppleToggle checked={pushEnabled} onChange={handlePushToggle} />
-                </div>
+                  <div style={{ color: 'var(--dim)' }}>
+                    {Vectors.ChevronRight}
+                  </div>
+                </button>
               </div>
 
               {/* 4. SOCIAL LINKS */}
@@ -538,12 +463,13 @@ export default function EditProfile({ open, onClose }) {
 
               {/* STATUS & SAVE */}
               <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 12 }}>
-                {error && <div style={{ color: 'var(--red)', fontSize: 14, fontWeight: 500, textAlign: 'center', background: 'rgba(255,59,48,0.1)', padding: '10px', borderRadius: 12 }}>{error}</div>}
-                {success && <div style={{ color: 'var(--blue)', fontSize: 14, fontWeight: 600, textAlign: 'center', background: 'rgba(10,132,255,0.1)', padding: '10px', borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>{Vectors.Check} {success}</div>}
+                {error && <div style={{ color: 'var(--ember)', fontSize: 14, fontWeight: 500, textAlign: 'center', background: 'color-mix(in srgb, var(--ember) 16%, transparent)', padding: '10px', borderRadius: 12 }}>{error}</div>}
+                {success && <div style={{ color: 'var(--signal)', fontSize: 14, fontWeight: 600, textAlign: 'center', background: 'color-mix(in srgb, var(--signal) 16%, transparent)', padding: '10px', borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>{Vectors.Check} {success}</div>}
                 
                 <button
                   onClick={handleSave} disabled={!hasChanges || saving}
-                  style={{ padding: '16px 0', borderRadius: 18, border: 'none', background: hasChanges ? 'var(--blue)' : 'var(--glass-border)', color: hasChanges ? '#fff' : 'var(--dim)', fontWeight: 700, fontSize: 16, cursor: hasChanges ? 'pointer' : 'default', boxShadow: hasChanges ? '0 8px 24px rgba(10,132,255,0.3)' : 'none', transition: 'all 0.2s cubic-bezier(0.2, 0.8, 0.2, 1)' }}
+                  className={hasChanges && !saving ? 'chat-row' : ''}
+                  style={{ padding: '16px 0', borderRadius: 18, border: 'none', background: hasChanges ? 'var(--ember)' : 'var(--glass-border)', color: hasChanges ? '#fff' : 'var(--dim)', fontWeight: 700, fontSize: 16, cursor: hasChanges ? 'pointer' : 'default', transition: 'background 0.2s', marginBottom: 16 }}
                 >
                   {saving ? 'Saving Changes...' : 'Save Profile'}
                 </button>
@@ -553,6 +479,10 @@ export default function EditProfile({ open, onClose }) {
           </div>
         </div>
       </div>
+
+      {notificationPanelOpen && (
+        <NotificationSettingsPanel onClose={() => setNotificationPanelOpen(false)} />
+      )}
     </>
   );
 }

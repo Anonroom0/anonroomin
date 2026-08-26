@@ -1,6 +1,6 @@
 /**
  * ============================================================================
- * EMOJI / GIF / STICKER PICKER
+ * EMOJI / GIF / STICKER PICKER (GLASS UI)
  * ============================================================================
  * Drop-in picker that pops up above the composer. Three tabs, all with SVG
  * icons (no emoji-as-icon glyphs):
@@ -9,27 +9,13 @@
  *   - GIFs: GIPHY API (free), search + trending, infinite scroll
  *   - Stickers: GIPHY Stickers API, search + trending, infinite scroll
  *
- * ---------------------------------------------------------------------------
- * SETUP (required before this works):
- * Tenor's public API was discontinued for new/free integrations, so this
- * picker uses GIPHY instead, which still offers a free developer tier:
- * 1. Get a free GIPHY API key: https://developers.giphy.com/dashboard/
- *    (sign up, create an app, choose "API" not "SDK", takes a couple minutes)
- * 2. Paste it into GIPHY_API_KEY below, or better, load it from an env var
- *    and pass it down as a prop so it isn't hardcoded in the bundle.
- * The GIPHY_API_KEY below defaults to Giphy's public beta testing key
- * (dc6zaTOxFJmzC) which works out of the box for trying this out, but is
- * rate-limited and shared by everyone using it — swap in your own key
- * before shipping to real users.
- * ---------------------------------------------------------------------------
+ * `mode` prop:
+ *   - "full" (default): Renders all tabs (Emoji, GIFs, Stickers).
+ *   - "emoji-only": Hides the top tab bar and GIPHY integration entirely, 
+ *     rendering only the Emoji grid, sized and aligned as a quick-tray popover.
  *
- * Usage:
- *   <EmojiGifPicker
- *     open={pickerOpen}
- *     onClose={() => setPickerOpen(false)}
- *     onEmoji={(char) => setText((t) => t + char)}
- *     onMedia={(url, type) => sendMediaMessage(url, type)} // type: 'gif' | 'sticker'
- *   />
+ * Uses `glass-panel` and `bubble-enter` from the global token/animation system.
+ * ---------------------------------------------------------------------------
  */
 
 import React, { useState, useEffect, useRef, useCallback } from 'react';
@@ -41,9 +27,7 @@ const GIPHY_BASE = 'https://api.giphy.com/v1';
 const PAGE_SIZE = 24;
 const SCROLL_FETCH_THRESHOLD_PX = 160; // start loading the next page this far from the bottom
 
-// A large curated emoji set grouped by category, roughly following the
-// Unicode CLDR groupings. No API needed, never rate-limits, always available
-// offline. Extend freely — it's just data.
+// A large curated emoji set grouped by category.
 const EMOJI_GROUPS = [
   {
     label: 'Smileys & Emotion',
@@ -231,7 +215,7 @@ const TabIcons = {
 };
 
 const SpinnerIcon = (
-  <svg className="picker-spin" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
+  <svg className="refresh-spin" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round">
     <path d="M12 3a9 9 0 1 0 9 9" />
   </svg>
 );
@@ -287,7 +271,6 @@ function GiphyGrid({ contentFilter, onPick }) {
     const params = searchTerm ? { q: searchTerm, offset: String(offset) } : { offset: String(offset) };
     const { items, totalCount } = await giphyFetch(path, params);
 
-    // A stale response from a superseded search/tab switch — drop it.
     if (myRequestId !== requestIdRef.current) {
       return;
     }
@@ -333,7 +316,6 @@ function GiphyGrid({ contentFilter, onPick }) {
     loadPage(query.trim(), offsetRef.current, myRequestId)
       .catch((err) => {
         console.error('GIPHY fetch failed:', err);
-        // Leave existing results in place; just stop trying to auto-load more.
         if (myRequestId === requestIdRef.current) {
           setHasMore(false);
         }
@@ -345,7 +327,6 @@ function GiphyGrid({ contentFilter, onPick }) {
       });
   }, [loadPage, loadingInitial, loadingMore, hasMore, errored, query]);
 
-  // Reset + reload whenever the tab (gif vs sticker) changes.
   useEffect(() => {
     startSearch('');
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -396,7 +377,7 @@ function GiphyGrid({ contentFilter, onPick }) {
       )}
 
       {!errored && (
-        <div ref={scrollRef} onScroll={handleScroll} className="picker-scroll">
+        <div ref={scrollRef} onScroll={handleScroll} className="picker-scroll custom-scrollbar">
           {loadingInitial && (
             <div className="picker-message picker-message--loading">
               {SpinnerIcon}
@@ -420,7 +401,7 @@ function GiphyGrid({ contentFilter, onPick }) {
                     key={result.id}
                     type="button"
                     onClick={() => onPick(fullUrl, contentFilter)}
-                    className="picker-tile"
+                    className="picker-tile chat-row"
                     aria-label={result.title || `Select ${contentFilter}`}
                   >
                     <img src={previewUrl} alt="" loading="lazy" className="picker-tile-img" />
@@ -450,7 +431,7 @@ function GiphyGrid({ contentFilter, onPick }) {
 
 function EmojiGrid({ onPick }) {
   return (
-    <div className="picker-scroll picker-emoji-scroll">
+    <div className="picker-scroll picker-emoji-scroll custom-scrollbar">
       {EMOJI_GROUPS.map((group) => (
         <div key={group.label} className="picker-emoji-group">
           <div className="picker-emoji-label">{group.label}</div>
@@ -460,7 +441,7 @@ function EmojiGrid({ onPick }) {
                 key={`${group.label}-${i}-${char}`}
                 type="button"
                 onClick={() => onPick(char)}
-                className="picker-emoji-btn"
+                className="picker-emoji-btn chat-row"
                 onMouseDown={(e) => e.preventDefault()} // keep focus in the text input
                 aria-label={char}
               >
@@ -476,7 +457,7 @@ function EmojiGrid({ onPick }) {
 
 // --- 6. MAIN PICKER -----------------------------------------------------------
 
-export default function EmojiGifPicker({ open, onClose, onEmoji, onMedia }) {
+export default function EmojiGifPicker({ open, onClose, onEmoji, onMedia, mode = 'full' }) {
   const [tab, setTab] = useState('emoji'); // 'emoji' | 'gif' | 'sticker'
   const panelRef = useRef(null);
 
@@ -512,37 +493,45 @@ export default function EmojiGifPicker({ open, onClose, onEmoji, onMedia }) {
     { id: 'sticker', label: 'Stickers', icon: TabIcons.Sticker },
   ];
 
+  const activeTab = mode === 'emoji-only' ? 'emoji' : tab;
+
   return (
-    <div ref={panelRef} className="picker-panel" role="dialog" aria-label="Emoji, GIF, and sticker picker">
+    <div 
+      ref={panelRef} 
+      className={`glass-panel bubble-enter picker-panel ${mode === 'emoji-only' ? 'picker-panel--emoji-only' : ''}`} 
+      role="dialog" 
+      aria-label="Emoji, GIF, and sticker picker"
+    >
       <style>{PICKER_STYLES}</style>
 
-      <div className="picker-tabbar">
-        {tabs.map((t) => (
-          <button
-            key={t.id}
-            type="button"
-            onClick={() => setTab(t.id)}
-            className={`picker-tab${tab === t.id ? ' picker-tab--active' : ''}`}
-            aria-selected={tab === t.id}
-          >
-            {t.icon}
-            <span>{t.label}</span>
-          </button>
-        ))}
-      </div>
+      {mode === 'full' && (
+        <div className="picker-tabbar">
+          {tabs.map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              onClick={() => setTab(t.id)}
+              className={`picker-tab chat-row ${activeTab === t.id ? ' picker-tab--active' : ''}`}
+              aria-selected={activeTab === t.id}
+            >
+              {t.icon}
+              <span>{t.label}</span>
+            </button>
+          ))}
+        </div>
+      )}
 
       <div className="picker-body">
-        {tab === 'emoji' && <EmojiGrid onPick={(char) => onEmoji(char)} />}
-        {tab === 'gif' && <GiphyGrid contentFilter="gif" onPick={(url, type) => onMedia(url, type)} />}
-        {tab === 'sticker' && <GiphyGrid contentFilter="sticker" onPick={(url, type) => onMedia(url, type)} />}
+        {activeTab === 'emoji' && <EmojiGrid onPick={(char) => onEmoji?.(char)} />}
+        {mode === 'full' && activeTab === 'gif' && <GiphyGrid contentFilter="gif" onPick={(url, type) => onMedia?.(url, type)} />}
+        {mode === 'full' && activeTab === 'sticker' && <GiphyGrid contentFilter="sticker" onPick={(url, type) => onMedia?.(url, type)} />}
       </div>
     </div>
   );
 }
 
 // --- 7. STYLES ----------------------------------------------------------------
-// Kept as a scoped <style> block so the component stays a drop-in single file.
-// Uses the same --glass / --ink / --dim / --blue theme tokens as the original.
+// Scoped <style> block mapping to glass tokens.
 
 const PICKER_STYLES = `
 .picker-panel {
@@ -552,22 +541,17 @@ const PICKER_STYLES = `
   right: 8px;
   margin-bottom: 8px;
   height: 360px;
-  background: var(--glass-strong);
-  backdrop-filter: blur(30px) saturate(200%);
-  -webkit-backdrop-filter: blur(30px) saturate(200%);
-  border: 1px solid var(--glass-border);
-  border-radius: 20px;
-  box-shadow: 0 12px 40px rgba(0,0,0,0.18);
   display: flex;
   flex-direction: column;
-  overflow: hidden;
   z-index: 30;
-  animation: pickerSlideUp 0.2s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  /* Appearance is handled by .glass-panel */
 }
 
-@keyframes pickerSlideUp {
-  from { opacity: 0; transform: translateY(6px); }
-  to { opacity: 1; transform: translateY(0); }
+.picker-panel--emoji-only {
+  left: auto;
+  right: 0;
+  width: 320px;
+  max-width: calc(100vw - 32px);
 }
 
 .picker-tabbar {
@@ -595,23 +579,16 @@ const PICKER_STYLES = `
 }
 
 .picker-tab:hover {
-  color: var(--ink);
-  background: rgba(127,127,127,0.06);
+  color: var(--paper);
+  background: var(--glass-white);
 }
 
 .picker-tab--active {
-  color: var(--blue);
-  border-bottom-color: var(--blue);
+  color: var(--ember);
+  border-bottom-color: var(--ember);
 }
 
-.picker-body {
-  flex: 1;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-}
-
-.picker-pane {
+.picker-body, .picker-pane {
   flex: 1;
   min-height: 0;
   display: flex;
@@ -639,16 +616,16 @@ const PICKER_STYLES = `
   padding: 9px 12px 9px 34px;
   border-radius: 14px;
   border: 1px solid var(--glass-border);
-  background: var(--glass);
-  color: var(--ink);
+  background: var(--ink-2);
+  color: var(--paper);
   font-size: 14px;
   outline: none;
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
 .picker-search-input:focus {
-  border-color: var(--blue);
-  box-shadow: 0 0 0 3px rgba(59,130,246,0.15);
+  border-color: var(--ember);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--ember) 15%, transparent);
 }
 
 .picker-scroll {
@@ -676,7 +653,7 @@ const PICKER_STYLES = `
   border-radius: 12px;
   overflow: hidden;
   cursor: pointer;
-  background: var(--glass);
+  background: var(--ink-2);
   width: 100%;
   aspect-ratio: 1 / 1;
   isolation: isolate;
@@ -685,12 +662,12 @@ const PICKER_STYLES = `
 
 .picker-tile:hover {
   transform: scale(1.03);
-  box-shadow: 0 4px 14px rgba(0,0,0,0.18);
+  box-shadow: 0 6px 18px rgba(0,0,0,0.35);
   z-index: 1;
 }
 
 .picker-tile:focus-visible {
-  outline: 2px solid var(--blue);
+  outline: 2px solid var(--ember);
   outline-offset: 2px;
 }
 
@@ -731,14 +708,6 @@ const PICKER_STYLES = `
   opacity: 0.7;
 }
 
-.picker-spin {
-  animation: pickerSpin 0.8s linear infinite;
-}
-
-@keyframes pickerSpin {
-  to { transform: rotate(360deg); }
-}
-
 .picker-emoji-scroll {
   padding-top: 6px;
 }
@@ -750,8 +719,9 @@ const PICKER_STYLES = `
 .picker-emoji-label {
   position: sticky;
   top: 0;
-  background: var(--glass-strong);
-  backdrop-filter: blur(8px);
+  background: var(--glass-white);
+  backdrop-filter: blur(20px) saturate(115%);
+  -webkit-backdrop-filter: blur(20px) saturate(115%);
   font-size: 11.5px;
   font-weight: 700;
   text-transform: uppercase;
@@ -760,12 +730,15 @@ const PICKER_STYLES = `
   margin: 0;
   padding: 8px 4px 6px;
   z-index: 1;
+  border-bottom: 1px solid var(--glass-border);
+  border-radius: 4px;
 }
 
 .picker-emoji-grid {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
   gap: 2px;
+  padding-top: 4px;
 }
 
 .picker-emoji-btn {
@@ -780,15 +753,16 @@ const PICKER_STYLES = `
   align-items: center;
   justify-content: center;
   transition: background 0.12s ease, transform 0.12s ease;
+  color: var(--paper);
 }
 
 .picker-emoji-btn:hover {
-  background: rgba(127,127,127,0.12);
+  background: var(--glass-white);
   transform: scale(1.12);
 }
 
 .picker-emoji-btn:focus-visible {
-  outline: 2px solid var(--blue);
+  outline: 2px solid var(--ember);
   outline-offset: 1px;
 }
 `;
