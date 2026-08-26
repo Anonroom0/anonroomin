@@ -34,7 +34,7 @@
  * ============================================================================ */
 
 import React, { useRef } from 'react';
-import GlassPanel from '../components/shared/GlassPanel';
+import GlassPanel from './GlassPanel';
 
 // ============================================================================
 // 1. INLINE SVG VECTOR LIBRARY

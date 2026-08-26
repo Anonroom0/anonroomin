@@ -31,8 +31,8 @@
  * ========================================================================= */
 
 import { useState } from 'react';
-import GlassPanel from '../GlassPanel';
-import SendButton from '../SendButton';
+import GlassPanel from '../shared/GlassPanel';
+import SendButton from '../shared/SendButton';
 import ShareStorySheet from './ShareStorySheet';
 import { useAuth } from '../../lib/authContext';
 import supabase from '../../lib/supabaseClient';

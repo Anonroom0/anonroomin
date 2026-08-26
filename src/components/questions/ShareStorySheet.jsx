@@ -20,7 +20,7 @@
  * ========================================================================= */
 
 import { useEffect, useRef, useState } from 'react';
-import GlassPanel, { useGlassPanelClose } from '../GlassPanel';
+import GlassPanel, { useGlassPanelClose } from '../shared/GlassPanel';
 import {
   generateQuestionStoryImage,
   shareStoryImage,
