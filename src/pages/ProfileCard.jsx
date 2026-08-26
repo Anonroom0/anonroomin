@@ -630,6 +630,6 @@ export default function ProfileCard({ userId, open, onClose, onMessage }) {
           </div>
         </div>
       </div>
-    </>
+</div>
   );
 }
