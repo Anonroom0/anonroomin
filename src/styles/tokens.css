@@ -44,6 +44,14 @@
   --glass-white: rgba(255, 255, 255, 0.07);
   --glass-border: rgba(255, 255, 255, 0.10);
 
+  /* Additional tokens referenced by DirectMessages.jsx / GroupChat.jsx —
+     missing from the original palette, which caused those components to
+     render fully transparent (undefined var() resolves to nothing). */
+  --glass-strong: rgba(255, 255, 255, 0.14);  /* denser glass fill for headers/composers */
+  --glass: rgba(255, 255, 255, 0.05);          /* input field fill */
+  --bg: var(--ink);                            /* alias so --bg matches the page base color */
+  --blue: #0A84FF;                             /* iOS-blue accent used throughout DMs */
+
   /* Radii */
   --radius-card: 20px;   /* cards/rows */
   --radius-sheet: 28px;  /* sheets/modals */
