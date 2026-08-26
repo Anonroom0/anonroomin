@@ -44,7 +44,7 @@ import StoriesBar from '../components/stories/StoriesBar';
 import StoryViewer from '../components/stories/StoryViewer';
 import CreateQuestionModal from '../components/questions/CreateQuestionModal';
 import QuestionCard from '../components/questions/QuestionCard';
-import QuestionThread from '../components/questions/QuestionThread';
+import QuestionThread from './QuestionThread';
 import ShareStorySheet from '../components/stories/ShareStorySheet';
 
 import '../styles/tokens.css';
