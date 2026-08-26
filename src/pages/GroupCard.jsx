@@ -1,24 +1,22 @@
 /**
  * ============================================================================
- * GROUP INFO CARD (GLASS UI)
+ * GROUP INFO CARD (PORTAL + MATTE UI)
  * ============================================================================
- * This component renders a premium, frosted-glass bottom-sheet for viewing
- * public group details.
- * 
  * CHANGES IN THIS PASS:
- * - Restyled entirely to the new dark-glass aesthetic using token variables.
- * - Replaced local skeleton with the shared <MessageSkeleton variant="card"/>.
- * - Replaced local avatar with the shared <LiquidAvatar kind="group"/>.
- * - Modal backdrop and entrance/exit animations now use standard classes
- *   (.backdrop-fade, .sheet-enter, .sheet-exit) from animations.css.
- * - Added a 3-dot menu with a "Copy Link" action to share the group.
- * - Kept all read-only group-info display logic untouched.
+ * - MATCHED PROFILE CARD: Applied exact hex colors (#1C1D24, #15161B, 
+ *   #F4F3F0, #8B8B96, #FF6B35) and removed all var() dependencies.
+ * - STRUCTURAL ALIGNMENT: Adopted the same master fixed wrapper with 
+ *   split backdrop and sheet siblings to guarantee perfect bottom-snapping
+ *   and avoid CSS flex traps.
+ * - BORDERS & RADII: Matched the exact border radii (28px top) and subtle 
+ *   rgba(255,255,255,0.06) border treatments.
  * 
- * Dependencies: React, Supabase, Subdomain Helpers, Shared Components
+ * Dependencies: React, ReactDOM, Supabase, Subdomain Helpers, Shared Components
  * ============================================================================
  */
 
 import React, { useEffect, useState, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import supabase from '../lib/supabaseClient';
 import { showToast, friendlyDbError } from '../lib/toast';
 import { getGroupUrl } from '../lib/subdomain';
@@ -30,7 +28,7 @@ import MessageSkeleton from '../components/shared/MessageSkeleton';
 // ============================================================================
 // 1. CONSTANTS & CONFIGURATION
 // ============================================================================
-const ANIMATION_DURATION = 320; // Matches typical .sheet-exit timing
+const ANIMATION_DURATION = 320; 
 
 // ============================================================================
 // 2. INLINE SVG VECTOR LIBRARY
@@ -76,9 +74,6 @@ const Vectors = {
 // 3. UTILITY FUNCTIONS
 // ============================================================================
 
-/**
- * Formats the creation date into a clean, readable string.
- */
 function formatDate(dateString) {
   if (!dateString) return 'Unknown';
   return new Date(dateString).toLocaleDateString([], { 
@@ -99,12 +94,12 @@ function ReadOnlyGroupInput({ icon, label, value, isTextArea = false }) {
     <div 
       style={{
         position: 'relative', display: 'flex', alignItems: isTextArea ? 'flex-start' : 'center', gap: 12,
-        background: 'var(--ink-2)', border: '1px solid var(--glass-border)',
+        backgroundColor: '#15161B', border: '1px solid rgba(255,255,255,0.06)', // Matched to Profile Card
         borderRadius: 16, padding: isTextArea ? '16px' : '8px 16px',
-        marginTop: 12, opacity: 0.8, cursor: 'default'
+        marginTop: 12, opacity: 0.9, cursor: 'default'
       }}
     >
-      <div style={{ color: 'var(--dim)', paddingTop: isTextArea ? 2 : 0 }}>
+      <div style={{ color: '#8B8B96', paddingTop: isTextArea ? 2 : 0 }}>
         {icon}
       </div>
       
@@ -112,12 +107,12 @@ function ReadOnlyGroupInput({ icon, label, value, isTextArea = false }) {
         {isTextArea ? (
           <textarea
             value={value} readOnly rows={4}
-            style={{ width: '100%', border: 'none', background: 'transparent', outline: 'none', fontSize: 16, color: 'var(--paper)', fontFamily: 'inherit', resize: 'none', paddingTop: 12, pointerEvents: 'none' }}
+            style={{ width: '100%', border: 'none', background: 'transparent', outline: 'none', fontSize: 16, color: '#F4F3F0', fontFamily: 'inherit', resize: 'none', paddingTop: 12, pointerEvents: 'none' }}
           />
         ) : (
           <input
             type="text" value={value} readOnly
-            style={{ width: '100%', border: 'none', background: 'transparent', outline: 'none', fontSize: 16, color: 'var(--paper)', padding: '12px 0 4px', pointerEvents: 'none' }}
+            style={{ width: '100%', border: 'none', background: 'transparent', outline: 'none', fontSize: 16, color: '#F4F3F0', padding: '12px 0 4px', pointerEvents: 'none' }}
           />
         )}
         
@@ -125,7 +120,7 @@ function ReadOnlyGroupInput({ icon, label, value, isTextArea = false }) {
           style={{
             position: 'absolute', top: 0, left: 0,
             transform: isTextArea ? 'translateY(-20px) scale(0.85)' : 'translateY(-24px) scale(0.85)',
-            transformOrigin: 'left top', color: 'var(--dim)', fontSize: 16, pointerEvents: 'none',
+            transformOrigin: 'left top', color: '#8B8B96', fontSize: 16, pointerEvents: 'none',
           }}
         >
           {label}
@@ -207,40 +202,60 @@ export default function GroupCard({ groupSlug, open, onClose }) {
 
   if (!open && !isVisible && !group && !loading) return null;
 
-  return (
+  // --------------------------------------------------------------------------
+  // THE PORTAL UI (Physically escapes all CSS traps)
+  // --------------------------------------------------------------------------
+  const modalUI = (
     <div 
-      onClick={handleBackdropClick} 
-      className={`backdrop-fade ${isVisible ? 'is-visible' : ''}`}
-      style={{ 
-        position: 'fixed', inset: 0, zIndex: 9000, 
-        display: 'flex', alignItems: 'flex-end', justifyContent: 'center'
+      style={{
+        position: 'fixed', inset: 0, zIndex: 99999, // Guaranteed Top Layer
+        display: 'flex', flexDirection: 'column', justifyContent: 'flex-end',
+        pointerEvents: 'none' // Let clicks pass through empty space
       }}
     >
+      {/* SOLID BLACK DIMMING BACKDROP */}
+      <div 
+        onClick={handleBackdropClick} 
+        style={{ 
+          position: 'absolute', inset: 0, 
+          backgroundColor: 'rgba(0,0,0,0.85)', 
+          opacity: isVisible ? 1 : 0, 
+          transition: `opacity ${ANIMATION_DURATION}ms ease`,
+          pointerEvents: 'auto',
+          zIndex: 1
+        }}
+      />
+      
+      {/* THE SHEET CONTAINER */}
       <div 
         onClick={(e) => e.stopPropagation()} 
-        className={`glass-sheet ${isVisible ? 'sheet-enter' : 'sheet-exit'}`}
         style={{ 
-          width: '100%', maxWidth: 560, height: '85dvh', 
-          display: 'flex', flexDirection: 'column', 
-          borderBottomLeftRadius: 0, borderBottomRightRadius: 0
+          position: 'relative', zIndex: 2, pointerEvents: 'auto',
+          width: '100%', maxWidth: 560, margin: '0 auto', 
+          height: '90dvh', // Explicit 90dvh height prevents content cutoff
+          backgroundColor: '#1C1D24', // SOLID MATTE HEX
+          borderTopLeftRadius: 28, borderTopRightRadius: 28,
+          borderTop: '1px solid rgba(255,255,255,0.08)',
+          boxShadow: '0 -10px 40px rgba(0,0,0,0.6)',
+          display: 'flex', flexDirection: 'column',
+          
+          transform: isVisible ? 'translateY(0)' : 'translateY(100%)',
+          transition: `transform ${ANIMATION_DURATION}ms cubic-bezier(0.2, 0.8, 0.2, 1)`
         }}
       >
         {/* HEADER */}
         <div 
           style={{ 
             display: 'flex', alignItems: 'center', justifyContent: 'space-between', 
-            padding: '16px 20px', background: 'var(--glass-white)', 
-            backdropFilter: 'blur(20px) saturate(115%)', 
-            WebkitBackdropFilter: 'blur(20px) saturate(115%)',
-            borderBottom: '1px solid var(--glass-border)', zIndex: 10 
+            padding: '16px 20px', backgroundColor: '#1C1D24', 
+            borderBottom: '1px solid rgba(255,255,255,0.06)', zIndex: 10 
           }}
         >
           <button 
             onClick={handleClose} 
-            className="chat-row"
             style={{ 
               display: 'flex', alignItems: 'center', gap: 6, border: 'none', 
-              background: 'transparent', color: 'var(--ember)', fontSize: 16, 
+              background: 'transparent', color: '#FF6B35', fontSize: 16, 
               fontWeight: 500, cursor: 'pointer', padding: '4px 8px', borderRadius: 8, marginLeft: -8 
             }}
           >
@@ -248,16 +263,15 @@ export default function GroupCard({ groupSlug, open, onClose }) {
             <span>Close</span>
           </button>
           
-          <h1 style={{ margin: 0, fontSize: 17, fontWeight: 700, color: 'var(--paper)', position: 'absolute', left: '50%', transform: 'translateX(-50%)' }}>
+          <h1 style={{ margin: 0, fontSize: 17, fontWeight: 700, color: '#F4F3F0', position: 'absolute', left: '50%', transform: 'translateX(-50%)' }}>
             Group Info
           </h1>
           
           <div style={{ position: 'relative' }}>
             <button 
               onClick={() => setMenuOpen(!menuOpen)} 
-              className="chat-row" 
               style={{ 
-                border: 'none', background: 'transparent', color: 'var(--paper)', 
+                border: 'none', background: 'transparent', color: '#F4F3F0', 
                 cursor: 'pointer', padding: 8, display: 'flex', alignItems: 'center', 
                 justifyContent: 'center', borderRadius: '50%', marginRight: -8 
               }}
@@ -267,21 +281,26 @@ export default function GroupCard({ groupSlug, open, onClose }) {
             
             {menuOpen && (
               <div 
-                className="glass-panel pop-in" 
+                className="pop-in" 
                 style={{ 
                   position: 'absolute', right: 0, top: '100%', marginTop: 4, 
-                  zIndex: 30, minWidth: 160, padding: 6 
+                  zIndex: 30, minWidth: 160, padding: 6,
+                  backgroundColor: '#1C1D24',
+                  border: '1px solid rgba(255,255,255,0.08)',
+                  borderRadius: 12,
+                  boxShadow: '0 4px 20px rgba(0,0,0,0.5)'
                 }}
               >
                 <button 
                   onClick={handleCopyLink} 
-                  className="chat-row" 
                   style={{ 
                     width: '100%', padding: '10px 14px', border: 'none', 
-                    background: 'transparent', color: 'var(--paper)', textAlign: 'left', 
+                    background: 'transparent', color: '#F4F3F0', textAlign: 'left', 
                     borderRadius: 8, cursor: 'pointer', fontSize: 14, fontWeight: 600, 
                     display: 'flex', alignItems: 'center', gap: 8 
                   }}
+                  onMouseOver={(e) => e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.05)'}
+                  onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
                 >
                   {Vectors.Link} Copy Link
                 </button>
@@ -290,7 +309,7 @@ export default function GroupCard({ groupSlug, open, onClose }) {
           </div>
         </div>
 
-        {/* BODY */}
+        {/* SCROLLABLE CONTENT BODY */}
         <div className="custom-scrollbar" style={{ flex: 1, overflowY: 'auto', padding: '32px 20px 60px' }}>
           <div style={{ maxWidth: 440, margin: '0 auto', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
             
@@ -298,8 +317,9 @@ export default function GroupCard({ groupSlug, open, onClose }) {
               <MessageSkeleton variant="card" />
             ) : error ? (
               <div style={{ marginTop: 40, display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
-                <p style={{ color: 'var(--paper)', fontSize: 20, fontWeight: 700, margin: 0 }}>Group Unavailable</p>
-                <p style={{ color: 'var(--dim)', fontSize: 15, margin: 0 }}>{error}</p>
+                <div style={{ color: '#8B8B96', opacity: 0.5, marginBottom: 8 }}>{Vectors.Info}</div>
+                <p style={{ color: '#F4F3F0', fontSize: 20, fontWeight: 700, margin: 0 }}>Group Unavailable</p>
+                <p style={{ color: '#8B8B96', fontSize: 15, margin: 0 }}>{error}</p>
               </div>
             ) : group ? (
               <>
@@ -310,20 +330,26 @@ export default function GroupCard({ groupSlug, open, onClose }) {
                 />
                 
                 <div style={{ textAlign: 'center', marginTop: 24, marginBottom: 12 }}>
-                  <h2 style={{ margin: 0, fontSize: 28, fontWeight: 800, color: 'var(--paper)', letterSpacing: '-0.5px' }}>
+                  <h2 style={{ margin: 0, fontSize: 28, fontWeight: 800, color: '#F4F3F0', letterSpacing: '-0.5px' }}>
                     {group.name}
                   </h2>
-                  <p style={{ margin: '4px 0 0', fontSize: 15, color: 'var(--dim)' }}>Public Channel</p>
+                  <p style={{ margin: '4px 0 0', fontSize: 15, color: '#8B8B96' }}>Public Channel</p>
                 </div>
 
-                <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--paper)', fontSize: 14, fontWeight: 600, marginBottom: 32, background: 'var(--glass-white)', border: '1px solid var(--glass-border)', padding: '8px 16px', borderRadius: 20 }}>
+                <div style={{ 
+                  display: 'flex', alignItems: 'center', gap: 8, color: '#F4F3F0', 
+                  fontSize: 14, fontWeight: 600, marginBottom: 32, 
+                  backgroundColor: '#15161B',
+                  border: '1px solid rgba(255,255,255,0.06)', 
+                  padding: '8px 16px', borderRadius: 20 
+                }}>
                   {Vectors.Calendar} 
                   <span>Created {formatDate(group.created_at)}</span>
                 </div>
 
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 24, width: '100%' }}>
                   <div>
-                    <h3 style={{ margin: '0 0 8px 12px', fontSize: 13, fontWeight: 600, color: 'var(--dim)', textTransform: 'uppercase', letterSpacing: 0.5 }}>About</h3>
+                    <h3 style={{ margin: '0 0 8px 12px', fontSize: 13, fontWeight: 600, color: '#8B8B96', textTransform: 'uppercase', letterSpacing: 0.5 }}>About</h3>
                     <ReadOnlyGroupInput icon={Vectors.Info} label="Description" value={group.description || 'Welcome to the group.'} isTextArea={true} />
                   </div>
                 </div>
@@ -335,4 +361,9 @@ export default function GroupCard({ groupSlug, open, onClose }) {
       </div>
     </div>
   );
+
+  if (typeof document !== 'undefined') {
+    return createPortal(modalUI, document.body);
+  }
+  return null;
 }
