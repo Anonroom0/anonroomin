@@ -95,20 +95,27 @@ export async function fetchReactionSummary(targetType, targetId) {
  * Returns the channel — callers should call supabase.removeChannel(channel)
  * on cleanup, exactly as GroupChat.jsx does for its own subscription.
  */
-export function subscribeToReactions(targetType, targetId, onChange) {
-  const channel = supabase
-    .channel(`reactions:${targetType}:${targetId}`)
+export function subscribeToReactions(targetType, targetId, callback) {
+  // Use Math.random() to guarantee a completely unique string every single time,
+  // bypassing sub-millisecond React Strict Mode collisions.
+  const uniqueId = Math.random().toString(36).substring(2, 10);
+  const uniqueChannelName = `reactions_${targetType}_${targetId}_${uniqueId}`;
+
+  const channel = supabase.channel(uniqueChannelName)
     .on(
-      'postgres_changes',
-      { event: '*', schema: 'public', table: 'reactions', filter: `target_id=eq.${targetId}` },
+      'postgres_changes', 
+      { 
+        event: '*', 
+        schema: 'public', 
+        table: 'reactions',
+        filter: `target_id=eq.${targetId}` 
+      }, 
       (payload) => {
-        const row = payload.new?.target_type ? payload.new : payload.old;
-        if (row?.target_type === targetType) {
-          onChange();
-        }
+        callback(payload);
       }
     )
-    .subscribe();
+    .subscribe(); 
 
   return channel;
 }
+

@@ -2,17 +2,6 @@
  * ============================================================================
  * GROUP CHAT MASTER VIEW (MATTE UI & FIXED RENDERING)
  * ============================================================================
- * CHANGES IN THIS PASS:
- * - FIXED: Removed `!messagesLoading` from the map array. The chat will no 
- *   longer unmount and flash blank when fetching messages/refreshing.
- * - FIXED: Tapping anywhere in the message row span (left/right blank space) 
- *   now instantly triggers the ReactionBar popup.
- * - FIXED: Own messages styled in Teal (#2FD8C4), Anonymous messages styled 
- *   in Purple (#8A2BE2), and incoming messages in Solid Matte Gray (#2A2B36).
- * - FIXED: Tapping a reply snippet smoothly scrolls to and flashes the 
- *   original parent message.
- * - FIXED: Sticky Date headers given solid backgrounds to prevent text overlapping.
- * ============================================================================
  */
 
 import React, { useEffect, useRef, useState, useCallback } from 'react';
@@ -39,17 +28,11 @@ import SendButton from '../components/shared/SendButton';
 import { AudioBubble, VideoBubble } from '../components/shared/MediaBubble';
 import InstagramCard from '../components/shared/InstagramCard';
 
-// ============================================================================
-// 1. CONSTANTS & CONFIGURATION
-// ============================================================================
 const MESSAGE_LIMIT = 200;
 const REPLY_SNIPPET_LENGTH = 80;
 const ADMIN_DISPLAY_NAME = 'ADMIN';
 const UPLOAD_TIMEOUT_MS = 60000;
 
-// ============================================================================
-// 2. INLINE SVG VECTOR LIBRARY
-// ============================================================================
 const Vectors = {
   Back: <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M19 12H5" /><path d="M12 19l-7-7 7-7" /></svg>,
   Attach: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" /></svg>,
@@ -68,10 +51,6 @@ const Vectors = {
   ReplyAction: <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 17 4 12 9 7" /><path d="M20 18v-2a4 4 0 0 0-4-4H4" /></svg>,
   Photo: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2" /><circle cx="8.5" cy="8.5" r="1.5" /><polyline points="21 15 16 10 5 21" /></svg>
 };
-
-// ============================================================================
-// 3. UTILITY & FORMATTING FUNCTIONS
-// ============================================================================
 
 function isSenderAdmin(message) { return message.sender_name === ADMIN_DISPLAY_NAME || message.is_admin === true; }
 function formatTime(dateString) { return dateString ? new Date(dateString).toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }) : ''; }
@@ -115,16 +94,12 @@ async function scrapeInstagram(username) {
   } catch { return null; }
 }
 
-// ============================================================================
-// 4. SUB-COMPONENTS & PHYSICS ENGINE
-// ============================================================================
-
 function ConfessionModal({ open, onClose, onSubmit }) {
   const [text, setText] = useState(''); const [anon, setAnon] = useState(true); const [photo, setPhoto] = useState(null); const photoInputRef = useRef(null);
   if (!open) return null;
   return (
-    <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', zIndex: 50, display: 'flex', alignItems: 'flex-end' }}>
-      <div onClick={(e) => e.stopPropagation()} style={{ width: '100%', background: '#1C1D24', borderRadius: '28px 28px 0 0', padding: '24px 20px', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+    <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', zIndex: 50, display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
+      <div onClick={(e) => e.stopPropagation()} style={{ width: '100%', maxWidth: 500, margin: '0 auto', background: '#1C1D24', borderRadius: '28px 28px 0 0', padding: '24px 20px', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
         <h3 style={{ margin: '0 0 16px', color: '#F4F3F0', fontSize: 20 }}>New Confession</h3>
         <textarea value={text} onChange={(e) => setText(e.target.value)} rows={4} placeholder="Type your confession…" style={{ width: '100%', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 16, padding: 14, fontSize: 15, resize: 'none', boxSizing: 'border-box', background: '#15161B', color: '#F4F3F0', outline: 'none' }} />
         {photo && (
@@ -134,7 +109,7 @@ function ConfessionModal({ open, onClose, onSubmit }) {
           </div>
         )}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', margin: '16px 0' }}>
-          <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14, color: '#F4F3F0' }}>
+          <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14, color: '#F4F3F0', cursor: 'pointer' }}>
             <input type="checkbox" checked={anon} onChange={(e) => setAnon(e.target.checked)} /> Post anonymously
           </label>
           <button onClick={() => photoInputRef.current?.click()} style={{ background: '#2A2B36', border: 'none', color: '#F4F3F0', padding: '8px 12px', borderRadius: 12, cursor: 'pointer', fontSize: 13, display: 'flex', alignItems: 'center', gap: 6, fontWeight: 600 }}>{Vectors.Photo} Attach Photo</button>
@@ -150,8 +125,8 @@ function InstagramModal({ open, onClose, onSubmit, loading }) {
   const [username, setUsername] = useState('');
   if (!open) return null;
   return (
-    <div onClick={loading ? undefined : onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', zIndex: 50, display: 'flex', alignItems: 'flex-end' }}>
-      <div onClick={(e) => e.stopPropagation()} style={{ width: '100%', background: '#1C1D24', borderRadius: '28px 28px 0 0', padding: '24px 20px', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+    <div onClick={loading ? undefined : onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', zIndex: 50, display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
+      <div onClick={(e) => e.stopPropagation()} style={{ width: '100%', maxWidth: 500, margin: '0 auto', background: '#1C1D24', borderRadius: '28px 28px 0 0', padding: '24px 20px', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
         <h3 style={{ margin: '0 0 6px', color: '#F4F3F0', display: 'flex', alignItems: 'center', gap: 8 }}><div style={{ color: '#FF6B35' }}>{Vectors.Instagram}</div> Share Instagram Profile</h3>
         <p style={{ margin: '0 0 16px', fontSize: 14, color: '#8B8B96' }}>Just the username — we'll pull the profile card automatically.</p>
         <div style={{ position: 'relative' }}>
@@ -190,10 +165,6 @@ function usePullToRefresh(onRefresh, scrollRef) {
   };
   return { pullDistance, isRefreshing, handleTouchStart, handleTouchMove, handleTouchEnd };
 }
-
-// ============================================================================
-// 5. MAIN GROUP CHAT COMPONENT EXPORT
-// ============================================================================
 
 export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
   const { session, profile } = useAuth();
@@ -246,9 +217,6 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
   const cameraInputRef = useRef(null);
   const cooldownRef = useRef(null);
 
-  // --------------------------------------------------------------------------
-  // INITIALIZATION EFFECTS
-  // --------------------------------------------------------------------------
   useEffect(() => {
     if (!groupSlug) return;
     let isMounted = true;
@@ -341,9 +309,6 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
 
   const { pullDistance, isRefreshing, handleTouchStart, handleTouchMove, handleTouchEnd } = usePullToRefresh(fetchMessagesAndReceipts, scrollRef);
 
-  // --------------------------------------------------------------------------
-  // ADMIN DELETION LOGIC
-  // --------------------------------------------------------------------------
   const toggleSelection = (msgId) => { if (!isAdmin) return; setSelectedMessages((prev) => (prev.includes(msgId) ? prev.filter((id) => id !== msgId) : [...prev, msgId])); };
   const handleLongPress = (msg) => { if (isAdmin) toggleSelection(msg.id); };
   const longPressHook = useLongPress(handleLongPress, 500);
@@ -356,9 +321,6 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
     setSelectedMessages([]);
   };
 
-  // --------------------------------------------------------------------------
-  // COMPOSER HELPERS
-  // --------------------------------------------------------------------------
   const currentSenderName = () => (isAnonMode ? 'Anonymous' : (profile?.is_admin ? ADMIN_DISPLAY_NAME : (profile?.username || 'Anonymous')));
 
   const startReply = useCallback((message) => {
@@ -386,9 +348,6 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
     setText(''); setReplyingTo(null); setPickerOpen(false); cooldownRef.current?.start();
   }
 
-  // --------------------------------------------------------------------------
-  // ATTACHMENTS & CONFESSIONS
-  // --------------------------------------------------------------------------
   function handleAttachmentSelected(e) {
     const file = e.target.files?.[0]; e.target.value = '';
     if (!file) return;
@@ -491,17 +450,8 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
   if (groupStatus === 'error') return <div className="no-copy-text" style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#0C0D10', flexDirection: 'column', gap: 16 }}><p style={{ color: '#8B8B96' }}>Failed to load group.</p><button onClick={onBack} style={{ background: '#FF6B35', color: '#fff', border: 'none', padding: '8px 16px', borderRadius: 12, cursor: 'pointer' }}>Go Back</button></div>;
 
   return (
-    <div className="no-copy-text" style={{ flex: 1, display: 'flex', flexDirection: 'column', position: 'relative', height: '100%', overflow: 'hidden', zIndex: 1, userSelect: 'none', WebkitUserSelect: 'none', background: '#0C0D10' }}>
+    <div className="no-copy-text" style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', position: 'relative', height: '100%', overflow: 'hidden', zIndex: 1, userSelect: 'none', WebkitUserSelect: 'none', background: '#0C0D10' }}>
       
-      {/* CSS Override for removing the ReactionBar default + sign */}
-      <style>{`
-        .reaction-bar-matte-override button.add-btn,
-        .reaction-bar-matte-override button[aria-label*="Add"],
-        .reaction-bar-matte-override button:last-child {
-            display: none !important;
-        }
-      `}</style>
-
       {/* HEADER */}
       {selectedMessages.length > 0 ? (
         <header style={{ flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 20px', background: '#FF6B35', color: '#fff', zIndex: 20 }}>
@@ -598,9 +548,8 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
           const isHighlighted = highlightedMsgId === message.id;
           const isSelected = selectedMessages.includes(message.id);
 
-          // Matte UI Bubble Colors: Teal for normal own, Purple for own anon, Gray for received
-          const bubbleBackground = isStickerOrGif ? 'transparent' : (isOwn ? (isAnonMsg ? '#8A2BE2' : '#2FD8C4') : '#2A2B36');
-          const bubbleColor = isOwn ? '#FFFFFF' : '#F4F3F0';
+          const bubbleBackground = isStickerOrGif ? 'transparent' : (isOwn ? '#2A2B32' : '#15161B');
+          const bubbleColor = '#F4F3F0';
 
           return (
             <React.Fragment key={message.id}>
@@ -615,8 +564,20 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
                 <SwipeableMessage onSwipe={() => { if (selectedMessages.length === 0) startReply(message); }} disabled={isSearching || selectedMessages.length > 0}>
                   
                   {isConfession ? (
-                     <div id={`msg-${message.id}`} className={isHighlighted ? 'highlight-flash' : ''} style={{ background: isSelected ? 'rgba(255,107,53, 0.15)' : 'transparent', borderRadius: 16 }}>
-                       <ConfessionBubble confession={{ id: message.confession_id || message.id, text: message.text, photo_url: message.media_url, is_anon: message.is_anon, created_at: message.created_at }} onReply={() => { if (selectedMessages.length === 0) startReply(message); }} userId={ownUserId} size="inline" />
+                     <div id={`msg-${message.id}`} className={isHighlighted ? 'highlight-flash' : ''} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: '100%', margin: '16px 0' }}>
+                       <div style={{ width: '100%', maxWidth: 440, background: isSelected ? 'rgba(255,107,53, 0.15)' : 'transparent', borderRadius: 16 }}>
+                         <ConfessionBubble confession={{ id: message.confession_id || message.id, text: message.text, photo_url: message.media_url, is_anon: message.is_anon, created_at: message.created_at }} onReply={() => { if (selectedMessages.length === 0) startReply(message); }} userId={ownUserId} size="inline" />
+                         
+                         <div style={{ marginTop: 8, display: 'flex', justifyContent: 'center', width: '100%' }}>
+                           <ReactionBar 
+                             targetType="confession" 
+                             targetId={message.confession_id || message.id} 
+                             userId={ownUserId} 
+                             showTray={activeReactionMsgId === message.id}
+                             onCloseTray={() => setActiveReactionMsgId(null)}
+                           />
+                         </div>
+                       </div>
                      </div>
                   ) : (
                     <div id={`msg-${message.id}`} className={isHighlighted ? 'highlight-flash' : ''} style={{ display: 'flex', flexDirection: isOwn ? 'row-reverse' : 'row', alignItems: 'flex-end', gap: 8, marginBottom: 16, borderRadius: 16, padding: '4px 8px', background: isSelected ? 'rgba(255,107,53, 0.15)' : 'transparent', animation: 'slideUpFade 0.3s cubic-bezier(0.2, 0.8, 0.2, 1) both', transition: 'background 0.2s' }}>
@@ -639,7 +600,7 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
                           </button>
                         )}
 
-                        <div style={{ maxWidth: '100%', padding: isInstagram ? '4px' : ((message.media_url && !isStickerOrGif) ? '4px' : (isStickerOrGif ? 0 : '10px 16px')), borderRadius: isStickerOrGif ? 0 : 20, borderBottomRightRadius: isStickerOrGif ? 0 : (isOwn ? 4 : 20), borderBottomLeftRadius: isStickerOrGif ? 0 : (isOwn ? 20 : 4), background: bubbleBackground, color: bubbleColor, border: isStickerOrGif ? 'none' : '1px solid rgba(255,255,255,0.06)', boxShadow: isStickerOrGif ? 'none' : '0 6px 18px rgba(0,0,0,0.2)' }}>
+                        <div style={{ maxWidth: '100%', padding: isInstagram ? '4px' : ((message.media_url && !isStickerOrGif) ? '4px' : (isStickerOrGif ? 0 : '10px 16px')), borderRadius: isStickerOrGif ? 0 : 20, borderBottomRightRadius: isStickerOrGif ? 0 : (isOwn ? 4 : 20), borderBottomLeftRadius: isStickerOrGif ? 0 : (isOwn ? 20 : 4), background: bubbleBackground, color: bubbleColor, border: isStickerOrGif ? 'none' : (isOwn ? '1px solid rgba(255,255,255,0.08)' : '1px solid rgba(255,255,255,0.04)'), boxShadow: isStickerOrGif ? 'none' : '0 6px 18px rgba(0,0,0,0.2)' }}>
                           {message.reply_to_id && (
                             <div 
                               onClick={(e) => {
@@ -651,10 +612,16 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
                                   setTimeout(() => targetEl.classList.remove('highlight-flash'), 2000);
                                 }
                               }}
-                              style={{ display: 'flex', flexDirection: 'column', gap: 2, padding: '6px 10px', marginBottom: 8, marginTop: (message.media_url || isInstagram) ? 4 : 0, borderRadius: 10, background: '#15161B', borderLeft: `3px solid ${isOwn ? (isAnonMsg ? '#8A2BE2' : '#2FD8C4') : '#FF6B35'}`, cursor: 'pointer' }}
+                              style={{ display: 'flex', flexDirection: 'column', gap: 2, padding: '6px 10px', marginBottom: 8, marginTop: (message.media_url || isInstagram) ? 4 : 0, borderRadius: 10, background: '#15161B', borderLeft: `3px solid ${isOwn ? '#8B8B96' : '#FF6B35'}`, cursor: 'pointer' }}
                             >
                               <span style={{ fontSize: 12, fontWeight: 700, color: '#F4F3F0' }}>{repliedMessage ? (repliedMessage.is_anon ? 'Anonymous' : repliedMessage.sender_name) : 'Original'}</span>
                               <span className="no-copy-text" style={{ fontSize: 13, color: '#8B8B96', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{generateReplySnippet(repliedMessage)}</span>
+                            </div>
+                          )}
+
+                          {isAnonMsg && isOwn && (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 11, color: '#FF6B35', fontWeight: 700, textTransform: 'uppercase', marginBottom: 6 }}>
+                              {Vectors.Ghost} Sent Anonymously
                             </div>
                           )}
 
@@ -688,44 +655,26 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
                             <span className="no-copy-text" style={{ fontSize: 15, whiteSpace: 'pre-wrap', wordBreak: 'break-word', lineHeight: 1.4 }}>{renderMessageTextWithMentions(message.text, isOwn)}</span>
                           )}
                         </div>
+                        
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4 }}>
                           <span style={{ fontSize: 11, color: '#8B8B96', marginInline: 4, fontWeight: 500 }}>{formatTime(message.created_at)}</span>
+                        </div>
+
+                        <div style={{ marginTop: 4, display: 'flex', justifyContent: 'center', width: '100%' }}>
+                          <ReactionBar 
+                             targetType="group_message" 
+                             targetId={message.id} 
+                             userId={ownUserId}
+                             showTray={activeReactionMsgId === message.id}
+                             onCloseTray={() => setActiveReactionMsgId(null)}
+                          />
                         </div>
                       </div>
                     </div>
                   )}
                 </SwipeableMessage>
-
-                {/* ABSOLUTELY POSITIONED REACTION BAR OVERLAY */}
-                {activeReactionMsgId === message.id && (
-                  <div
-                    onClick={(e) => e.stopPropagation()}
-                    className="reaction-bar-matte-override"
-                    style={{
-                      position: 'absolute',
-                      bottom: -16,
-                      right: isOwn ? 16 : 'auto',
-                      left: !isOwn ? 48 : 'auto', 
-                      zIndex: 50,
-                      background: '#1C1D24',
-                      borderRadius: 20,
-                      boxShadow: '0 4px 16px rgba(0,0,0,0.5)',
-                      border: '1px solid rgba(255,255,255,0.08)',
-                      padding: '2px 4px',
-                      animation: 'pop-in 0.2s cubic-bezier(0.2, 0.8, 0.2, 1)'
-                    }}
-                  >
-                    <ReactionBar 
-                      targetType={isConfession ? "confession" : "group_message"} 
-                      targetId={isConfession ? (message.confession_id || message.id) : message.id} 
-                      userId={ownUserId} 
-                      forceTrayOpen={true}
-                    />
-                  </div>
-                )}
               </div>
 
-              {/* SOLID BACKGROUND DATE HEADER (Prevents Overlap) */}
               {showDayDivider && !isSearching && (
                 <div style={{ textAlign: 'center', margin: '24px 0 16px', position: 'sticky', top: 16, zIndex: 15 }}>
                   <span style={{ fontSize: 12, fontWeight: 600, color: '#8B8B96', background: '#1C1D24', padding: '6px 14px', borderRadius: 14, border: '1px solid rgba(255,255,255,0.06)', boxShadow: '0 4px 12px rgba(0,0,0,0.2)' }}>

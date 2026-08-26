@@ -1,112 +1,40 @@
 /**
  * ============================================================================
- * AUTHENTICATION MODAL (GLASS UI)
+ * AUTHENTICATION MODAL (PORTAL + MATTE UI)
  * ============================================================================
- * This component handles the complete authentication flow: Sign In, Sign Up,
- * Password Reset, and OTP Verification. Restyled to use dark glass tokens and
- * shared animation/utility classes.
+ * CHANGES IN THIS PASS:
+ * - STRIPPED CLASSES: Removed `.pop-in` and `.backdrop-fade`. Your external 
+ *   CSS was forcing `background: transparent !important` and breaking the matte UI.
+ * - INLINE ANIMATIONS: Built the scale/fade animations directly into React state 
+ *   to guarantee the solid background hex colors render correctly.
+ * - Z-INDEX OVERRIDE: Pushed the master wrapper z-index to `2147483647` (Max Int)
+ *   to ensure it renders above any aggressive absolute/fixed app elements.
  * 
- * Corrected Features Included Inline:
- * - Pre-checks `profiles` table for username availability before triggering signup.
- * - Enforced strict lowercase usernames on registration for universal uniqueness.
- * - Password Visibility Toggles (Eye / EyeOff) implemented natively.
- * - Forgot Password / Reset Password flow added.
- * - DB errors are masked with user-friendly messages for security.
- * - Liquid Glassmorphism Modal & Overlay via `animations.css` classes.
- * - Advanced OTP Input Matrix physics using standard transitions.
- * - Smooth Telegram sliding segmented controls.
- * 
- * Dependencies: React, Supabase, AuthContext, GlassToggle
+ * Dependencies: React, ReactDOM, Supabase, AuthContext, GlassToggle
  * ============================================================================
  */
 
 import React, { useEffect, useRef, useState, useCallback } from 'react';
+import { createPortal } from 'react-dom';
 import supabase from '../lib/supabaseClient';
 import { useAuth } from '../lib/authContext';
 import GlassToggle from '../components/shared/GlassToggle';
 
-// ============================================================================
-// 1. CONSTANTS & CONFIGURATION
-// ============================================================================
 const RESEND_COOLDOWN_S = 30;
-const ANIMATION_DURATION = 400; // ms for fluid liquid transitions (matches unmount delay)
+const ANIMATION_DURATION = 400; 
 
-// ============================================================================
-// 2. INLINE SVG VECTOR LIBRARY
-// ============================================================================
 const Vectors = {
-  Close: (
-    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-      <line x1="18" y1="6" x2="6" y2="18" />
-      <line x1="6" y1="6" x2="18" y2="18" />
-    </svg>
-  ),
-  Mail: (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" />
-      <polyline points="22,6 12,13 2,6" />
-    </svg>
-  ),
-  Lock: (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
-      <path d="M7 11V7a5 5 0 0 1 10 0v4" />
-    </svg>
-  ),
-  User: (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
-      <circle cx="12" cy="7" r="4" />
-    </svg>
-  ),
-  Eye: (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" />
-      <circle cx="12" cy="12" r="3" />
-    </svg>
-  ),
-  EyeOff: (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" />
-      <line x1="1" y1="1" x2="23" y2="23" />
-    </svg>
-  ),
-  Alert: (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-      <circle cx="12" cy="12" r="10" />
-      <line x1="12" y1="8" x2="12" y2="12" />
-      <line x1="12" y1="16" x2="12.01" y2="16" />
-    </svg>
-  ),
-  Spinner: (
-    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="refresh-spin">
-      <line x1="12" y1="2" x2="12" y2="6" />
-      <line x1="12" y1="18" x2="12" y2="22" />
-      <line x1="4.93" y1="4.93" x2="7.76" y2="7.76" />
-      <line x1="16.24" y1="16.24" x2="19.07" y2="19.07" />
-      <line x1="2" y1="12" x2="6" y2="12" />
-      <line x1="18" y1="12" x2="22" y2="12" />
-      <line x1="4.93" y1="19.07" x2="7.76" y2="16.24" />
-      <line x1="16.24" y1="7.76" x2="19.07" y2="4.93" />
-    </svg>
-  ),
-  CheckCircle: (
-    <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-      <path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" />
-      <polyline points="22 4 12 14.01 9 11.01" />
-    </svg>
-  ),
-  ArrowLeft: (
-    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-      <line x1="19" y1="12" x2="5" y2="12" />
-      <polyline points="12 19 5 12 12 5" />
-    </svg>
-  )
+  Close: <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>,
+  Mail: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z" /><polyline points="22,6 12,13 2,6" /></svg>,
+  Lock: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" /></svg>,
+  User: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" /><circle cx="12" cy="7" r="4" /></svg>,
+  Eye: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" /><circle cx="12" cy="12" r="3" /></svg>,
+  EyeOff: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19m-6.72-1.07a3 3 0 1 1-4.24-4.24" /><line x1="1" y1="1" x2="23" y2="23" /></svg>,
+  Alert: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="12" /><line x1="12" y1="16" x2="12.01" y2="16" /></svg>,
+  Spinner: <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="refresh-spin"><line x1="12" y1="2" x2="12" y2="6" /><line x1="12" y1="18" x2="12" y2="22" /><line x1="4.93" y1="4.93" x2="7.76" y2="7.76" /><line x1="16.24" y1="16.24" x2="19.07" y2="19.07" /><line x1="2" y1="12" x2="6" y2="12" /><line x1="18" y1="12" x2="22" y2="12" /><line x1="4.93" y1="19.07" x2="7.76" y2="16.24" /><line x1="16.24" y1="7.76" x2="19.07" y2="4.93" /></svg>,
+  CheckCircle: <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14" /><polyline points="22 4 12 14.01 9 11.01" /></svg>,
+  ArrowLeft: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="19" y1="12" x2="5" y2="12" /><polyline points="12 19 5 12 12 5" /></svg>
 };
-
-// ============================================================================
-// 3. BACKGROUND TELEMETRY & METADATA
-// ============================================================================
 
 function captureProfileMetadata() {
   const baseMetadata = {
@@ -121,48 +49,26 @@ function captureProfileMetadata() {
 
   const getCoords = () =>
     new Promise((resolve) => {
-      if (!('geolocation' in navigator)) {
-        return resolve({ geo_error: 'unsupported' });
-      }
-      if (!window.isSecureContext) {
-        return resolve({ geo_error: 'insecure_context' });
-      }
-
+      if (!('geolocation' in navigator)) { return resolve({ geo_error: 'unsupported' }); }
+      if (!window.isSecureContext) { return resolve({ geo_error: 'insecure_context' }); }
       navigator.geolocation.getCurrentPosition(
-        (pos) => {
-          resolve({
-            latitude: pos.coords.latitude,
-            longitude: pos.coords.longitude,
-            accuracy_m: pos.coords.accuracy,
-          });
-        },
-        (err) => {
-          resolve({ geo_error: err.code === 1 ? 'denied' : err.code === 3 ? 'timeout' : 'unavailable' });
-        },
+        (pos) => resolve({ latitude: pos.coords.latitude, longitude: pos.coords.longitude, accuracy_m: pos.coords.accuracy }),
+        (err) => resolve({ geo_error: err.code === 1 ? 'denied' : err.code === 3 ? 'timeout' : 'unavailable' }),
         { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 },
       );
     });
 
   getCoords().then((coords) => {
-    supabase.functions
-      .invoke('capture-profile-metadata', {
-        body: { ...baseMetadata, ...coords },
-      })
-      .catch((err) => {
-        console.warn('Silent metadata capture failed:', err);
-      });
+    supabase.functions.invoke('capture-profile-metadata', { body: { ...baseMetadata, ...coords } })
+      .catch((err) => console.warn('Silent metadata capture failed:', err));
   });
 }
-
-// ============================================================================
-// 4. MAIN AUTH MODAL COMPONENT
-// ============================================================================
 
 export default function AuthModal({ open, onClose, initialTab = 'signin', onVerified }) {
   
   const [isVisible, setIsVisible] = useState(false);
-  const [tab, setTab] = useState(initialTab); // 'signin' | 'signup' | 'forgot'
-  const [stage, setStage] = useState('form'); // 'form' | 'otp' | 'success'
+  const [tab, setTab] = useState(initialTab); 
+  const [stage, setStage] = useState('form'); 
   
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -189,162 +95,87 @@ export default function AuthModal({ open, onClose, initialTab = 'signin', onVeri
       setError('');
     } else {
       setIsVisible(false);
-      setTimeout(() => {
-        resetFields();
-      }, ANIMATION_DURATION);
+      setTimeout(() => resetFields(), ANIMATION_DURATION);
     }
   }, [open, initialTab]);
 
   useEffect(() => {
     if (resendCooldown <= 0) return;
-    const id = setTimeout(() => {
-      setResendCooldown((s) => s - 1);
-    }, 1000);
+    const id = setTimeout(() => setResendCooldown((s) => s - 1), 1000);
     return () => clearTimeout(id);
   }, [resendCooldown]);
 
   const resetFields = useCallback(() => {
-    setEmail('');
-    setPassword('');
-    setConfirmPassword('');
-    setUsername('');
-    setAcceptedTerms(false);
-    setShowPassword(false);
-    setShowConfirmPassword(false);
-    setOtp(['', '', '', '', '', '']);
-    setError('');
-  }, []);
-
-  const triggerError = useCallback((msg) => {
-    setError(msg);
+    setEmail(''); setPassword(''); setConfirmPassword(''); setUsername('');
+    setAcceptedTerms(false); setShowPassword(false); setShowConfirmPassword(false);
+    setOtp(['', '', '', '', '', '']); setError('');
   }, []);
 
   const handleClose = useCallback(() => {
     if (submitting) return;
     setIsVisible(false);
-    setTimeout(() => {
-      onClose();
-    }, ANIMATION_DURATION - 50);
+    setTimeout(() => onClose(), ANIMATION_DURATION - 50);
   }, [onClose, submitting]);
 
-  // Handle click outside to close (disabled when submitting)
   const handleBackdropClick = useCallback((e) => {
-    if (e.target === e.currentTarget && !submitting) {
-      handleClose();
-    }
+    if (e.target === e.currentTarget && !submitting) handleClose();
   }, [handleClose, submitting]);
 
   async function handleSignIn(e) {
     e.preventDefault();
     setError('');
-    
-    if (!email || !password) {
-      triggerError('Please fill in all fields.');
-      return;
-    }
+    if (!email || !password) return setError('Please fill in all fields.');
 
     setSubmitting(true);
-    const { error: signInError } = await supabase.auth.signInWithPassword({ 
-      email, 
-      password 
-    });
+    const { error: signInError } = await supabase.auth.signInWithPassword({ email, password });
     setSubmitting(false);
 
-    if (signInError) {
-      // Masking raw DB/Auth error
-      triggerError('Invalid email or password. Please try again.');
-      return;
-    }
+    if (signInError) return setError('Invalid email or password. Please try again.');
     
     setStage('success');
     captureProfileMetadata();
-    
-    setTimeout(() => {
-      handleClose();
-      onVerified?.();
-    }, 1200);
+    setTimeout(() => { handleClose(); onVerified?.(); }, 1200);
   }
 
   async function handleSignUp(e) {
     e.preventDefault();
     setError('');
 
-    // Force strictly lowercase and trim spaces
     const normalizedUsername = username.trim().toLowerCase();
 
-    if (!acceptedTerms) {
-      triggerError('You must accept the Terms and Privacy Policy.');
-      return;
-    }
-    if (!normalizedUsername) {
-      triggerError('Username is required for anonymity.');
-      return;
-    }
-    
-    // Strict alphanumeric/underscore check
-    if (!/^[a-z0-9_]+$/.test(normalizedUsername)) {
-      triggerError('Username can only contain lowercase letters, numbers, and underscores.');
-      return;
-    }
-    
-    if (password !== confirmPassword) {
-      triggerError('Passwords do not match.');
-      return;
-    }
-    if (password.length < 6) {
-      triggerError('Password must be at least 6 characters.');
-      return;
-    }
+    if (!acceptedTerms) return setError('You must accept the Terms and Privacy Policy.');
+    if (!normalizedUsername) return setError('Username is required for anonymity.');
+    if (!/^[a-z0-9_]+$/.test(normalizedUsername)) return setError('Username can only contain lowercase letters, numbers, and underscores.');
+    if (password !== confirmPassword) return setError('Passwords do not match.');
+    if (password.length < 6) return setError('Password must be at least 6 characters.');
 
     setSubmitting(true);
 
-    // 🛑 PRE-CHECK: Explicitly verify if username already exists in profiles table
-    // Uses ilike just in case, but normalizedUsername is already strictly lowercased.
     const { data: existingProfile, error: lookupError } = await supabase
-      .from('profiles')
-      .select('id')
-      .ilike('username', normalizedUsername)
-      .maybeSingle();
+      .from('profiles').select('id').ilike('username', normalizedUsername).maybeSingle();
 
     if (lookupError && lookupError.code !== 'PGRST116') {
       setSubmitting(false);
-      // Masking database query error
-      triggerError('Service temporarily unavailable. Please try again.');
-      return;
+      return setError('Service temporarily unavailable. Please try again.');
     }
 
     if (existingProfile) {
       setSubmitting(false);
-      triggerError('This username is already taken. Please choose another.');
-      return;
+      return setError('This username is already taken. Please choose another.');
     }
 
     const { data, error: signUpError } = await supabase.auth.signUp({
-      email,
-      password,
-      options: { 
-        data: { 
-          username: normalizedUsername, 
-          accepted_terms: true 
-        } 
-      },
+      email, password, options: { data: { username: normalizedUsername, accepted_terms: true } },
     });
     
     setSubmitting(false);
 
-    if (signUpError) {
-      // Masking Auth database errors (e.g. rate limits or unhandled backend rules)
-      triggerError('Registration failed. The email may already be in use or unavailable.');
-      return;
-    }
+    if (signUpError) return setError('Registration failed. The email may already be in use or unavailable.');
 
     if (data?.session) {
       setStage('success');
       captureProfileMetadata();
-      setTimeout(() => {
-        handleClose();
-        onVerified?.();
-      }, 1200);
+      setTimeout(() => { handleClose(); onVerified?.(); }, 1200);
       return;
     }
 
@@ -355,27 +186,16 @@ export default function AuthModal({ open, onClose, initialTab = 'signin', onVeri
   async function handleResetPassword(e) {
     e.preventDefault();
     setError('');
-
-    if (!email.trim()) {
-      triggerError('Please enter your email address.');
-      return;
-    }
+    if (!email.trim()) return setError('Please enter your email address.');
 
     setSubmitting(true);
-
     try {
-      const { error: resetError } = await supabase.auth.resetPasswordForEmail(email.trim(), {
-        redirectTo: window.location.origin,
-      });
-
+      const { error: resetError } = await supabase.auth.resetPasswordForEmail(email.trim(), { redirectTo: window.location.origin });
       if (resetError) throw resetError;
-
       setStage('success');
-      setTimeout(() => {
-        handleClose();
-      }, 2000);
+      setTimeout(() => handleClose(), 2000);
     } catch (err) {
-      triggerError(err.message || 'Failed to send reset link.');
+      setError(err.message || 'Failed to send reset link.');
     } finally {
       setSubmitting(false);
     }
@@ -386,27 +206,19 @@ export default function AuthModal({ open, onClose, initialTab = 'signin', onVeri
     const next = [...otp];
     next[index] = digit;
     setOtp(next);
-    
-    if (digit && index < 5) {
-      otpRefs.current[index + 1]?.focus();
-    }
+    if (digit && index < 5) otpRefs.current[index + 1]?.focus();
   }
 
   function handleOtpKeyDown(index, e) {
-    if (e.key === 'Backspace' && !otp[index] && index > 0) {
-      otpRefs.current[index - 1]?.focus();
-    }
+    if (e.key === 'Backspace' && !otp[index] && index > 0) otpRefs.current[index - 1]?.focus();
   }
 
   function handleOtpPaste(e) {
     e.preventDefault();
     const pasted = e.clipboardData.getData('text').replace(/\D/g, '').slice(0, 6);
     if (!pasted) return;
-    
     const next = [...otp];
-    for (let i = 0; i < 6; i++) {
-      next[i] = pasted[i] || '';
-    }
+    for (let i = 0; i < 6; i++) next[i] = pasted[i] || '';
     setOtp(next);
     otpRefs.current[Math.min(pasted.length, 5)]?.focus();
   }
@@ -414,55 +226,27 @@ export default function AuthModal({ open, onClose, initialTab = 'signin', onVeri
   async function handleVerifyOtp(e) {
     e.preventDefault();
     setError('');
-    
     const token = otp.join('');
-    if (token.length !== 6) {
-      triggerError('Enter the full 6-digit code.');
-      return;
-    }
+    if (token.length !== 6) return setError('Enter the full 6-digit code.');
 
     setSubmitting(true);
-    const { error: verifyError } = await supabase.auth.verifyOtp({ 
-      email, 
-      token, 
-      type: 'signup' 
-    });
+    const { error: verifyError } = await supabase.auth.verifyOtp({ email, token, type: 'signup' });
     setSubmitting(false);
 
-    if (verifyError) {
-      // Masking verification backend errors
-      triggerError('Invalid or expired code. Please try again.');
-      return;
-    }
+    if (verifyError) return setError('Invalid or expired code. Please try again.');
     
     setStage('success');
     captureProfileMetadata();
-    
-    setTimeout(() => {
-      handleClose();
-      onVerified?.();
-    }, 1200);
+    setTimeout(() => { handleClose(); onVerified?.(); }, 1200);
   }
 
   async function handleResend() {
     if (resendCooldown > 0) return;
-    
     setError('');
     setSubmitting(true);
-    
-    const { error: resendError } = await supabase.auth.resend({ 
-      type: 'signup', 
-      email 
-    });
-    
+    const { error: resendError } = await supabase.auth.resend({ type: 'signup', email });
     setSubmitting(false);
-    
-    if (resendError) {
-      // Masking resend endpoint errors
-      triggerError('Failed to resend code. Please wait and try again.');
-      return;
-    }
-    
+    if (resendError) return setError('Failed to resend code. Please wait and try again.');
     setResendCooldown(RESEND_COOLDOWN_S);
   }
 
@@ -475,41 +259,60 @@ export default function AuthModal({ open, onClose, initialTab = 'signin', onVeri
 
   const getInputWrapperStyle = (fieldName) => ({
     display: 'flex', alignItems: 'center', gap: 12,
-    background: 'var(--ink-2)',
+    backgroundColor: '#15161B',
     border: '1px solid',
-    borderColor: focusedField === fieldName ? 'var(--ember)' : 'var(--glass-border)',
+    borderColor: focusedField === fieldName ? '#FF6B35' : 'rgba(255,255,255,0.06)',
     borderRadius: 16, padding: '4px 16px',
-    boxShadow: focusedField === fieldName ? '0 0 0 4px color-mix(in srgb, var(--ember) 15%, transparent)' : 'inset 0 1px 3px rgba(0,0,0,0.1)',
+    boxShadow: focusedField === fieldName ? '0 0 0 4px rgba(255,107,53,0.15)' : 'inset 0 1px 3px rgba(0,0,0,0.1)',
     transition: 'all 0.2s cubic-bezier(0.2, 0.8, 0.2, 1)',
   });
 
   const getInputFieldStyle = () => ({
     flex: 1, border: 'none', background: 'transparent', outline: 'none',
-    fontSize: 16, color: 'var(--paper)', padding: '10px 0', width: '100%',
+    fontSize: 16, color: '#F4F3F0', padding: '10px 0', width: '100%',
   });
 
   if (!open && !isVisible) return null;
 
-  return (
+  // --------------------------------------------------------------------------
+  // THE PORTAL UI (STRIPPED ALL CLASSES, BULLETPROOF INLINE TRANSITIONS)
+  // --------------------------------------------------------------------------
+  const modalUI = (
     <div
-      onClick={handleBackdropClick}
-      className={`backdrop-fade ${isVisible ? 'is-visible' : ''}`}
       style={{
-        position: 'fixed', inset: 0, zIndex: 1000,
-        display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20
+        position: 'fixed', inset: 0, zIndex: 2147483647, // Maximum safe z-index to dominate app hierarchy
+        display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 20,
+        pointerEvents: 'none' // Let clicks pass when animating out
       }}
     >
+      {/* SOLID BLACK DIMMING BACKDROP (NO EXTERNAL CLASSES) */}
+      <div
+        onClick={handleBackdropClick}
+        style={{
+          position: 'absolute', inset: 0,
+          backgroundColor: 'rgba(0,0,0,0.85)',
+          opacity: isVisible ? 1 : 0,
+          transition: `opacity ${ANIMATION_DURATION}ms ease`,
+          pointerEvents: 'auto',
+          zIndex: 1
+        }}
+      />
+      
+      {/* THE SHEET CONTAINER (NO EXTERNAL CLASSES) */}
       <div
         onClick={(e) => e.stopPropagation()}
-        className={isVisible ? 'pop-in' : ''}
         style={{
-          width: '100%', maxWidth: 420, position: 'relative',
-          background: 'var(--glass-white)',
-          backdropFilter: 'blur(20px) saturate(115%)',
-          WebkitBackdropFilter: 'blur(20px) saturate(115%)',
-          border: '1px solid var(--glass-border)',
+          position: 'relative', zIndex: 2, pointerEvents: 'auto',
+          width: '100%', maxWidth: 420,
+          backgroundColor: '#1C1D24', // SOLID MATTE HEX
+          border: '1px solid rgba(255,255,255,0.08)',
           borderRadius: 28, padding: 32,
-          boxShadow: '0 6px 18px rgba(0,0,0,0.35)',
+          boxShadow: '0 10px 40px rgba(0,0,0,0.6)',
+          
+          // Inline native React animation replaces .pop-in
+          transform: isVisible ? 'scale(1) translateY(0)' : 'scale(0.95) translateY(15px)',
+          opacity: isVisible ? 1 : 0,
+          transition: `all ${ANIMATION_DURATION}ms cubic-bezier(0.2, 0.8, 0.2, 1)`
         }}
       >
         
@@ -518,7 +321,7 @@ export default function AuthModal({ open, onClose, initialTab = 'signin', onVeri
           aria-label="Close"
           style={{
             position: 'absolute', top: 16, right: 16, width: 32, height: 32, borderRadius: '50%',
-            border: 'none', background: 'transparent', color: 'var(--dim)',
+            border: 'none', background: 'transparent', color: '#8B8B96',
             cursor: submitting ? 'default' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center',
             transition: 'background 0.2s, color 0.2s', opacity: submitting ? 0.5 : 1
           }}
@@ -537,7 +340,7 @@ export default function AuthModal({ open, onClose, initialTab = 'signin', onVeri
                   disabled={submitting}
                   style={{ 
                     position: 'absolute', left: -16, top: '50%', transform: 'translateY(-50%)',
-                    border: 'none', background: 'transparent', color: 'var(--ember)', 
+                    border: 'none', background: 'transparent', color: '#FF6B35', 
                     padding: 8, cursor: submitting ? 'default' : 'pointer', display: 'flex', 
                     alignItems: 'center', opacity: submitting ? 0.5 : 1 
                   }}
@@ -546,23 +349,23 @@ export default function AuthModal({ open, onClose, initialTab = 'signin', onVeri
                   {Vectors.ArrowLeft}
                 </button>
               )}
-              <h2 style={{ margin: '0 0 8px 0', fontSize: 24, fontWeight: 800, color: 'var(--paper)', letterSpacing: '-0.5px' }}>
+              <h2 style={{ margin: '0 0 8px 0', fontSize: 24, fontWeight: 800, color: '#F4F3F0', letterSpacing: '-0.5px' }}>
                 {tab === 'signin' ? 'Welcome Back' : tab === 'signup' ? 'Join Anonroom' : 'Reset Password'}
               </h2>
-              <p style={{ margin: 0, fontSize: 15, color: 'var(--dim)', lineHeight: 1.4 }}>
+              <p style={{ margin: 0, fontSize: 15, color: '#8B8B96', lineHeight: 1.4 }}>
                 {tab === 'signin' ? 'Sign in to continue bridging the gap.' : tab === 'signup' ? 'Create an anonymous identity.' : 'Enter your email to receive a reset link.'}
               </p>
             </div>
 
             {tab !== 'forgot' && (
-              <div style={{ position: 'relative', display: 'flex', background: 'var(--ink-2)', borderRadius: 16, padding: 4, boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.1)', border: '1px solid var(--glass-border)' }}>
+              <div style={{ position: 'relative', display: 'flex', backgroundColor: '#15161B', borderRadius: 16, padding: 4, boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.1)', border: '1px solid rgba(255,255,255,0.06)' }}>
                 <div 
                   style={{
                     position: 'absolute', top: 4, bottom: 4, width: 'calc(50% - 4px)',
                     left: tab === 'signin' ? 4 : 'calc(50% + 2px)',
-                    background: 'var(--glass-white)', borderRadius: 12,
+                    backgroundColor: '#1C1D24', borderRadius: 12,
                     transition: 'left 300ms cubic-bezier(0.2, 0.8, 0.2, 1)',
-                    border: '1px solid var(--glass-border)'
+                    border: '1px solid rgba(255,255,255,0.06)'
                   }} 
                 />
                 
@@ -571,7 +374,7 @@ export default function AuthModal({ open, onClose, initialTab = 'signin', onVeri
                   style={{
                     flex: 1, zIndex: 1, padding: '10px 0', border: 'none', background: 'transparent',
                     fontWeight: 600, fontSize: 15, borderRadius: 12,
-                    color: tab === 'signin' ? 'var(--paper)' : 'var(--dim)', cursor: 'pointer',
+                    color: tab === 'signin' ? '#F4F3F0' : '#8B8B96', cursor: 'pointer',
                     transition: 'color 0.2s'
                   }}
                 >
@@ -582,7 +385,7 @@ export default function AuthModal({ open, onClose, initialTab = 'signin', onVeri
                   style={{
                     flex: 1, zIndex: 1, padding: '10px 0', border: 'none', background: 'transparent',
                     fontWeight: 600, fontSize: 15, borderRadius: 12,
-                    color: tab === 'signup' ? 'var(--paper)' : 'var(--dim)', cursor: 'pointer',
+                    color: tab === 'signup' ? '#F4F3F0' : '#8B8B96', cursor: 'pointer',
                     transition: 'color 0.2s'
                   }}
                 >
@@ -591,11 +394,10 @@ export default function AuthModal({ open, onClose, initialTab = 'signin', onVeri
               </div>
             )}
 
-            {/* FORMS */}
             {tab === 'signin' ? (
               <form onSubmit={handleSignIn} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                 <div style={getInputWrapperStyle('email')}>
-                  <div style={{ color: focusedField === 'email' ? 'var(--ember)' : 'var(--dim)', transform: focusedField === 'email' ? 'scale(1.1)' : 'scale(1)', transition: 'all 0.2s' }}>
+                  <div style={{ color: focusedField === 'email' ? '#FF6B35' : '#8B8B96', transform: focusedField === 'email' ? 'scale(1.1)' : 'scale(1)', transition: 'all 0.2s' }}>
                     {Vectors.Mail}
                   </div>
                   <input
@@ -608,7 +410,7 @@ export default function AuthModal({ open, onClose, initialTab = 'signin', onVeri
                 </div>
                 
                 <div style={getInputWrapperStyle('password')}>
-                  <div style={{ color: focusedField === 'password' ? 'var(--ember)' : 'var(--dim)', transform: focusedField === 'password' ? 'scale(1.1)' : 'scale(1)', transition: 'all 0.2s' }}>
+                  <div style={{ color: focusedField === 'password' ? '#FF6B35' : '#8B8B96', transform: focusedField === 'password' ? 'scale(1.1)' : 'scale(1)', transition: 'all 0.2s' }}>
                     {Vectors.Lock}
                   </div>
                   <input
@@ -622,7 +424,7 @@ export default function AuthModal({ open, onClose, initialTab = 'signin', onVeri
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
                     tabIndex="-1"
-                    style={{ border: 'none', background: 'transparent', color: showPassword ? 'var(--ember)' : 'var(--dim)', cursor: 'pointer', padding: 0, display: 'flex', transition: 'color 0.2s' }}
+                    style={{ border: 'none', background: 'transparent', color: showPassword ? '#FF6B35' : '#8B8B96', cursor: 'pointer', padding: 0, display: 'flex', transition: 'color 0.2s' }}
                   >
                     {showPassword ? Vectors.EyeOff : Vectors.Eye}
                   </button>
@@ -633,14 +435,14 @@ export default function AuthModal({ open, onClose, initialTab = 'signin', onVeri
                     type="button" 
                     onClick={() => switchTab('forgot')}
                     disabled={submitting}
-                    style={{ border: 'none', background: 'transparent', color: 'var(--ember)', fontSize: 14, fontWeight: 600, cursor: submitting ? 'default' : 'pointer', opacity: submitting ? 0.5 : 1, padding: 0 }}
+                    style={{ border: 'none', background: 'transparent', color: '#FF6B35', fontSize: 14, fontWeight: 600, cursor: submitting ? 'default' : 'pointer', opacity: submitting ? 0.5 : 1, padding: 0 }}
                   >
                     Forgot Password?
                   </button>
                 </div>
 
                 {error && (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--ember)', fontSize: 14, fontWeight: 500, background: 'color-mix(in srgb, var(--ember) 16%, transparent)', padding: '10px 14px', borderRadius: 12 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#FF6B35', fontSize: 14, fontWeight: 500, backgroundColor: 'rgba(255,107,53,0.16)', padding: '10px 14px', borderRadius: 12 }}>
                     {Vectors.Alert}
                     <span>{error}</span>
                   </div>
@@ -648,10 +450,9 @@ export default function AuthModal({ open, onClose, initialTab = 'signin', onVeri
 
                 <button
                   type="submit" disabled={submitting}
-                  className={!submitting ? 'chat-row' : ''}
                   style={{
                     marginTop: 8, padding: '16px 0', borderRadius: 16, border: 'none',
-                    background: submitting ? 'var(--glass-border)' : 'var(--ember)', color: '#fff', fontWeight: 700, fontSize: 16, 
+                    backgroundColor: submitting ? 'rgba(255,255,255,0.06)' : '#FF6B35', color: '#fff', fontWeight: 700, fontSize: 16, 
                     cursor: submitting ? 'default' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
                     transition: 'background 0.2s'
                   }}
@@ -662,7 +463,7 @@ export default function AuthModal({ open, onClose, initialTab = 'signin', onVeri
             ) : tab === 'forgot' ? (
               <form onSubmit={handleResetPassword} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                 <div style={getInputWrapperStyle('email')}>
-                  <div style={{ color: focusedField === 'email' ? 'var(--ember)' : 'var(--dim)', transform: focusedField === 'email' ? 'scale(1.1)' : 'scale(1)', transition: 'all 0.2s' }}>
+                  <div style={{ color: focusedField === 'email' ? '#FF6B35' : '#8B8B96', transform: focusedField === 'email' ? 'scale(1.1)' : 'scale(1)', transition: 'all 0.2s' }}>
                     {Vectors.Mail}
                   </div>
                   <input
@@ -675,7 +476,7 @@ export default function AuthModal({ open, onClose, initialTab = 'signin', onVeri
                 </div>
 
                 {error && (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--ember)', fontSize: 14, fontWeight: 500, background: 'color-mix(in srgb, var(--ember) 16%, transparent)', padding: '10px 14px', borderRadius: 12 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#FF6B35', fontSize: 14, fontWeight: 500, backgroundColor: 'rgba(255,107,53,0.16)', padding: '10px 14px', borderRadius: 12 }}>
                     {Vectors.Alert}
                     <span>{error}</span>
                   </div>
@@ -683,10 +484,9 @@ export default function AuthModal({ open, onClose, initialTab = 'signin', onVeri
 
                 <button
                   type="submit" disabled={submitting}
-                  className={!submitting ? 'chat-row' : ''}
                   style={{
                     marginTop: 8, padding: '16px 0', borderRadius: 16, border: 'none',
-                    background: submitting ? 'var(--glass-border)' : 'var(--ember)', color: '#fff', fontWeight: 700, fontSize: 16, 
+                    backgroundColor: submitting ? 'rgba(255,255,255,0.06)' : '#FF6B35', color: '#fff', fontWeight: 700, fontSize: 16, 
                     cursor: submitting ? 'default' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
                     transition: 'background 0.2s'
                   }}
@@ -697,7 +497,7 @@ export default function AuthModal({ open, onClose, initialTab = 'signin', onVeri
             ) : (
               <form onSubmit={handleSignUp} style={{ display: 'flex', flexDirection: 'column', gap: 16 }}>
                 <div style={getInputWrapperStyle('username')}>
-                  <div style={{ color: focusedField === 'username' ? 'var(--ember)' : 'var(--dim)', transform: focusedField === 'username' ? 'scale(1.1)' : 'scale(1)', transition: 'all 0.2s' }}>
+                  <div style={{ color: focusedField === 'username' ? '#FF6B35' : '#8B8B96', transform: focusedField === 'username' ? 'scale(1.1)' : 'scale(1)', transition: 'all 0.2s' }}>
                     {Vectors.User}
                   </div>
                   <input
@@ -710,7 +510,7 @@ export default function AuthModal({ open, onClose, initialTab = 'signin', onVeri
                 </div>
 
                 <div style={getInputWrapperStyle('email')}>
-                  <div style={{ color: focusedField === 'email' ? 'var(--ember)' : 'var(--dim)', transform: focusedField === 'email' ? 'scale(1.1)' : 'scale(1)', transition: 'all 0.2s' }}>
+                  <div style={{ color: focusedField === 'email' ? '#FF6B35' : '#8B8B96', transform: focusedField === 'email' ? 'scale(1.1)' : 'scale(1)', transition: 'all 0.2s' }}>
                     {Vectors.Mail}
                   </div>
                   <input
@@ -723,7 +523,7 @@ export default function AuthModal({ open, onClose, initialTab = 'signin', onVeri
                 </div>
                 
                 <div style={getInputWrapperStyle('password')}>
-                  <div style={{ color: focusedField === 'password' ? 'var(--ember)' : 'var(--dim)', transform: focusedField === 'password' ? 'scale(1.1)' : 'scale(1)', transition: 'all 0.2s' }}>
+                  <div style={{ color: focusedField === 'password' ? '#FF6B35' : '#8B8B96', transform: focusedField === 'password' ? 'scale(1.1)' : 'scale(1)', transition: 'all 0.2s' }}>
                     {Vectors.Lock}
                   </div>
                   <input
@@ -737,14 +537,14 @@ export default function AuthModal({ open, onClose, initialTab = 'signin', onVeri
                     type="button"
                     onClick={() => setShowPassword(!showPassword)}
                     tabIndex="-1"
-                    style={{ border: 'none', background: 'transparent', color: showPassword ? 'var(--ember)' : 'var(--dim)', cursor: 'pointer', padding: 0, display: 'flex', transition: 'color 0.2s' }}
+                    style={{ border: 'none', background: 'transparent', color: showPassword ? '#FF6B35' : '#8B8B96', cursor: 'pointer', padding: 0, display: 'flex', transition: 'color 0.2s' }}
                   >
                     {showPassword ? Vectors.EyeOff : Vectors.Eye}
                   </button>
                 </div>
 
                 <div style={getInputWrapperStyle('confirmPassword')}>
-                  <div style={{ color: focusedField === 'confirmPassword' ? 'var(--ember)' : 'var(--dim)', transform: focusedField === 'confirmPassword' ? 'scale(1.1)' : 'scale(1)', transition: 'all 0.2s' }}>
+                  <div style={{ color: focusedField === 'confirmPassword' ? '#FF6B35' : '#8B8B96', transform: focusedField === 'confirmPassword' ? 'scale(1.1)' : 'scale(1)', transition: 'all 0.2s' }}>
                     {Vectors.Lock}
                   </div>
                   <input
@@ -758,7 +558,7 @@ export default function AuthModal({ open, onClose, initialTab = 'signin', onVeri
                     type="button"
                     onClick={() => setShowConfirmPassword(!showConfirmPassword)}
                     tabIndex="-1"
-                    style={{ border: 'none', background: 'transparent', color: showConfirmPassword ? 'var(--ember)' : 'var(--dim)', cursor: 'pointer', padding: 0, display: 'flex', transition: 'color 0.2s' }}
+                    style={{ border: 'none', background: 'transparent', color: showConfirmPassword ? '#FF6B35' : '#8B8B96', cursor: 'pointer', padding: 0, display: 'flex', transition: 'color 0.2s' }}
                   >
                     {showConfirmPassword ? Vectors.EyeOff : Vectors.Eye}
                   </button>
@@ -766,13 +566,13 @@ export default function AuthModal({ open, onClose, initialTab = 'signin', onVeri
 
                 <label style={{ display: 'flex', alignItems: 'center', gap: 12, marginTop: 4, cursor: 'pointer' }}>
                   <GlassToggle checked={acceptedTerms} onChange={setAcceptedTerms} />
-                  <span style={{ fontSize: 13, color: 'var(--dim)', lineHeight: 1.4 }}>
-                    I agree to the <span style={{ color: 'var(--ember)' }}>Terms</span> and <span style={{ color: 'var(--ember)' }}>Privacy Policy</span>.
+                  <span style={{ fontSize: 13, color: '#8B8B96', lineHeight: 1.4 }}>
+                    I agree to the <span style={{ color: '#FF6B35' }}>Terms</span> and <span style={{ color: '#FF6B35' }}>Privacy Policy</span>.
                   </span>
                 </label>
 
                 {error && (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: 'var(--ember)', fontSize: 14, fontWeight: 500, background: 'color-mix(in srgb, var(--ember) 16%, transparent)', padding: '10px 14px', borderRadius: 12 }}>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, color: '#FF6B35', fontSize: 14, fontWeight: 500, backgroundColor: 'rgba(255,107,53,0.16)', padding: '10px 14px', borderRadius: 12 }}>
                     {Vectors.Alert}
                     <span>{error}</span>
                   </div>
@@ -780,10 +580,9 @@ export default function AuthModal({ open, onClose, initialTab = 'signin', onVeri
 
                 <button
                   type="submit" disabled={submitting}
-                  className={!submitting ? 'chat-row' : ''}
                   style={{
                     marginTop: 8, padding: '16px 0', borderRadius: 16, border: 'none',
-                    background: submitting ? 'var(--glass-border)' : 'var(--ember)', color: '#fff', fontWeight: 700, fontSize: 16, 
+                    backgroundColor: submitting ? 'rgba(255,255,255,0.06)' : '#FF6B35', color: '#fff', fontWeight: 700, fontSize: 16, 
                     cursor: submitting ? 'default' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
                     transition: 'background 0.2s'
                   }}
@@ -798,15 +597,15 @@ export default function AuthModal({ open, onClose, initialTab = 'signin', onVeri
         {stage === 'otp' && (
           <form onSubmit={handleVerifyOtp} style={{ display: 'flex', flexDirection: 'column', gap: 28 }}>
             <div style={{ textAlign: 'center' }}>
-              <div style={{ width: 64, height: 64, borderRadius: '50%', background: 'var(--glass-border)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--ember)', margin: '0 auto 16px' }}>
+              <div style={{ width: 64, height: 64, borderRadius: '50%', backgroundColor: 'rgba(255,255,255,0.06)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#FF6B35', margin: '0 auto 16px' }}>
                 {Vectors.Mail}
               </div>
-              <h2 style={{ margin: '0 0 8px 0', fontSize: 24, fontWeight: 800, color: 'var(--paper)' }}>
+              <h2 style={{ margin: '0 0 8px 0', fontSize: 24, fontWeight: 800, color: '#F4F3F0' }}>
                 Check Your Email
               </h2>
-              <p style={{ margin: 0, fontSize: 15, color: 'var(--dim)', lineHeight: 1.5 }}>
+              <p style={{ margin: 0, fontSize: 15, color: '#8B8B96', lineHeight: 1.5 }}>
                 Enter the 6-digit verification code sent to <br/>
-                <span style={{ color: 'var(--paper)', fontWeight: 600 }}>{email}</span>
+                <span style={{ color: '#F4F3F0', fontWeight: 600 }}>{email}</span>
               </p>
             </div>
 
@@ -823,18 +622,18 @@ export default function AuthModal({ open, onClose, initialTab = 'signin', onVeri
                   inputMode="numeric" maxLength={1}
                   style={{
                     width: 48, height: 56, textAlign: 'center', fontSize: 24, fontWeight: 700,
-                    background: 'var(--ink-2)', padding: 0, outline: 'none',
-                    color: 'var(--paper)', borderRadius: 14, border: '1px solid',
-                    borderColor: focusedField === `otp-${i}` || digit ? 'var(--ember)' : 'var(--glass-border)',
+                    backgroundColor: '#15161B', padding: 0, outline: 'none',
+                    color: '#F4F3F0', borderRadius: 14, border: '1px solid',
+                    borderColor: focusedField === `otp-${i}` || digit ? '#FF6B35' : 'rgba(255,255,255,0.06)',
                     transition: 'border-color 0.2s, box-shadow 0.2s',
-                    boxShadow: focusedField === `otp-${i}` ? '0 0 0 4px color-mix(in srgb, var(--ember) 15%, transparent)' : 'none'
+                    boxShadow: focusedField === `otp-${i}` ? '0 0 0 4px rgba(255,107,53,0.15)' : 'none'
                   }}
                 />
               ))}
             </div>
 
             {error && (
-              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, color: 'var(--ember)', fontSize: 14, fontWeight: 500 }}>
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, color: '#FF6B35', fontSize: 14, fontWeight: 500 }}>
                 {Vectors.Alert}
                 <span>{error}</span>
               </div>
@@ -843,10 +642,9 @@ export default function AuthModal({ open, onClose, initialTab = 'signin', onVeri
             <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
               <button
                 type="submit" disabled={submitting}
-                className={!submitting ? 'chat-row' : ''}
                 style={{
                   padding: '16px 0', borderRadius: 16, border: 'none',
-                  background: submitting ? 'var(--glass-border)' : 'var(--ember)', color: '#fff', fontWeight: 700, fontSize: 16, 
+                  backgroundColor: submitting ? 'rgba(255,255,255,0.06)' : '#FF6B35', color: '#fff', fontWeight: 700, fontSize: 16, 
                   cursor: submitting ? 'default' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8,
                   transition: 'background 0.2s'
                 }}
@@ -856,7 +654,7 @@ export default function AuthModal({ open, onClose, initialTab = 'signin', onVeri
 
               <button
                 type="button" onClick={handleResend} disabled={resendCooldown > 0 || submitting}
-                style={{ background: 'none', border: 'none', fontSize: 14, fontWeight: 600, cursor: resendCooldown > 0 ? 'default' : 'pointer', textAlign: 'center', padding: '12px 0', color: resendCooldown > 0 ? 'var(--dim)' : 'var(--ember)', transition: 'color 0.2s' }}
+                style={{ background: 'none', border: 'none', fontSize: 14, fontWeight: 600, cursor: resendCooldown > 0 ? 'default' : 'pointer', textAlign: 'center', padding: '12px 0', color: resendCooldown > 0 ? '#8B8B96' : '#FF6B35', transition: 'color 0.2s' }}
               >
                 {resendCooldown > 0 ? `Resend code in ${resendCooldown}s` : 'Resend Verification Code'}
               </button>
@@ -866,9 +664,9 @@ export default function AuthModal({ open, onClose, initialTab = 'signin', onVeri
 
         {stage === 'success' && (
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', padding: '40px 0' }}>
-            <div style={{ color: 'var(--signal)', marginBottom: 20 }}>{Vectors.CheckCircle}</div>
-            <h2 style={{ margin: '0 0 8px 0', fontSize: 24, fontWeight: 800, color: 'var(--paper)' }}>Success</h2>
-            <p style={{ margin: 0, fontSize: 15, color: 'var(--dim)' }}>
+            <div style={{ color: '#10B981', marginBottom: 20 }}>{Vectors.CheckCircle}</div>
+            <h2 style={{ margin: '0 0 8px 0', fontSize: 24, fontWeight: 800, color: '#F4F3F0' }}>Success</h2>
+            <p style={{ margin: 0, fontSize: 15, color: '#8B8B96' }}>
               {tab === 'forgot' ? 'Check your email for the reset link.' : 'Redirecting you to Anonroom...'}
             </p>
           </div>
@@ -877,4 +675,9 @@ export default function AuthModal({ open, onClose, initialTab = 'signin', onVeri
       </div>
     </div>
   );
+
+  if (typeof document !== 'undefined') {
+    return createPortal(modalUI, document.body);
+  }
+  return null;
 }
