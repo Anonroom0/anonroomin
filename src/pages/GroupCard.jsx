@@ -24,8 +24,8 @@ import { showToast, friendlyDbError } from '../lib/toast';
 import { getGroupUrl } from '../lib/subdomain';
 
 // Shared Components
-import LiquidAvatar from '../components/LiquidAvatar';
-import MessageSkeleton from '../components/MessageSkeleton';
+import LiquidAvatar from '../components/shared/LiquidAvatar';
+import MessageSkeleton from '../components/shared/MessageSkeleton';
 
 // ============================================================================
 // 1. CONSTANTS & CONFIGURATION

@@ -33,15 +33,15 @@ import AuthModal from './AuthModal';
 import EmojiGifPicker from './EmojiGifPicker';
 
 // Shared Components
-import LiquidAvatar from '../components/LiquidAvatar';
-import MessageSkeleton from '../components/MessageSkeleton';
-import AttachmentSheet from '../components/AttachmentSheet';
-import ConfessionBubble from '../components/ConfessionBubble';
-import ReactionBar from '../components/ReactionBar';
-import SwipeableMessage from '../components/SwipeableMessage';
-import SendButton from '../components/SendButton';
-import { AudioBubble, VideoBubble } from '../components/MediaBubble';
-import InstagramCard from '../components/InstagramCard';
+import LiquidAvatar from '../components/shared/LiquidAvatar';
+import MessageSkeleton from '../components/shared/MessageSkeleton';
+import AttachmentSheet from '../components/shared/AttachmentSheet';
+import ConfessionBubble from '../components/shared/ConfessionBubble';
+import ReactionBar from '../components/shared/ReactionBar';
+import SwipeableMessage from '../components/shared/SwipeableMessage';
+import SendButton from '../components/shared/SendButton';
+import { AudioBubble, VideoBubble } from '../components/shared/MediaBubble';
+import InstagramCard from '../components/shared/InstagramCard';
 
 // ============================================================================
 // 1. CONSTANTS & CONFIGURATION

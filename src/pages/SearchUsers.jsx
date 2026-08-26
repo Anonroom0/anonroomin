@@ -21,8 +21,8 @@ import React, { useEffect, useState } from 'react';
 import supabase from '../lib/supabaseClient';
 
 // Shared Components
-import LiquidAvatar from '../components/LiquidAvatar';
-import MessageSkeleton from '../components/MessageSkeleton';
+import LiquidAvatar from '../components/shared/LiquidAvatar';
+import MessageSkeleton from '../components/shared/MessageSkeleton';
 
 // ============================================================================
 // 1. CONSTANTS & CONFIGURATION

@@ -39,8 +39,8 @@ import { useAuth } from '../lib/authContext';
 import { getOrCreateVisitorId } from '../lib/visitorId';
 import { ROOT_PATH } from '../lib/subdomain';
 import { showToast, friendlyDbError } from '../lib/toast';
-import MessageSkeleton from '../components/MessageSkeleton';
-import SendButton from '../components/SendButton';
+import MessageSkeleton from '../components/shared/MessageSkeleton';
+import SendButton from '../components/shared/SendButton';
 
 // ============================================================================
 // 1. CONSTANTS

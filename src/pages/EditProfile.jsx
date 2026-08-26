@@ -20,7 +20,7 @@ import React, { useEffect, useRef, useState, useCallback } from 'react';
 import supabase from '../lib/supabaseClient';
 import { useAuth } from '../lib/authContext';
 import { showToast, friendlyDbError } from '../lib/toast';
-import NotificationSettingsPanel from '../components/NotificationSettingsPanel';
+import NotificationSettingsPanel from '../components/notifications/NotificationSettingsPanel';
 
 // ============================================================================
 // 1. CONSTANTS & CONFIGURATION

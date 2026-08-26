@@ -23,7 +23,7 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import supabase from '../lib/supabaseClient';
 import { useAuth } from '../lib/authContext';
-import GlassToggle from '../components/GlassToggle';
+import GlassToggle from '../components/shared/GlassToggle';
 
 // ============================================================================
 // 1. CONSTANTS & CONFIGURATION

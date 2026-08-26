@@ -38,14 +38,14 @@ import GroupChat from './GroupChat';
 import EditProfile from './EditProfile';
 
 // Shared Components
-import LiquidAvatar from '../components/LiquidAvatar';
-import MessageSkeleton from '../components/MessageSkeleton';
-import StoriesBar from '../components/StoriesBar';
-import StoryViewer from '../components/StoryViewer';
-import CreateQuestionModal from '../components/CreateQuestionModal';
-import QuestionCard from '../components/QuestionCard';
-import QuestionThread from '../components/QuestionThread';
-import ShareStorySheet from '../components/ShareStorySheet';
+import LiquidAvatar from '../components/shared/LiquidAvatar';
+import MessageSkeleton from '../components/shared/MessageSkeleton';
+import StoriesBar from '../components/stories/StoriesBar';
+import StoryViewer from '../components/stories/StoryViewer';
+import CreateQuestionModal from '../components/questions/CreateQuestionModal';
+import QuestionCard from '../components/questions/QuestionCard';
+import QuestionThread from '../components/questions/QuestionThread';
+import ShareStorySheet from '../components/stories/ShareStorySheet';
 
 import '../styles/tokens.css';
 import '../styles/animations.css';
