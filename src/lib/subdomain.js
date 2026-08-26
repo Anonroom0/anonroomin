@@ -128,3 +128,42 @@ export function getDmUsernameFromPath() {
 export function buildDmPath(username) {
   return `/${encodeURIComponent(username)}`;
 }
+
+// ----------------------------------------------------------------------------
+// QUESTION-THREAD ROUTING (root domain, /q/<id>)
+// ----------------------------------------------------------------------------
+// Its own single-segment-under-/q/ parser rather than reusing
+// normalizedPathSegments()/getDmUsernameFromPath()'s reserved-word logic —
+// question ids live under an explicit /q/ prefix so they can never collide
+// with the single-segment /<username> DM route above, and don't need
+// RESERVED_PATH_SEGMENTS filtering as a result.
+
+// Returns the id for the root-level question-thread route (anonroom.in/q/<id>),
+// or null if the current path doesn't match that shape.
+export function getQuestionIdFromPath() {
+  const path = window.location.pathname;
+  if (!path.startsWith('/q/')) {
+    return null;
+  }
+  const remainder = path.slice('/q/'.length);
+  if (!remainder) {
+    return null;
+  }
+  return decodeURIComponent(remainder);
+}
+
+export function buildQuestionPath(id) {
+  return `/q/${encodeURIComponent(id)}`;
+}
+
+// ----------------------------------------------------------------------------
+// CONFESSIONS FEED ROUTING (root domain, /confessions)
+// ----------------------------------------------------------------------------
+
+export function getConfessionsFeedPath() {
+  return '/confessions';
+}
+
+export function isConfessionsFeedPath() {
+  return window.location.pathname.replace(/^\/+|\/+$/g, '') === 'confessions';
+}

@@ -1,82 +1,58 @@
 /**
  * ============================================================================
- * ANONROOM - CORE APPLE LIQUID DESIGN TOKENS
+ * ANONROOM - CORE DARK GLASSMORPHISM DESIGN TOKENS
  * ============================================================================
- * This file serves as the absolute foundation for the Apple Liquid UI.
- * It strictly defines color palettes, fluid glassmorphism rules, and 
- * responsive dark-mode transitions using pure CSS variables.
- * 
+ * This file serves as the absolute foundation for the app's visual system,
+ * alongside src/styles/animations.css (which owns every @keyframes and
+ * reusable animation utility class). Together these two files are the only
+ * place color/glass-material/radii and motion get defined — components
+ * style themselves with plain inline style objects referencing var(--token)
+ * plus classNames into these two files.
+ *
+ * Dark-only design now: :root is the single source of truth, no
+ * prefers-color-scheme branching.
+ *
  * Features:
- * - Native Light/Dark Mode auto-switching via media queries
+ * - Single dark palette: Ink / Ink-2 / Paper / Dim / Ember / Signal
+ * - Liquid-glass panels + sheets with a tiled grain overlay
  * - Telegram iOS custom scrollbars
- * - Base Typography resets (SF Pro Display / Apple System)
- * - Standardized glass panel rendering
+ * - Base typography resets (SF Pro Display / Apple System)
  * ============================================================================
  */
 
-/* 
+/*
   =============================================================================
-  1. LIGHT MODE (DEFAULT) COLOR TOKENS
+  1. DARK TOKEN PALETTE (SINGLE SOURCE OF TRUTH)
   =============================================================================
 */
 :root {
-  /* Core Text */
-  --ink: #000000;         /* Primary high-contrast text */
-  --dim: #8e8e93;         /* Secondary muted text */
-  
-  /* Primary Accents */
-  --blue: #007aff;        /* Apple iOS Blue - Only accent color */
-  --admin-gold: #ff9500;  /* Strict Admin Override Color */
+  /* Surfaces */
+  --ink: #0C0D10;      /* base bg */
+  --ink-2: #15161B;    /* elevated surface */
 
-  /* Status Colors */
-  --green: #34c759;
-  --red: #ff3b30;
+  /* Text */
+  --paper: #F4F3F0;    /* primary text */
+  --dim: #8B8B96;      /* secondary text */
 
-  /* Surfaces & Backgrounds */
-  --bg: #f2f2f7;          /* Standard Apple hardware background */
-  
-  /* Liquid Glass Base */
-  --glass: rgba(255, 255, 255, 0.65);
-  --glass-strong: rgba(255, 255, 255, 0.85);
-  --glass-border: rgba(0, 0, 0, 0.08);
+  /* Accents — the ONE primary-action color per screen (ember), and
+     live/online/delivered states only (signal). Never gradient together —
+     flat, separate fills only. */
+  --ember: #FF6B35;
+  --signal: #2FD8C4;
 
-  /* Message Bubbles */
-  --bubble-own: #007aff;
-  --bubble-them: #e5e5ea;
+  /* Glass material */
+  --glass-white: rgba(255, 255, 255, 0.07);
+  --glass-border: rgba(255, 255, 255, 0.10);
+
+  /* Radii */
+  --radius-card: 20px;   /* cards/rows */
+  --radius-sheet: 28px;  /* sheets/modals */
+  --radius-round: 50%;   /* avatars/FAB */
 }
 
-/* 
+/*
   =============================================================================
-  2. DARK MODE COLOR TOKENS (AUTOMATIC SWITCHING)
-  =============================================================================
-*/
-@media (prefers-color-scheme: dark) {
-  :root {
-    /* Core Text */
-    --ink: #ffffff;
-    --dim: #ebebf5;
-    
-    /* Primary Accents (Adjusted for Dark Mode contrast) */
-    --blue: #0a84ff;
-    --admin-gold: #ffd60a;
-
-    /* Surfaces & Backgrounds */
-    --bg: #000000;
-    
-    /* Liquid Glass Base (Inverted for dark mode) */
-    --glass: rgba(28, 28, 30, 0.55);
-    --glass-strong: rgba(28, 28, 30, 0.75);
-    --glass-border: rgba(255, 255, 255, 0.12);
-
-    /* Message Bubbles */
-    --bubble-own: #0a84ff;
-    --bubble-them: #2c2c2e;
-  }
-}
-
-/* 
-  =============================================================================
-  3. GLOBAL TYPOGRAPHY & BODY RESETS
+  2. GLOBAL TYPOGRAPHY & BODY RESETS
   =============================================================================
 */
 /*
@@ -103,9 +79,9 @@ body {
   width: 100%;
   /* Enforce native Apple typography, falling back to standard sans-serifs */
   font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-  background-color: var(--bg);
-  color: var(--ink);
-  
+  background-color: var(--ink);
+  color: var(--paper);
+
   /* Prevent bounce-scrolling on iOS to maintain the native app feel */
   overflow: hidden;
   overscroll-behavior: none;
@@ -118,46 +94,64 @@ body {
   width: 100%;
 }
 
-/* 
+/*
   =============================================================================
-  4. UTILITY CLASSES (BASE GLASSMORPHISM)
+  3. LIQUID GLASS SURFACES (PANEL + SHEET)
   =============================================================================
-  These are used as fallback wrappers. Most components in this architecture 
-  now use inline styling for highly specific dynamic blurring, but these 
-  are retained for `Home.jsx` sidebars and list containers.
+  .glass-panel is for cards/rows (radius-card). .glass-sheet is identical
+  but for sheets/modals (radius-sheet). Both get a subtle tiled grain
+  overlay via ::after — an inlined fractal-noise SVG data-URI, no external
+  image file — blended at 2% opacity to keep the flat glass fill from
+  looking too sterile.
+
+  position: relative + overflow: hidden are needed here (not spec'd
+  explicitly) so the ::after's `inset: 0` has a positioned ancestor to
+  anchor to and so the grain gets clipped to the panel's own border-radius
+  instead of bleeding past its corners.
 */
+.glass-panel,
+.glass-sheet {
+  position: relative;
+  overflow: hidden;
+  background: var(--glass-white);
+  border: 1px solid var(--glass-border);
+  backdrop-filter: blur(20px) saturate(115%);
+  -webkit-backdrop-filter: blur(20px) saturate(115%);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+}
 
 .glass-panel {
-  background: var(--glass);
-  border: 1px solid var(--glass-border);
-  border-radius: 16px;
-  backdrop-filter: blur(24px) saturate(200%);
-  -webkit-backdrop-filter: blur(24px) saturate(200%);
-  /* Soft shadow for depth */
-  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.04);
+  border-radius: var(--radius-card);
 }
 
-.glass-strong {
-  background: var(--glass-strong);
-  border: 1px solid var(--glass-border);
-  backdrop-filter: blur(40px) saturate(200%);
-  -webkit-backdrop-filter: blur(40px) saturate(200%);
-  /* Deeper shadow for modal/pane elevation */
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08);
+.glass-sheet {
+  border-radius: var(--radius-sheet);
 }
 
-/* 
+.glass-panel::after,
+.glass-sheet::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  mix-blend-mode: overlay;
+  opacity: 0.02;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-repeat: repeat;
+}
+
+/*
   =============================================================================
-  5. TELEGRAM iOS CUSTOM SCROLLBARS
+  4. TELEGRAM iOS CUSTOM SCROLLBARS
   =============================================================================
-  Standard browser scrollbars ruin the native app illusion. 
+  Standard browser scrollbars ruin the native app illusion.
   This overrides them to look like sleek, disappearing iOS scroll indicators.
 */
 
 .custom-scrollbar {
   /* For Firefox */
   scrollbar-width: thin;
-  scrollbar-color: rgba(142, 142, 147, 0.3) transparent;
+  scrollbar-color: rgba(139, 139, 150, 0.3) transparent;
 }
 
 .custom-scrollbar::-webkit-scrollbar {
@@ -170,18 +164,19 @@ body {
 }
 
 .custom-scrollbar::-webkit-scrollbar-thumb {
-  background: rgba(142, 142, 147, 0.3);
+  background: rgba(139, 139, 150, 0.3); /* --dim at low opacity */
   border-radius: 10px;
 }
 
 .custom-scrollbar:hover::-webkit-scrollbar-thumb {
-  background: rgba(142, 142, 147, 0.5);
+  background: rgba(139, 139, 150, 0.5);
 }
 
-/* 
+/*
   =============================================================================
-  6. GLOBAL ANIMATION PRIMITIVES
+  5. GLOBAL ANIMATION PRIMITIVES
   =============================================================================
+  Color-neutral, still applicable as-is.
 */
 
 @keyframes pop-in {
@@ -199,17 +194,18 @@ body {
   animation: pop-in 300ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
 }
 
-/* Remove default focus outlines to maintain Apple aesthetic */
+/* Remove default focus outlines to maintain the flat, glass-first aesthetic */
 input:focus, textarea:focus, button:focus {
   outline: none;
 }
 
 /*
   =============================================================================
-  7. MOBILE MASTER/DETAIL PAGE TRANSITION
+  6. MOBILE MASTER/DETAIL PAGE TRANSITION
   =============================================================================
   Used by Home.jsx to slide the chat pane in as its own dedicated page on
-  mobile instead of the old cramped side-by-side squeeze.
+  mobile instead of the old cramped side-by-side squeeze. Motion is already
+  color-neutral, kept as-is.
 */
 @keyframes slideInFromRight {
   from { transform: translateX(100%); }
@@ -222,7 +218,7 @@ input:focus, textarea:focus, button:focus {
 
 /*
   =============================================================================
-  8. VIEWPORT-SAFE FULL-HEIGHT SHELL
+  7. VIEWPORT-SAFE FULL-HEIGHT SHELL
   =============================================================================
   Plain `100vh` is unreliable on mobile browsers — it's measured against the
   *largest* possible viewport (address bar collapsed), so a shell sized with

@@ -9,6 +9,11 @@ import { useEffect, useRef, useState } from 'react';
  * and renders a stack of glassmorphic toast pills anchored to the
  * top-center of the screen, above the safe area.
  *
+ * Restyled onto the shared --ink-2 / --paper / --dim / --ember / --signal
+ * token system (tokens.css). All queueing/dismiss timing and the
+ * 'anonroom:toast' event contract are unchanged — src/lib/toast.js keeps
+ * calling into this exactly as it does today.
+ *
  * No props. No context. No external dependencies.
  */
 
@@ -18,19 +23,29 @@ const AUTO_DISMISS_MS = 3500;
 // so we don't rip the toast out of the DOM before its fade-out finishes.
 const EXIT_ANIMATION_MS = 220;
 
-// Per-type visual accents. All types share the same glass background;
-// only the accent color + dot/icon differ.
+// Per-type visual accents. All types share the same glass surface (applied
+// via .glass-panel below); only the accent color + glyph differ.
+//
+// The token palette only defines one semantic accent (--ember, for
+// success/action) plus --signal, which is reserved for live/delivered
+// states specifically — none of this module's three documented types
+// ('error' | 'success' | 'info', per toast.js) represent that, so --signal
+// isn't used here. There's no dedicated destructive/error color in this
+// palette, so 'error' uses --paper (the brightest neutral available) to
+// keep it visually louder than the merely-informational --dim used for
+// 'info', while still staying inside the token system rather than
+// introducing a red that doesn't exist in tokens.css.
 const TYPE_STYLES = {
   error: {
-    accent: 'var(--red)',
+    accent: 'var(--paper)',
     glyph: '!',
   },
   success: {
-    accent: '#34d399', // green accent (falls back gracefully if no --green token exists)
+    accent: 'var(--ember)',
     glyph: '✓',
   },
   info: {
-    accent: 'var(--blue)',
+    accent: 'var(--dim)',
     glyph: 'i',
   },
 };
@@ -166,7 +181,7 @@ export default function ToastContainer() {
           return (
             <div
               key={toast.id}
-              className={`anonroom-toast${toast.leaving ? ' anonroom-toast-leaving' : ''}`}
+              className={`glass-panel anonroom-toast${toast.leaving ? ' anonroom-toast-leaving' : ''}`}
               onClick={() => handleTap(toast.id)}
               role="status"
               style={{
@@ -178,13 +193,16 @@ export default function ToastContainer() {
                 width: '100%',
                 boxSizing: 'border-box',
                 padding: '12px 18px',
+                // .glass-panel supplies the shared blur/border/shadow and
+                // radius-card corners; toasts override the background to
+                // the more opaque --ink-2 surface (rather than the
+                // translucent --glass-white the class defaults to) so text
+                // stays legible over whatever's behind it, and override the
+                // radius to a full pill shape, which radius-card doesn't
+                // cover. Inline styles win over the class for both.
+                background: 'var(--ink-2)',
                 borderRadius: '999px',
-                background: 'var(--glass-strong, var(--glass))',
-                border: '1px solid var(--glass-border)',
-                backdropFilter: 'blur(20px) saturate(180%)',
-                WebkitBackdropFilter: 'blur(20px) saturate(180%)',
-                boxShadow: '0 8px 24px rgba(0, 0, 0, 0.28), 0 1px 0 rgba(255, 255, 255, 0.06) inset',
-                color: 'var(--ink)',
+                color: 'var(--paper)',
               }}
             >
               <span
@@ -201,9 +219,7 @@ export default function ToastContainer() {
                   fontWeight: 700,
                   lineHeight: 1,
                   color: accent,
-                  background: accent.startsWith('var(')
-                    ? `color-mix(in srgb, ${accent} 20%, transparent)`
-                    : `${accent}33`,
+                  background: `color-mix(in srgb, ${accent} 20%, transparent)`,
                   border: `1px solid ${accent}`,
                 }}
               >
