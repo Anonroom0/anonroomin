@@ -9,7 +9,7 @@ import supabase from '../lib/supabaseClient';
 import { useAuth } from '../lib/authContext';
 import { createCooldown } from '../lib/rateLimit';
 import { showToast, friendlyDbError } from '../lib/toast';
-import { toShortId } from '../lib/subdomain';
+import { toShortId, isShortId, shortIdPrefixFilter } from '../lib/subdomain';
 
 // Modals / Overlays
 import MediaViewer from './MediaViewer';
@@ -216,6 +216,9 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
   const [hasUnreadMention, setHasUnreadMention] = useState(false);
   const [latestMentionId, setLatestMentionId] = useState(null);
   const [highlightedMsgId, setHighlightedMsgId] = useState(null);
+  // Set once a #msg-<id> deep link has been resolved to a real, loaded (or
+  // just-fetched) message id; cleared the moment the scroll actually runs.
+  const [pendingJumpId, setPendingJumpId] = useState(null);
   const [isAnonMode, setIsAnonMode] = useState(false);
   const [selectedMessages, setSelectedMessages] = useState([]);
   
@@ -391,21 +394,77 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
 
   // Deep-link support for "Share link" on a message (see the share actions
   // below): once messages are loaded, check the URL's #msg-<id> fragment
-  // (short or full id — see resolveMessageIdFromHash) and, if it matches a
-  // currently-loaded message, scroll to it and give it the same brief
-  // highlight flash the mention-jump button uses.
+  // (short or full id — see resolveMessageIdFromHash) and resolve it to a
+  // real, loaded message — fetching it (plus a page of context around it)
+  // from the DB first if it isn't one of the most-recent MESSAGE_LIMIT
+  // messages this chat loads up front. Resolution is split into two
+  // effects: this one figures out (and if needed, fetches) the target and
+  // stores it in `pendingJumpId`; the one right below actually scrolls,
+  // re-running every time `messages` changes so it doesn't try to scroll
+  // to a bubble that hasn't rendered into the DOM yet.
   useEffect(() => {
-    if (messagesLoading || messages.length === 0) return;
-    const targetId = resolveMessageIdFromHash(window.location.hash, messages);
-    if (!targetId) return;
-    const el = document.getElementById(`msg-${targetId}`);
-    if (el) {
-      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      setHighlightedMsgId(targetId);
-      setTimeout(() => setHighlightedMsgId(null), 2000);
+    if (messagesLoading || !group?.id) return;
+    const hashMatch = /^#msg-(.+)$/.exec(window.location.hash || '');
+    if (!hashMatch) return;
+    const rawTarget = decodeURIComponent(hashMatch[1]);
+    let cancelled = false;
+
+    async function resolveDeepLink() {
+      // Fast path: it's already among the messages this chat has loaded.
+      const alreadyLoadedId = resolveMessageIdFromHash(window.location.hash, messagesRef.current);
+      if (alreadyLoadedId) { setPendingJumpId(alreadyLoadedId); return; }
+
+      // Slow path: not loaded (older than the initial window) — resolve
+      // the short/full id straight from the DB, the same way
+      // QuestionThread.jsx resolves /q/<id>.
+      const lookup = isShortId(rawTarget)
+        ? (() => {
+            const f = shortIdPrefixFilter('id', rawTarget);
+            return supabase.from('group_messages').select('*, profiles(avatar_url)').eq('group_id', group.id).filter(f.column, f.operator, f.value).order('created_at', { ascending: false }).limit(1).maybeSingle();
+          })()
+        : supabase.from('group_messages').select('*, profiles(avatar_url)').eq('group_id', group.id).eq('id', rawTarget).maybeSingle();
+
+      const { data: row } = await lookup;
+      if (cancelled || !row) return;
+
+      // Pull a page of real context on either side of it so it drops into
+      // the list looking like an actual point in the conversation, not an
+      // isolated bubble with nothing around it.
+      const [{ data: olderCtx }, { data: newerCtx }] = await Promise.all([
+        supabase.from('group_messages').select('*, profiles(avatar_url)').eq('group_id', group.id).lte('created_at', row.created_at).order('created_at', { ascending: false }).limit(MESSAGE_LIMIT),
+        supabase.from('group_messages').select('*, profiles(avatar_url)').eq('group_id', group.id).gt('created_at', row.created_at).order('created_at', { ascending: true }).limit(MESSAGE_LIMIT),
+      ]);
+      if (cancelled) return;
+
+      const context = await attachConfessionIds([...(olderCtx || []), ...(newerCtx || [])]);
+      setMessages((prev) => {
+        const existingIds = new Set(prev.map((m) => m.id));
+        const additions = context.filter((m) => !existingIds.has(m.id));
+        if (additions.length === 0) return prev;
+        return [...prev, ...additions].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+      });
+      setHasMoreMessages(true); // there's real history further back than this spliced-in window
+      setPendingJumpId(row.id);
     }
+
+    resolveDeepLink();
+    return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [messagesLoading, messages.length]);
+  }, [messagesLoading, group?.id]);
+
+  // Actually performs the scroll once the target bubble is confirmed to be
+  // in the DOM — re-runs on every `messages` update so it catches the
+  // moment the fetched context above finishes rendering.
+  useEffect(() => {
+    if (!pendingJumpId) return;
+    const el = document.getElementById(`msg-${pendingJumpId}`);
+    if (!el) return;
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    setHighlightedMsgId(pendingJumpId);
+    setPendingJumpId(null);
+    const t = setTimeout(() => setHighlightedMsgId(null), 2000);
+    return () => clearTimeout(t);
+  }, [pendingJumpId, messages]);
 
   const { pullDistance, isRefreshing, handleTouchStart, handleTouchMove, handleTouchEnd } = usePullToRefresh(fetchMessagesAndReceipts, scrollRef);
 
@@ -468,6 +527,20 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
       if (confessionReactionIds.length > 0) {
         const { error: confReactionsError } = await supabase.from('reactions').delete().eq('target_type', 'confession').in('target_id', confessionReactionIds);
         if (confReactionsError) throw confReactionsError;
+      }
+
+      // Confession-flagged messages get auto-mirrored into `confessions`
+      // (source_message_id -> group_messages.id) by a DB trigger the moment
+      // they're inserted. That foreign key has no ON DELETE clause, so
+      // Postgres defaults to RESTRICT: deleting the group_messages row
+      // below would fail outright while a confessions row still points at
+      // it. Deleting that mirrored row first (which also removes it from
+      // the public Confessions feed, matching what "delete this message"
+      // should mean) clears the reference so the actual delete can succeed.
+      const confessionSourceIds = msgsToDelete.filter((m) => m.is_confession).map((m) => m.id);
+      if (confessionSourceIds.length > 0) {
+        const { error: confDeleteError } = await supabase.from('confessions').delete().in('source_message_id', confessionSourceIds);
+        if (confDeleteError) throw confDeleteError;
       }
 
       const { error: deleteError } = await supabase.from('group_messages').delete().in('id', ids);
@@ -611,6 +684,14 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
     return m.text?.toLowerCase().includes(q) || m.sender_name?.toLowerCase().includes(q);
   });
 
+  // Hoisted above the header (rather than computed inline where the nav
+  // bar renders, as before) so the header's own bottom border can be
+  // suppressed when this bar is about to render directly beneath it — the
+  // two are meant to read as one continuous block with a single dividing
+  // line under the bar, not two separately-bordered pieces of chrome.
+  const confessionMessages = messages.filter((m) => m.is_confession);
+  const hasConfessions = confessionMessages.length > 0 && !isSearching;
+
   if (groupStatus === 'loading') return <div className="no-copy-text" style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#0C0D10' }}><div style={{ color: '#FF6B35' }}>{Vectors.Spinner}</div></div>;
   if (groupStatus === 'error') return <div className="no-copy-text" style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#0C0D10', flexDirection: 'column', gap: 16 }}><p style={{ color: '#8B8B96' }}>Failed to load group.</p><button onClick={onBack} style={{ background: '#FF6B35', color: '#fff', border: 'none', padding: '8px 16px', borderRadius: 12, cursor: 'pointer' }}>Go Back</button></div>;
 
@@ -624,7 +705,7 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
           <button onClick={handleDeleteSelected} style={{ border: 'none', background: 'transparent', color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontWeight: 600 }}>{Vectors.Trash} Delete</button>
         </header>
       ) : (
-        <header style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: 14, padding: '12px 20px', background: '#1C1D24', borderBottom: '1px solid rgba(255,255,255,0.06)', zIndex: 20 }}>
+        <header style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: 14, padding: '12px 20px', background: '#1C1D24', borderBottom: hasConfessions ? 'none' : '1px solid rgba(255,255,255,0.06)', zIndex: 20 }}>
           <button onClick={onBack} style={{ border: 'none', background: 'transparent', color: '#F4F3F0', cursor: 'pointer', padding: '4px', marginLeft: '-8px' }}>{Vectors.Back}</button>
           <button onClick={() => setGroupCardOpen(true)} style={{ border: 'none', background: 'transparent', padding: 0, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 14, flex: 1, textAlign: 'left' }}>
             <LiquidAvatar identity={{ name: group.name, avatar_url: group.cover_url, is_admin: false }} size={42} kind="group" />
@@ -661,8 +742,6 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
       )}
 
       {(() => {
-        const confessionMessages = messages.filter((m) => m.is_confession);
-        const hasConfessions = confessionMessages.length > 0 && !isSearching;
         // Always mounted (never conditionally added/removed from the tree)
         // and height/opacity-animated instead — previously this whole bar
         // only rendered once `hasConfessions` became true, which meant
@@ -674,48 +753,65 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
         return (
           <div
             style={{
-              maxHeight: hasConfessions ? 56 : 0,
+              maxHeight: hasConfessions ? 72 : 0,
               opacity: hasConfessions ? 1 : 0,
               overflow: 'hidden',
               flexShrink: 0,
               background: '#1C1D24',
+              // The single dividing line between "chrome" (header + this
+              // bar, read as one block) and the message list below — the
+              // header itself no longer draws its own, so this is the only
+              // border between the two.
               borderBottom: hasConfessions ? '1px solid rgba(255,255,255,0.06)' : 'none',
               zIndex: 19,
               transition: 'max-height 0.32s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.24s ease, border-color 0.24s ease',
             }}
           >
-            <div style={{ padding: '10px 16px', display: 'flex' }}>
-              <button
-                onClick={() => {
-                  if (confessionMessages.length === 0) return;
-                  const nextIdx = confessionNavIndex + 1 >= confessionMessages.length ? 0 : confessionNavIndex + 1;
-                  setConfessionNavIndex(nextIdx);
-                  const el = document.getElementById(`msg-${confessionMessages[nextIdx].id}`);
-                  if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); setHighlightedMsgId(confessionMessages[nextIdx].id); setTimeout(() => setHighlightedMsgId(null), 2000); }
-                }}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 8,
-                  background: 'linear-gradient(180deg, rgba(255,107,53,0.16), rgba(255,107,53,0.08))',
-                  border: '1px solid rgba(255,107,53,0.28)',
-                  color: '#F4F3F0', borderRadius: 22, padding: '7px 14px 7px 8px',
-                  fontSize: 13, fontWeight: 600, cursor: 'pointer',
-                  transition: 'transform 0.12s ease-out, background 0.15s ease',
-                }}
-                onMouseDown={(e) => { e.currentTarget.style.transform = 'scale(0.96)'; }}
-                onMouseUp={(e) => { e.currentTarget.style.transform = 'scale(1)'; }}
-                onMouseLeave={(e) => { e.currentTarget.style.transform = 'scale(1)'; }}
-              >
-                <span style={{ width: 24, height: 24, borderRadius: '50%', background: 'rgba(255,107,53,0.2)', color: '#FF6B35', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+            <button
+              onClick={() => {
+                if (confessionMessages.length === 0) return;
+                const nextIdx = confessionNavIndex + 1 >= confessionMessages.length ? 0 : confessionNavIndex + 1;
+                setConfessionNavIndex(nextIdx);
+                const el = document.getElementById(`msg-${confessionMessages[nextIdx].id}`);
+                if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); setHighlightedMsgId(confessionMessages[nextIdx].id); setTimeout(() => setHighlightedMsgId(null), 2000); }
+              }}
+              style={{
+                width: '100%',
+                display: 'flex',
+                flexDirection: 'column',
+                border: 'none',
+                background: 'none',
+                cursor: 'pointer',
+                padding: 0,
+                textAlign: 'left',
+              }}
+            >
+              {/* Header strip — same ember-tinted header chrome
+                  ConfessionBubble uses for its own "Confession" label, so
+                  this reads as a confession's header rather than a plain
+                  nav pill. */}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '7px 16px', background: 'linear-gradient(180deg, rgba(255,107,53,0.18), rgba(255,107,53,0.08))' }}>
+                <span style={{ width: 20, height: 20, borderRadius: '50%', background: 'rgba(255,107,53,0.2)', color: '#FF6B35', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                   {Vectors.Ghost}
                 </span>
-                Previous Confession
+                <span style={{ fontSize: 12, fontWeight: 800, letterSpacing: 0.5, textTransform: 'uppercase', color: '#FF6B35' }}>
+                  Previous Confession
+                </span>
                 {confessionMessages.length > 1 && (
-                  <span style={{ fontSize: 11, fontWeight: 700, color: '#8B8B96', background: 'rgba(255,255,255,0.06)', borderRadius: 10, padding: '2px 7px' }}>
-                    {(confessionNavIndex % confessionMessages.length) + 1}/{confessionMessages.length}
+                  <span style={{ marginLeft: 'auto', fontSize: 11, fontWeight: 700, color: '#8B8B96', background: 'rgba(255,255,255,0.06)', borderRadius: 10, padding: '2px 7px' }}>
+                    {(confessionNavIndex >= 0 ? confessionNavIndex % confessionMessages.length : 0) + 1}/{confessionMessages.length}
                   </span>
                 )}
-              </button>
-            </div>
+              </div>
+              {/* Body strip — a dashed skeleton line standing in for the
+                  confession's actual (hidden) text, echoing the
+                  header-sitting-on-a-body shape of the real card without
+                  spoiling or duplicating its content. */}
+              <div style={{ padding: '7px 16px 10px', display: 'flex', gap: 6 }}>
+                <span style={{ display: 'block', height: 7, width: '42%', borderRadius: 4, background: 'repeating-linear-gradient(90deg, rgba(244,243,240,0.16) 0px, rgba(244,243,240,0.16) 6px, transparent 6px, transparent 10px)' }} />
+                <span style={{ display: 'block', height: 7, width: '20%', borderRadius: 4, background: 'rgba(244,243,240,0.08)' }} />
+              </div>
+            </button>
           </div>
         );
       })()}
@@ -776,7 +872,7 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
                   {isConfession ? (
                      <div id={`msg-${message.id}`} className={isHighlighted ? 'highlight-flash' : ''} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: '100%', margin: '16px 0' }}>
                        <div style={{ width: '100%', maxWidth: 440, background: isSelected ? 'rgba(255,107,53, 0.15)' : 'transparent', borderRadius: 16 }}>
-                         <ConfessionBubble confession={{ id: message.confession_id || message.id, text: message.text, photo_url: message.media_url, is_anon: message.is_anon, created_at: message.created_at }} onReply={() => { if (selectedMessages.length === 0) startReply(message); }} onPhotoClick={(c) => setViewerMedia({ url: c.photo_url, type: 'image' })} userId={ownUserId} size="inline" />
+                         <ConfessionBubble confession={{ id: message.confession_id || message.id, text: message.text, photo_url: message.media_url, is_anon: message.is_anon, created_at: message.created_at }} onReply={() => { if (selectedMessages.length === 0) startReply(message); }} onPhotoClick={(c) => setViewerMedia({ url: c.photo_url, type: 'image' })} userId={ownUserId} size="inline" showReactions={false} />
                          
                          <div style={{ marginTop: 8, display: 'flex', justifyContent: 'center', width: '100%' }}>
                            <ReactionBar 

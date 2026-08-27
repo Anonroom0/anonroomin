@@ -19,7 +19,7 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import supabase from '../lib/supabaseClient';
 import { useAuth } from '../lib/authContext';
-import { toShortId } from '../lib/subdomain';
+import { toShortId, isShortId, shortIdPrefixFilter } from '../lib/subdomain';
 import { createCooldown } from '../lib/rateLimit';
 import MediaViewer from './MediaViewer';
 import ProfileCard from './ProfileCard';
@@ -501,6 +501,7 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
   const [hasUnreadMention, setHasUnreadMention] = useState(false);
   const [latestMentionId, setLatestMentionId] = useState(null);
   const [highlightedMsgId, setHighlightedMsgId] = useState(null);
+  const [pendingJumpId, setPendingJumpId] = useState(null);
   const [selectedMessages, setSelectedMessages] = useState([]);
   const [isSearching, setIsSearching] = useState(false);
   const [chatSearchQuery, setChatSearchQuery] = useState('');
@@ -668,17 +669,58 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
   // #dm-msg-<id> fragment (short or full id) and, if it matches a
   // currently-loaded message, scroll to it and flash-highlight it.
   useEffect(() => {
-    if (messagesLoading || messages.length === 0) return;
-    const targetId = resolveMessageIdFromHash(window.location.hash, messages);
-    if (!targetId) return;
-    const el = document.getElementById(`dm-msg-${targetId}`);
-    if (el) {
-      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      setHighlightedMsgId(targetId);
-      setTimeout(() => setHighlightedMsgId(null), 2000);
+    if (messagesLoading || !activeThread?.id) return;
+    const hashMatch = /^#dm-msg-(.+)$/.exec(window.location.hash || '');
+    if (!hashMatch) return;
+    const rawTarget = decodeURIComponent(hashMatch[1]);
+    let cancelled = false;
+
+    async function resolveDeepLink() {
+      const alreadyLoadedId = resolveMessageIdFromHash(window.location.hash, messagesRef.current);
+      if (alreadyLoadedId) { setPendingJumpId(alreadyLoadedId); return; }
+
+      const lookup = isShortId(rawTarget)
+        ? (() => {
+            const f = shortIdPrefixFilter('id', rawTarget);
+            return supabase.from('dm_messages').select('*').eq('thread_id', activeThread.id).filter(f.column, f.operator, f.value).order('created_at', { ascending: false }).limit(1).maybeSingle();
+          })()
+        : supabase.from('dm_messages').select('*').eq('thread_id', activeThread.id).eq('id', rawTarget).maybeSingle();
+
+      const { data: row } = await lookup;
+      if (cancelled || !row) return;
+
+      const [{ data: olderCtx }, { data: newerCtx }] = await Promise.all([
+        supabase.from('dm_messages').select('*').eq('thread_id', activeThread.id).lte('created_at', row.created_at).order('created_at', { ascending: false }).limit(MESSAGE_LIMIT),
+        supabase.from('dm_messages').select('*').eq('thread_id', activeThread.id).gt('created_at', row.created_at).order('created_at', { ascending: true }).limit(MESSAGE_LIMIT),
+      ]);
+      if (cancelled) return;
+
+      const context = [...(olderCtx || []), ...(newerCtx || [])];
+      setMessages((prev) => {
+        const existingIds = new Set(prev.map((m) => m.id));
+        const additions = context.filter((m) => !existingIds.has(m.id));
+        if (additions.length === 0) return prev;
+        return [...prev, ...additions].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+      });
+      setHasMoreMessages(true);
+      setPendingJumpId(row.id);
     }
+
+    resolveDeepLink();
+    return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [messagesLoading, messages.length]);
+  }, [messagesLoading, activeThread?.id]);
+
+  useEffect(() => {
+    if (!pendingJumpId) return;
+    const el = document.getElementById(`dm-msg-${pendingJumpId}`);
+    if (!el) return;
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    setHighlightedMsgId(pendingJumpId);
+    setPendingJumpId(null);
+    const t = setTimeout(() => setHighlightedMsgId(null), 2000);
+    return () => clearTimeout(t);
+  }, [pendingJumpId, messages]);
 
   const { pullDistance, isRefreshing, handleTouchStart, handleTouchMove, handleTouchEnd } = usePullToRefresh(fetchMessagesAndReceipts, scrollRef);
 
@@ -909,7 +951,6 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
               {menuOpen && (
                 <div style={{ position: 'absolute', right: 0, top: '100%', marginTop: 4, background: '#1C1D24', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 12, boxShadow: '0 8px 24px rgba(0,0,0,0.5)', zIndex: 30, minWidth: 160, padding: 6 }}>
                   <button onClick={() => { setIsSearching(true); setMenuOpen(false); }} style={{ width: '100%', padding: '10px 14px', border: 'none', background: 'transparent', color: '#F4F3F0', textAlign: 'left', borderRadius: 8, cursor: 'pointer', fontSize: 14, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8 }}>{Vectors.SearchSmall} Search Chat</button>
-                  <button onClick={() => { navigator.clipboard.writeText(window.location.href); setMenuOpen(false); showToast('Link copied to clipboard!', 'info'); }} style={{ width: '100%', padding: '10px 14px', border: 'none', background: 'transparent', color: '#F4F3F0', textAlign: 'left', borderRadius: 8, cursor: 'pointer', fontSize: 14, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8 }}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg> Share link</button>
                 </div>
               )}
             </div>
@@ -1054,16 +1095,6 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
                            showTray={activeReactionMsgId === message.id}
                            onCloseTray={() => setActiveReactionMsgId(null)}
                            actions={[
-                             {
-                               key: 'share',
-                               label: 'Share',
-                               icon: <span style={{ display: 'flex', color: '#8B8B96' }}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg></span>,
-                               onClick: () => {
-                                 const url = `${window.location.origin}${window.location.pathname}#dm-msg-${toShortId(message.id)}`;
-                                 navigator.clipboard.writeText(url);
-                                 showToast('Link copied to clipboard!', 'info');
-                               },
-                             },
                              ...(isAdmin ? [{
                                key: 'delete',
                                label: 'Delete',

@@ -49,8 +49,18 @@ export function isShortId(value) {
 // Postgres, so this casts the column to text first — the `column::text`
 // syntax is a PostgREST feature supabase-js's `.filter()` passes straight
 // through.
+//
+// THE WILDCARD CHARACTER MUST BE '*', NOT '%'. PostgREST reserves '%' for
+// standard URI percent-encoding, so for like/ilike it repurposes '*' as the
+// pattern wildcard instead (see PostgREST's "Pattern Matching" docs) — a
+// literal '%' in the value is matched as a literal percent sign, not a
+// wildcard. Every short-id lookup built with a trailing '%' therefore
+// searched for an id that literally ends in the character '%', which no
+// row ever does, so it always came back empty ("not found") no matter how
+// correct the short id was. This was the root cause of /q/<shortid> (and
+// anything else built on this helper) failing to resolve.
 export function shortIdPrefixFilter(column, shortId) {
-  return { column: `${column}::text`, operator: 'ilike', value: `${shortId}%` };
+  return { column: `${column}::text`, operator: 'ilike', value: `${shortId}*` };
 }
 
 // Resolves which group (if any) should render based on the current URL.

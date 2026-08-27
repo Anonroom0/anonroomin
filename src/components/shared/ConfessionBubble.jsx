@@ -94,7 +94,7 @@ function relativeTime(dateString) {
 // 3. MAIN EXPORT
 // ============================================================================
 
-export default function ConfessionBubble({ confession, onReply, onPhotoClick, size = 'inline', userId }) {
+export default function ConfessionBubble({ confession, onReply, onPhotoClick, size = 'inline', userId, showReactions = true }) {
   const preset = SIZE_PRESETS[size] || SIZE_PRESETS.inline;
   const isStory = size === 'story';
 
@@ -208,7 +208,7 @@ export default function ConfessionBubble({ confession, onReply, onPhotoClick, si
 
           {/* Bottom row: reply affordance + reactions. In story mode this
               stays hidden until the chrome is revealed by a tap. */}
-          {showChrome && (
+          {showChrome && (onReply || showReactions) && (
             <div
               style={{
                 display: 'flex',
@@ -249,9 +249,13 @@ export default function ConfessionBubble({ confession, onReply, onPhotoClick, si
                 <span />
               )}
 
-              <div onClick={(e) => e.stopPropagation()}>
-                <ReactionBar targetType="confession" targetId={confession.id} userId={userId} />
-              </div>
+              {showReactions ? (
+                <div onClick={(e) => e.stopPropagation()}>
+                  <ReactionBar targetType="confession" targetId={confession.id} userId={userId} />
+                </div>
+              ) : (
+                <span />
+              )}
             </div>
           )}
         </div>

@@ -324,7 +324,17 @@ export default function ConfessionsFeed({ focusConfessionId }) {
     if (!targetId || loading || hasAutoScrolledRef.current) return;
     const normalizedTarget = targetId.replace(/-/g, '').toLowerCase();
     const match = confessions.find((c) => c.id === targetId || c.id.replace(/-/g, '').toLowerCase().startsWith(normalizedTarget));
-    if (!match) return;
+    if (!match) {
+      (async () => {
+        const isShort = /^[0-9a-f]{1,32}$/i.test(normalizedTarget);
+        const { data } = isShort
+          ? await supabase.from('confessions').select('*').is('group_id', null)
+              .filter('id::text', 'ilike', `${normalizedTarget}*`).order('created_at', { ascending: false }).limit(1).maybeSingle()
+          : await supabase.from('confessions').select('*').eq('id', targetId).maybeSingle();
+        if (data) setConfessions((prev) => prev.some((c) => c.id === data.id) ? prev : [data, ...prev]);
+      })();
+      return;
+    }
 
     hasAutoScrolledRef.current = true;
     // Wait a frame for the card to be in the DOM before measuring/scrolling.
