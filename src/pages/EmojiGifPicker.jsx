@@ -363,6 +363,11 @@ function GiphyGrid({ contentFilter, onPick }) {
         </svg>
         <input
           type="text"
+          name="gif-picker-search"
+          autoComplete="off"
+          data-lpignore="true"
+          data-1p-ignore
+          data-form-type="other"
           value={query}
           onChange={handleQueryChange}
           placeholder={contentFilter === 'sticker' ? 'Search stickers' : 'Search GIFs'}

@@ -107,11 +107,13 @@ function ReadOnlyGroupInput({ icon, label, value, isTextArea = false }) {
         {isTextArea ? (
           <textarea
             value={value} readOnly rows={4}
+            autoComplete="off" data-lpignore="true" data-1p-ignore data-form-type="other"
             style={{ width: '100%', border: 'none', background: 'transparent', outline: 'none', fontSize: 16, color: '#F4F3F0', fontFamily: 'inherit', resize: 'none', paddingTop: 12, pointerEvents: 'none' }}
           />
         ) : (
           <input
             type="text" value={value} readOnly
+            autoComplete="off" data-lpignore="true" data-1p-ignore data-form-type="other"
             style={{ width: '100%', border: 'none', background: 'transparent', outline: 'none', fontSize: 16, color: '#F4F3F0', padding: '12px 0 4px', pointerEvents: 'none' }}
           />
         )}

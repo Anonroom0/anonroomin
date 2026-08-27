@@ -145,6 +145,11 @@ function ComposerSheet({ open, onClose, initialPhotoIntent, onSubmit, submitting
 
         <textarea
           autoFocus
+          name="confession-composer"
+          autoComplete="off"
+          data-lpignore="true"
+          data-1p-ignore
+          data-form-type="other"
           value={text}
           onChange={(e) => setText(e.target.value)}
           rows={5}

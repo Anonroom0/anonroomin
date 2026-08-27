@@ -546,8 +546,16 @@ export default function QuestionThread({ questionId, onBack }) {
       // column on this table) — and per confessions_insert_own's RLS,
       // is_anon: true requires author_id to stay null, so it's
       // intentionally omitted rather than set to the author's id.
+      //
+      // The text is tagged with a small machine-readable marker
+      // (`❓ Re: "<question excerpt>"\n\n<reply>`) so the confessions story
+      // reel (StoryViewer.jsx) and feed can tell this apart from a plain
+      // confession and show what question it was answering, without
+      // needing a schema change to link the two tables.
+      const questionExcerpt = extractQuestionBodyText(question).slice(0, 140).trim();
+      const taggedText = questionExcerpt ? `❓ Re: "${questionExcerpt}"\n\n${trimmed}` : trimmed;
       const { error: confessionError } = await supabase.from('confessions').insert({
-        text: trimmed,
+        text: taggedText,
         visibility: 'public',
         group_id: null,
         is_anon: true, // judgment call: confessions read as anonymous-by-default app-wide
@@ -736,6 +744,11 @@ export default function QuestionThread({ questionId, onBack }) {
           )}
           <input
             type="text"
+            name="question-reply"
+            autoComplete="off"
+            data-lpignore="true"
+            data-1p-ignore
+            data-form-type="other"
             value={replyText}
             onChange={(e) => setReplyText(e.target.value)}
             placeholder="Send an anonymous reply…"

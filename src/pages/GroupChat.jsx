@@ -118,7 +118,7 @@ function ConfessionModal({ open, onClose, onSubmit }) {
     <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', zIndex: 50, display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
       <div onClick={(e) => e.stopPropagation()} style={{ width: '100%', maxWidth: 500, margin: '0 auto', background: '#1C1D24', borderRadius: '28px 28px 0 0', padding: '24px 20px', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
         <h3 style={{ margin: '0 0 16px', color: '#F4F3F0', fontSize: 20 }}>New Confession</h3>
-        <textarea value={text} onChange={(e) => setText(e.target.value)} rows={4} placeholder="Type your confession…" style={{ width: '100%', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 16, padding: 14, fontSize: 15, resize: 'none', boxSizing: 'border-box', background: '#15161B', color: '#F4F3F0', outline: 'none' }} />
+        <textarea name="group-confession-composer" autoComplete="off" data-lpignore="true" data-1p-ignore data-form-type="other" value={text} onChange={(e) => setText(e.target.value)} rows={4} placeholder="Type your confession…" style={{ width: '100%', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 16, padding: 14, fontSize: 15, resize: 'none', boxSizing: 'border-box', background: '#15161B', color: '#F4F3F0', outline: 'none' }} />
         {photo && (
           <div style={{ position: 'relative', marginTop: 12, width: 80, height: 80 }}>
             <img src={URL.createObjectURL(photo)} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 12 }} alt="preview" />
@@ -148,7 +148,7 @@ function InstagramModal({ open, onClose, onSubmit, loading }) {
         <p style={{ margin: '0 0 16px', fontSize: 14, color: '#8B8B96' }}>Just the username — we'll pull the profile card automatically.</p>
         <div style={{ position: 'relative' }}>
           <span style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', color: '#8B8B96', fontWeight: 700 }}>@</span>
-          <input autoFocus type="text" value={username} disabled={loading} onChange={(e) => setUsername(e.target.value.replace(/^@/, '').trim())} onKeyDown={(e) => { if (e.key === 'Enter' && username.trim()) onSubmit(username.trim()); }} placeholder="username" style={{ width: '100%', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 16, padding: '14px 14px 14px 32px', fontSize: 15, boxSizing: 'border-box', color: '#F4F3F0', background: '#15161B', outline: 'none' }} />
+          <input autoFocus type="text" name="group-ig-username" autoComplete="off" data-lpignore="true" data-1p-ignore data-form-type="other" value={username} disabled={loading} onChange={(e) => setUsername(e.target.value.replace(/^@/, '').trim())} onKeyDown={(e) => { if (e.key === 'Enter' && username.trim()) onSubmit(username.trim()); }} placeholder="username" style={{ width: '100%', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 16, padding: '14px 14px 14px 32px', fontSize: 15, boxSizing: 'border-box', color: '#F4F3F0', background: '#15161B', outline: 'none' }} />
         </div>
         <button onClick={() => username.trim() && onSubmit(username.trim())} disabled={loading || !username.trim()} style={{ width: '100%', marginTop: 16, padding: 16, borderRadius: 20, border: 'none', background: loading ? '#2A2B36' : '#FF6B35', color: '#fff', fontWeight: 700, cursor: loading ? 'default' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, fontSize: 16 }}>{loading ? (<>{Vectors.Spinner} Fetching profile…</>) : 'Share Profile'}</button>
       </div>
@@ -1035,7 +1035,7 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
                   <button onClick={cancelPendingAttachment} disabled={uploading} style={{ border: 'none', background: 'rgba(255,255,255,0.06)', width: 28, height: 28, borderRadius: '50%', color: '#F4F3F0', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{Vectors.Close}</button>
                 </div>
                 <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-                  <input type="text" value={caption} onChange={(e) => setCaption(e.target.value)} placeholder="Add a caption…" disabled={uploading} style={{ flex: 1, border: '1px solid rgba(255,255,255,0.06)', outline: 'none', background: '#15161B', borderRadius: 20, padding: '10px 16px', fontSize: 14, color: '#F4F3F0' }} />
+                  <input type="text" name="group-media-caption" autoComplete="off" data-lpignore="true" data-1p-ignore data-form-type="other" value={caption} onChange={(e) => setCaption(e.target.value)} placeholder="Add a caption…" disabled={uploading} style={{ flex: 1, border: '1px solid rgba(255,255,255,0.06)', outline: 'none', background: '#15161B', borderRadius: 20, padding: '10px 16px', fontSize: 14, color: '#F4F3F0' }} />
                   <button type="button" onClick={sendPendingAttachment} disabled={uploading} style={{ width: 44, height: 44, borderRadius: '50%', border: 'none', background: uploading ? 'rgba(255,255,255,0.06)' : '#FF6B35', color: '#fff', cursor: uploading ? 'default' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{uploading ? Vectors.Spinner : Vectors.Attach}</button>
                 </div>
               </div>

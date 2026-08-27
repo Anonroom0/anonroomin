@@ -41,6 +41,7 @@ import MessageSkeleton from '../components/shared/MessageSkeleton';
 import StoriesBar from '../components/stories/StoriesBar';
 import StoryViewer from '../components/stories/StoryViewer';
 import CreateQuestionModal from '../components/questions/CreateQuestionModal';
+import CreateConfessionModal from '../components/questions/CreateConfessionModal';
 import QuestionCard from '../components/questions/QuestionCard';
 import QuestionThread from './QuestionThread';
 import ShareStorySheet from '../components/questions/ShareStorySheet';
@@ -274,6 +275,7 @@ export default function Home() {
   const [createQuestionOpen, setCreateQuestionOpen] = useState(false);
   const [createQuestionType, setCreateQuestionType] = useState('general'); // Default fallback
   const [sharingQuestion, setSharingQuestion] = useState(null);
+  const [createConfessionOpen, setCreateConfessionOpen] = useState(false);
 
   const [threads, setThreads] = useState([]);
   const [groups, setGroups] = useState([]);
@@ -448,7 +450,7 @@ export default function Home() {
               <div style={{ position: 'relative', flex: 1 }}>
                 <span style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--dim)', pointerEvents: 'none' }}>{Icons.Search}</span>
                 <input 
-                  type="text" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} 
+                  type="text" name="home-search" autoComplete="off" data-lpignore="true" data-1p-ignore data-form-type="other" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} 
                   onFocus={() => setSearchFocused(true)} onBlur={() => setTimeout(() => setSearchFocused(false), 200)} 
                   placeholder="Search..." 
                   style={{ width: '100%', border: '1px solid rgba(255,255,255,0.06)', background: '#1C1D24', padding: '10px 36px 10px 42px', borderRadius: 14, fontSize: 16, color: 'var(--paper)', outline: 'none', transition: 'background 0.2s', boxSizing: 'border-box' }} 
@@ -579,13 +581,29 @@ export default function Home() {
                           {/* SINGLE "ASK QUESTION" BUTTON (Matches Chat Layout) */}
                           <button 
                             className="chat-row stagger-item"
-                            style={{ animationDelay: '0.05s', marginBottom: 28, width: '100%', marginLeft: 0 }}
+                            style={{ animationDelay: '0.05s', marginBottom: 12, width: '100%', marginLeft: 0 }}
                             onClick={(e) => { e.preventDefault(); setCreateQuestionOpen(true); }}
                           >
                             <div style={{ width: 50, height: 50, borderRadius: '50%', background: 'var(--ember)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, fontSize: 28, fontWeight: 400, boxShadow: '0 4px 12px rgba(255,107,53,0.3)' }}>+</div>
                             <div className="chat-row-content">
                               <span style={{ fontWeight: 600, fontSize: 16, display: 'block', color: 'var(--paper)', marginBottom: 2 }}>Ask Question</span>
                               <span style={{ fontSize: 14, color: 'var(--dim)', display: 'block' }}>Create a new anonymous link</span>
+                            </div>
+                          </button>
+
+                          {/* "ADD CONFESSION" BUTTON — posts straight into the
+                              public Confessions feed, no separate composer page */}
+                          <button
+                            className="chat-row stagger-item"
+                            style={{ animationDelay: '0.1s', marginBottom: 28, width: '100%', marginLeft: 0 }}
+                            onClick={(e) => { e.preventDefault(); setCreateConfessionOpen(true); }}
+                          >
+                            <div style={{ width: 50, height: 50, borderRadius: '50%', background: '#2A2B36', color: 'var(--ember)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.06)' }}>
+                              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M9 10h.01" /><path d="M15 10h.01" /><path d="M12 2a8 8 0 0 0-8 8v12l3-3 2.5 2.5L12 19l2.5 2.5L17 19l3 3V10a8 8 0 0 0-8-8z" /></svg>
+                            </div>
+                            <div className="chat-row-content">
+                              <span style={{ fontWeight: 600, fontSize: 16, display: 'block', color: 'var(--paper)', marginBottom: 2 }}>Add Confession</span>
+                              <span style={{ fontSize: 14, color: 'var(--dim)', display: 'block' }}>Post straight to the Confessions feed</span>
                             </div>
                           </button>
 
@@ -673,6 +691,7 @@ export default function Home() {
       <EditProfile open={editProfileOpen} onClose={() => setEditProfileOpen(false)} />
       <ProfileCard userId={profileCardUserId} open={profileCardUserId !== null} onClose={() => setProfileCardUserId(null)} onMessage={(id) => { setProfileCardUserId(null); handleOpenChat(id, 'dm'); }} />
       <CreateQuestionModal open={createQuestionOpen} onClose={() => setCreateQuestionOpen(false)} initialType={createQuestionType} onCreated={(question) => { setMyQuestions(prev => [question, ...prev]); }} />
+      <CreateConfessionModal open={createConfessionOpen} onClose={() => setCreateConfessionOpen(false)} onCreated={() => {}} />
       {sharingQuestion && <ShareStorySheet open={!!sharingQuestion} onClose={() => setSharingQuestion(null)} question={sharingQuestion} />}
       {viewingStory && (
         <StoryViewer
@@ -680,6 +699,10 @@ export default function Home() {
           startIndex={viewingStory.startIndex}
           userId={userId}
           onClose={() => setViewingStory(null)}
+          onViewReplies={(questionId) => {
+            setViewingStory(null);
+            handleOpenChat(questionId, 'question');
+          }}
         />
       )}
     </>

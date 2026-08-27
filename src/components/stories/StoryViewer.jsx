@@ -1,80 +1,73 @@
 /** ===========================================================================
- * STORY VIEWER — full-screen IG/NGL-style story playback
+ * STORY VIEWER — full-screen IG-style story playback
  * ============================================================================
- * <StoryViewer channels startIndex onClose userId />
+ * <StoryViewer channels startIndex onClose userId onViewReplies? />
  *
- * `channels` is the array StoriesBar (prompt 27) builds. This file doesn't
- * have that component's source, so per the master context's instruction to
- * trust referenced shapes exactly as named, it assumes each entry looks
- * like:
+ * `channels` is the array StoriesBar.jsx builds — groups (with fresh
+ * confessions) first, then the two virtual channels 'public-confessions'
+ * and 'public-questions', in that order. Each entry looks like:
  *   {
  *     type: 'group' | 'public-confessions' | 'public-questions',
- *     id:   string,        // group id for 'group'; a fixed key otherwise
- *     name: string,        // group display name (unused for virtual channels
- *                          // — those get the literal labels the prompt specifies)
- *     logoUrl: string|null,// group logo (unused for virtual channels)
- *     slug: string|null,   // group subdomain slug, for building share links
+ *     id:   string,
+ *     name: string,
+ *     logoUrl: string|null,
+ *     slug: string|null,
  *   }
  *
- * Body content:
- *   - 'group' / 'public-confessions' channels play confessions rows via the
- *     shared <ConfessionBubble size="story"/> (identical card everywhere
- *     else in the app).
- *   - 'public-questions' plays `questions` rows. It deliberately does NOT
- *     reuse ConfessionBubble — that component hardcodes a "Confession"
- *     header label and a "Reply" affordance baked into its own internal
- *     chrome, neither of which fits a question. Instead a small local
- *     <QuestionStoryCard> mirrors the same header-strip/glass-body shape
- *     for visual consistency, with no built-in interactive chrome of its
- *     own (interaction lives in this file's bottom bar, see below).
+ * Body content, one distinct treatment per type (never reused generically):
+ *   - 'group': confessions posted inside that group, via the shared
+ *     <ConfessionBubble size="story"/>.
+ *   - 'public-confessions': standalone public confessions, same bubble.
+ *     A confession that was actually posted as a question-reply (see
+ *     QuestionThread.jsx's "Add to Confessions" flow, which tags the text
+ *     with a small machine-readable marker) renders with an extra
+ *     "Answered a question" strip quoting what it was replying to, so it
+ *     reads as its own distinct kind of story rather than a plain
+ *     confession.
+ *   - 'public-questions' plays `questions` rows through a local
+ *     <QuestionStoryCard>, with a "See all replies" button in the bottom
+ *     bar (calls onViewReplies(questionId), wired to open QuestionThread).
  *
- * Interaction model:
+ * Progress bar: a segmented bar across the header, one segment per item in
+ * the *current* channel — same visual language as Instagram. The active
+ * segment fills over STORY_DURATION_MS and then auto-advances; completed
+ * segments are solid, upcoming segments are empty. A press-and-hold pauses
+ * the fill (and the chrome), same as IG's "hold to pause" behavior.
+ *
+ * Navigation:
  *   - Tap the right/left half of the story area to move within the current
  *     channel; running past either end walks into the neighboring channel
  *     (landing on its first/last item respectively), skipping any channel
- *     that resolves to zero items in the last 24h.
- *   - A real swipe-left/right gesture also jumps straight to the
- *     next/previous channel, per the prompt's explicit "swipe-left at the
- *     channel's end" cue.
- *   - Judgment call: when chrome is hidden, the first tap only reveals it
- *     (doesn't also navigate) — standard story-viewer behavior, and it
- *     keeps "reveal" and "advance" from fighting over the same tap.
- *   - Header/bottom bar auto-hide after a few seconds of no interaction;
- *     any tap/swipe resets the timer. This is a distinct mechanism from
- *     ConfessionBubble's own internal story-mode chrome toggle — see the
- *     nav-zone overlay note below for why the two don't collide.
- *   - The nav-tap overlay is layered above the card so taps always resolve
- *     to navigation unambiguously; ConfessionBubble's own internal
- *     reply/react row therefore isn't reachable by pointer here. All real
- *     interaction (reply/answer input + reactions) lives in this file's
- *     own bottom bar instead, which is the "Bottom bar for ALL channel
- *     types" the prompt specifies as a first-class, always-present piece
- *     of chrome.
+ *     that resolves to zero items in the last 24h. Reaching the very end of
+ *     the whole channel list closes the viewer.
+ *   - Visible chevron nav buttons are layered over the tap zones purely for
+ *     affordance/aesthetics — they trigger the exact same navigation as a
+ *     tap, just discoverable without guessing.
+ *   - A real swipe-left/right gesture jumps straight to the next/previous
+ *     channel.
+ *   - Whenever a channel boundary is crossed (tap-past-the-end, swipe, or
+ *     auto-advance timeout at the last item), the new channel's card slides
+ *     in from the appropriate side with a brief animation instead of
+ *     popping in — this is the "end of channel" transition.
  *
- * Reply/answer backend, per channel type:
- *   - 'group': posts a normal row into group_messages (attributed to
- *     userId, is_confession: false) — "replies are sent normally in
- *     groups".
- *   - 'public-questions': posts into question_replies, anonymous-capable
- *     exactly like QuestionThread.jsx's insert (replier_id null + is_anon
- *     true for a signed-in user who wants to stay anon, or replier_id null
- *     + a cookie-style visitor_id for a fully anonymous visitor, matching
- *     the RLS policies in 0001_anonroom_v2.sql).
- *   - 'public-confessions': judgment call — there is no reply/comment table
- *     for a standalone (non-group) confession anywhere in the schema, so
- *     the text input is intentionally omitted for this channel type. The
- *     reaction bar still works everywhere, including here.
- * Reactions always post to `reactions` with target_type="confession"
- * against the current item's id, for all three channel types — exactly as
- * the prompt's own <ReactionBar targetType="confession" .../> snippet
- * specifies, even for question items (the schema has no "question" target
- * type to reach for).
+ * Seen tracking: every time the active item changes, this writes a
+ * per-channel "last seen" timestamp to localStorage (read by
+ * StoriesBar.jsx to decide the ring highlight) and fires a
+ * `anonroom:story-seen` window event so an already-mounted bar can refresh
+ * without a reload.
+ *
+ * Reply/answer backend, per channel type — unchanged from before:
+ *   - 'group': posts into group_messages (is_confession: false).
+ *   - 'public-questions': posts into question_replies.
+ *   - 'public-confessions': no composer — there's no comment table for a
+ *     standalone confession, reactions still work.
+ * Reactions always post to `reactions` with target_type="confession".
  *
  * Dependencies: React, src/lib/supabaseClient, src/components/shared/
  * ConfessionBubble.jsx, src/components/shared/ReactionBar.jsx.
  * ========================================================================= */
 
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import supabase from '../../lib/supabaseClient';
 import ConfessionBubble from '../shared/ConfessionBubble';
 import { buildQuestionPath, toShortId } from '../../lib/subdomain';
@@ -82,11 +75,43 @@ import ReactionBar from '../shared/ReactionBar';
 
 const STORY_WINDOW_MS = 24 * 60 * 60 * 1000; // stories are ephemeral: last 24h only
 const IDLE_HIDE_MS = 4000;
+const STORY_DURATION_MS = 6000; // per-item autoplay duration, IG-ish pace
 const VISITOR_ID_KEY = 'anonroom_visitor_id';
+const SEEN_KEY_PREFIX = 'anonroom_story_seen:';
 
 // ============================================================================
 // 1. DATA HELPERS
 // ============================================================================
+
+// Machine-readable marker QuestionThread.jsx's "Add to Confessions" flow
+// stamps onto the confession text, so a question-reply-turned-confession can
+// be told apart from a plain confession and still show what it answered.
+const QUESTION_REPLY_MARKER = /^❓ Re: "([\s\S]*?)"\n\n([\s\S]*)$/;
+
+function parseQuestionReplyConfession(text) {
+  if (!text) return null;
+  const match = text.match(QUESTION_REPLY_MARKER);
+  if (!match) return null;
+  return { questionExcerpt: match[1], replyText: match[2] };
+}
+
+function channelSeenKey(channel) {
+  return channel.type === 'group' ? `group:${channel.id}` : channel.type;
+}
+
+function markChannelSeen(channel, item) {
+  if (!channel || !item?.created_at) return;
+  try {
+    const key = SEEN_KEY_PREFIX + channelSeenKey(channel);
+    const existing = window.localStorage.getItem(key);
+    if (!existing || new Date(item.created_at) > new Date(existing)) {
+      window.localStorage.setItem(key, item.created_at);
+    }
+    window.dispatchEvent(new Event('anonroom:story-seen'));
+  } catch {
+    // localStorage unavailable — seen-state just won't persist, non-fatal.
+  }
+}
 
 async function loadChannelItems(channel) {
   const since = new Date(Date.now() - STORY_WINDOW_MS).toISOString();
@@ -127,9 +152,7 @@ async function loadChannelItems(channel) {
 }
 
 /** Local, file-scoped visitor id for anonymous (unauthenticated) question
- * answers — the canonical helper QuestionThread.jsx presumably uses isn't
- * attached to this prompt, so this is a minimal stand-in with the same
- * cookie-ish persistence intent, kept private to this file. */
+ * answers. */
 function getOrCreateVisitorId() {
   try {
     let id = window.localStorage.getItem(VISITOR_ID_KEY);
@@ -141,33 +164,22 @@ function getOrCreateVisitorId() {
     }
     return id;
   } catch {
-    // localStorage unavailable (private browsing, etc.) — fall back to a
-    // session-only id so anon answers still work, just without persistence.
     return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
   }
 }
 
 function buildShareUrl(channel, item) {
   if (channel.type === 'public-questions') {
-    // Was previously `/questions/<uuid>` — a path App.jsx never actually
-    // routes (the real question-thread route is /q/<id>, see subdomain.js),
-    // so shared question-story links silently 404'd. Fixed to use the same
-    // buildQuestionPath() the rest of the app shares (also short-id'd).
     return `${window.location.origin}${buildQuestionPath(item.id)}`;
   }
   if (channel.type === 'group' && channel.slug) {
-    // Groups live on their own subdomain — mirrors ConfessionsFeed's
-    // focusConfessionId deep-link pattern, just rooted at the group's host.
-    // Query param is `id` (not `focus`) to match what ConfessionsFeed.jsx
-    // actually reads back out of the URL.
     return `https://${channel.slug}.anonroom.in/confessions?id=${toShortId(item.id)}`;
   }
   return `${window.location.origin}/confessions?id=${toShortId(item.id)}`;
 }
 
 // ============================================================================
-// 2. QUESTION STORY CARD (local subcomponent — see banner for why this
-//    isn't ConfessionBubble)
+// 2. STORY CARDS (one distinct look per content type)
 // ============================================================================
 
 export function QuestionStoryCard({ question }) {
@@ -223,8 +235,56 @@ export function QuestionStoryCard({ question }) {
   );
 }
 
+/** Wraps a plain <ConfessionBubble> with an "Answered a question" strip
+ * when the underlying text carries the QUESTION_REPLY_MARKER — its own
+ * distinct story type, separate from both a plain confession and a
+ * question card, per the differentiate-everything requirement. */
+function ConfessionOrQuestionReplyCard({ item, userId }) {
+  const parsed = useMemo(() => parseQuestionReplyConfession(item.text), [item.text]);
+
+  if (!parsed) {
+    return <ConfessionBubble confession={item} size="story" userId={userId} />;
+  }
+
+  const cleanedItem = { ...item, text: parsed.replyText };
+
+  return (
+    <div style={{ width: '100%', maxWidth: 480 }}>
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: 6,
+          padding: '8px 14px',
+          borderRadius: 16,
+          background: 'color-mix(in srgb, var(--ember) 16%, transparent)',
+          border: '1px solid var(--glass-border)',
+          marginBottom: 8,
+        }}
+      >
+        <span style={{ fontSize: 11, fontWeight: 800, letterSpacing: 0.4, textTransform: 'uppercase', color: 'var(--ember)', flexShrink: 0 }}>
+          Answered
+        </span>
+        <span
+          style={{
+            fontSize: 12.5,
+            color: 'var(--dim)',
+            fontStyle: 'italic',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+            whiteSpace: 'nowrap',
+          }}
+        >
+          "{parsed.questionExcerpt}"
+        </span>
+      </div>
+      <ConfessionBubble confession={cleanedItem} size="story" userId={userId} />
+    </div>
+  );
+}
+
 // ============================================================================
-// 3. ICONS (small inline SVGs — no icon library dependency)
+// 3. ICONS
 // ============================================================================
 
 function BackIcon() {
@@ -245,11 +305,60 @@ function DotsIcon() {
   );
 }
 
+function ChevronIcon({ dir }) {
+  const points = dir === 'left' ? '15 18 9 12 15 6' : '9 18 15 12 9 6';
+  return (
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points={points} />
+    </svg>
+  );
+}
+
+function RepliesIcon() {
+  return (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" />
+    </svg>
+  );
+}
+
 // ============================================================================
-// 4. MAIN EXPORT
+// 4. SEGMENTED PROGRESS BAR (Instagram-style)
+// ============================================================================
+function ProgressBar({ count, activeIndex, progress }) {
+  return (
+    <div style={{ display: 'flex', gap: 4, padding: '10px 12px 0' }}>
+      {Array.from({ length: count }).map((_, i) => (
+        <div
+          key={i}
+          style={{
+            flex: 1,
+            height: 3,
+            borderRadius: 999,
+            background: 'rgba(255,255,255,0.28)',
+            overflow: 'hidden',
+          }}
+        >
+          <div
+            style={{
+              height: '100%',
+              borderRadius: 999,
+              background: '#fff',
+              width: i < activeIndex ? '100%' : i === activeIndex ? `${progress * 100}%` : '0%',
+              transition: i === activeIndex ? 'none' : 'width 150ms ease',
+            }}
+          />
+        </div>
+      ))}
+    </div>
+  );
+}
+
+// ============================================================================
+// 5. MAIN EXPORT
 // ============================================================================
 
-export default function StoryViewer({ channels, startIndex = 0, onClose, userId }) {
+export default function StoryViewer({ channels, startIndex = 0, onClose, userId, onViewReplies }) {
   const [chIndex, setChIndex] = useState(startIndex);
   const [itemIndex, setItemIndex] = useState(0);
   const [itemsCache, setItemsCache] = useState({});
@@ -258,10 +367,17 @@ export default function StoryViewer({ channels, startIndex = 0, onClose, userId 
   const [menuOpen, setMenuOpen] = useState(false);
   const [replyText, setReplyText] = useState('');
   const [posting, setPosting] = useState(false);
+  const [progress, setProgress] = useState(0); // 0..1 fill of the active segment
+  const [paused, setPaused] = useState(false);
+  const [slideDir, setSlideDir] = useState(null); // 'from-right' | 'from-left' | null — channel-crossing animation
+  const [slideKey, setSlideKey] = useState(0);
 
   const idleTimerRef = useRef(null);
   const touchStartXRef = useRef(null);
   const skipDirRef = useRef(1);
+  const rafRef = useRef(null);
+  const progressStartRef = useRef(null);
+  const holdTimerRef = useRef(null);
 
   const channel = channels && channels[chIndex];
   const items = itemsCache[chIndex] || [];
@@ -290,10 +406,13 @@ export default function StoryViewer({ channels, startIndex = 0, onClose, userId 
         onClose?.();
         return;
       }
+      setSlideDir(dir > 0 ? 'from-right' : 'from-left');
+      setSlideKey((k) => k + 1);
       setChIndex(newIndex);
       setItemIndex(itemPos);
       setReplyText('');
       setMenuOpen(false);
+      setProgress(0);
     },
     [channels, onClose]
   );
@@ -338,6 +457,7 @@ export default function StoryViewer({ channels, startIndex = 0, onClose, userId 
     if (itemIndex < items.length - 1) {
       setItemIndex((i) => i + 1);
       setReplyText('');
+      setProgress(0);
     } else {
       goToChannel(chIndex + 1, { dir: 1, itemPos: 0 });
     }
@@ -347,6 +467,7 @@ export default function StoryViewer({ channels, startIndex = 0, onClose, userId 
     if (itemIndex > 0) {
       setItemIndex((i) => i - 1);
       setReplyText('');
+      setProgress(0);
     } else {
       goToChannel(chIndex - 1, { dir: -1, itemPos: -1 });
     }
@@ -354,8 +475,6 @@ export default function StoryViewer({ channels, startIndex = 0, onClose, userId 
 
   function handleZoneTap(direction) {
     if (!chromeVisible) {
-      // First tap while chrome is hidden only reveals it, per the header/
-      // bottom-bar auto-hide spec — it doesn't also navigate.
       resetIdleTimer();
       return;
     }
@@ -364,11 +483,50 @@ export default function StoryViewer({ channels, startIndex = 0, onClose, userId 
     else prevItem();
   }
 
+  // ---- autoplay progress bar --------------------------------------------
+  useEffect(() => {
+    if (!item || paused || menuOpen) {
+      progressStartRef.current = null;
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+      return undefined;
+    }
+
+    progressStartRef.current = performance.now() - progress * STORY_DURATION_MS;
+
+    function tick(now) {
+      const elapsed = now - progressStartRef.current;
+      const pct = Math.min(elapsed / STORY_DURATION_MS, 1);
+      setProgress(pct);
+      if (pct >= 1) {
+        nextItem();
+        return;
+      }
+      rafRef.current = requestAnimationFrame(tick);
+    }
+    rafRef.current = requestAnimationFrame(tick);
+
+    return () => {
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [item, chIndex, itemIndex, paused, menuOpen]);
+
+  // ---- press-and-hold to pause -------------------------------------------
+  function handlePressStart() {
+    holdTimerRef.current = setTimeout(() => setPaused(true), 180);
+  }
+  function handlePressEnd() {
+    if (holdTimerRef.current) clearTimeout(holdTimerRef.current);
+    setPaused(false);
+  }
+
   function handleTouchStart(e) {
     touchStartXRef.current = e.touches[0].clientX;
+    handlePressStart();
   }
 
   function handleTouchEnd(e) {
+    handlePressEnd();
     if (touchStartXRef.current == null) return;
     const dx = e.changedTouches[0].clientX - touchStartXRef.current;
     touchStartXRef.current = null;
@@ -380,6 +538,11 @@ export default function StoryViewer({ channels, startIndex = 0, onClose, userId 
       goToChannel(chIndex - 1, { dir: -1, itemPos: -1 });
     }
   }
+
+  // ---- mark seen -----------------------------------------------------------
+  useEffect(() => {
+    if (channel && item) markChannelSeen(channel, item);
+  }, [channel, item]);
 
   // ---- share -------------------------------------------------------------
   async function handleShare() {
@@ -465,7 +628,15 @@ export default function StoryViewer({ channels, startIndex = 0, onClose, userId 
       }}
       onTouchStart={handleTouchStart}
       onTouchEnd={handleTouchEnd}
+      onMouseDown={handlePressStart}
+      onMouseUp={handlePressEnd}
+      onMouseLeave={handlePressEnd}
     >
+      {/* Segmented progress bar — Instagram-style */}
+      <div style={{ position: 'relative', zIndex: 31, opacity: chromeVisible ? 1 : 0, transition: 'opacity 200ms ease' }}>
+        <ProgressBar count={items.length || 1} activeIndex={itemIndex >= 0 ? itemIndex : 0} progress={progress} />
+      </div>
+
       {/* Header */}
       <div
         style={{
@@ -474,7 +645,7 @@ export default function StoryViewer({ channels, startIndex = 0, onClose, userId 
           display: 'flex',
           alignItems: 'center',
           gap: 10,
-          padding: '14px 16px',
+          padding: '10px 16px 14px',
           opacity: chromeVisible ? 1 : 0,
           pointerEvents: chromeVisible ? 'auto' : 'none',
           transition: 'opacity 200ms ease',
@@ -523,7 +694,27 @@ export default function StoryViewer({ channels, startIndex = 0, onClose, userId 
               {(channel.name || '?').charAt(0).toUpperCase()}
             </div>
           )
-        ) : null}
+        ) : (
+          <div
+            style={{
+              width: 30,
+              height: 30,
+              borderRadius: '50%',
+              background: channel.type === 'public-questions' ? 'var(--signal)' : 'var(--ember)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: '#fff',
+              flexShrink: 0,
+            }}
+          >
+            {channel.type === 'public-questions' ? (
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3" /><line x1="12" y1="17" x2="12.01" y2="17" /></svg>
+            ) : (
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M9 10h.01" /><path d="M15 10h.01" /><path d="M12 2a8 8 0 0 0-8 8v12l3-3 2.5 2.5L12 19l2.5 2.5L17 19l3 3V10a8 8 0 0 0-8-8z" /></svg>
+            )}
+          </div>
+        )}
 
         <span style={{ fontSize: 15, fontWeight: 700, color: 'var(--paper)', flex: 1 }}>
           {headerLabel}
@@ -592,21 +783,70 @@ export default function StoryViewer({ channels, startIndex = 0, onClose, userId 
           alignItems: 'center',
           justifyContent: 'center',
           padding: '0 16px',
+          overflow: 'hidden',
         }}
       >
         {loadingCh && !item && (
           <span style={{ color: 'var(--dim)', fontSize: 14 }}>Loading…</span>
         )}
 
-        {item &&
-          (channel.type === 'public-questions' ? (
-            <QuestionStoryCard question={item} />
-          ) : (
-            <ConfessionBubble confession={item} size="story" userId={userId} />
-          ))}
+        {item && (
+          <div
+            key={slideKey}
+            style={{
+              width: '100%',
+              display: 'flex',
+              justifyContent: 'center',
+              animation: slideDir
+                ? `story-slide-${slideDir} 320ms cubic-bezier(0.22, 1, 0.36, 1)`
+                : 'story-pop-in 220ms ease-out',
+            }}
+          >
+            {channel.type === 'public-questions' ? (
+              <QuestionStoryCard question={item} />
+            ) : (
+              <ConfessionOrQuestionReplyCard item={item} userId={userId} />
+            )}
+          </div>
+        )}
+
+        {/* Visible chevron nav buttons — pure affordance, same action as a
+            tap on the underlying zone. */}
+        {chromeVisible && (
+          <>
+            <button
+              type="button"
+              onClick={() => handleZoneTap('prev')}
+              aria-label="Previous"
+              style={{
+                position: 'absolute', left: 8, top: '50%', transform: 'translateY(-50%)',
+                zIndex: 25, width: 36, height: 36, borderRadius: '50%', border: 'none',
+                background: 'rgba(0,0,0,0.35)', color: '#fff', display: 'flex',
+                alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
+                backdropFilter: 'blur(6px)',
+              }}
+            >
+              <ChevronIcon dir="left" />
+            </button>
+            <button
+              type="button"
+              onClick={() => handleZoneTap('next')}
+              aria-label="Next"
+              style={{
+                position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)',
+                zIndex: 25, width: 36, height: 36, borderRadius: '50%', border: 'none',
+                background: 'rgba(0,0,0,0.35)', color: '#fff', display: 'flex',
+                alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
+                backdropFilter: 'blur(6px)',
+              }}
+            >
+              <ChevronIcon dir="right" />
+            </button>
+          </>
+        )}
 
         {/* Nav-tap overlay — sits above the card so left/right taps always
-            resolve to navigation unambiguously (see banner comment). */}
+            resolve to navigation unambiguously; sits below the chevrons. */}
         <div
           onClick={() => handleZoneTap('prev')}
           style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: '50%', zIndex: 20 }}
@@ -623,7 +863,7 @@ export default function StoryViewer({ channels, startIndex = 0, onClose, userId 
           position: 'relative',
           zIndex: 30,
           display: 'flex',
-          alignItems: 'center',
+          flexDirection: 'column',
           gap: 10,
           padding: '12px 16px 18px',
           opacity: chromeVisible ? 1 : 0,
@@ -632,55 +872,102 @@ export default function StoryViewer({ channels, startIndex = 0, onClose, userId 
           background: 'linear-gradient(to top, rgba(0,0,0,0.45), transparent)',
         }}
       >
-        {showComposer && (
-          <>
-            <input
-              type="text"
-              value={replyText}
-              onChange={(e) => setReplyText(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') handleSubmitReply();
-              }}
-              placeholder={composerPlaceholder}
-              disabled={channel.type === 'group' && !userId}
-              style={{
-                flex: 1,
-                background: 'var(--glass-white)',
-                border: '1px solid var(--glass-border)',
-                borderRadius: 999,
-                padding: '10px 16px',
-                color: 'var(--paper)',
-                fontSize: 14,
-                outline: 'none',
-              }}
-            />
-            <button
-              type="button"
-              onClick={handleSubmitReply}
-              disabled={!replyText.trim() || posting}
-              style={{
-                border: 'none',
-                background: 'var(--ember)',
-                color: 'var(--paper)',
-                fontWeight: 700,
-                fontSize: 14,
-                borderRadius: 999,
-                padding: '10px 18px',
-                cursor: replyText.trim() && !posting ? 'pointer' : 'default',
-                opacity: replyText.trim() && !posting ? 1 : 0.5,
-              }}
-            >
-              Send
-            </button>
-          </>
+        {channel.type === 'public-questions' && item && (
+          <button
+            type="button"
+            onClick={() => onViewReplies?.(item.id)}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 8,
+              alignSelf: 'center',
+              border: '1px solid rgba(255,255,255,0.25)',
+              background: 'rgba(255,255,255,0.08)',
+              color: '#fff',
+              fontWeight: 700,
+              fontSize: 13.5,
+              borderRadius: 999,
+              padding: '8px 18px',
+              cursor: 'pointer',
+              backdropFilter: 'blur(6px)',
+            }}
+          >
+            <RepliesIcon /> See all replies
+          </button>
         )}
 
-        {item && (
-          <div style={{ marginLeft: showComposer ? 0 : 'auto' }}>
-            <ReactionBar targetType="confession" targetId={item.id} userId={userId} />
-          </div>
-        )}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          {showComposer && (
+            <>
+              <input
+                type="text"
+                name="story-reply"
+                autoComplete="off"
+                data-lpignore="true"
+                data-1p-ignore
+                data-form-type="other"
+                value={replyText}
+                onChange={(e) => setReplyText(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') handleSubmitReply();
+                }}
+                placeholder={composerPlaceholder}
+                disabled={channel.type === 'group' && !userId}
+                style={{
+                  flex: 1,
+                  background: 'var(--glass-white)',
+                  border: '1px solid var(--glass-border)',
+                  borderRadius: 999,
+                  padding: '10px 16px',
+                  color: 'var(--paper)',
+                  fontSize: 14,
+                  outline: 'none',
+                }}
+              />
+              <button
+                type="button"
+                onClick={handleSubmitReply}
+                disabled={!replyText.trim() || posting}
+                style={{
+                  border: 'none',
+                  background: 'var(--ember)',
+                  color: 'var(--paper)',
+                  fontWeight: 700,
+                  fontSize: 14,
+                  borderRadius: 999,
+                  padding: '10px 18px',
+                  cursor: replyText.trim() && !posting ? 'pointer' : 'default',
+                  opacity: replyText.trim() && !posting ? 1 : 0.5,
+                }}
+              >
+                Send
+              </button>
+            </>
+          )}
+
+          {item && (
+            <div style={{ marginLeft: showComposer ? 0 : 'auto' }}>
+              <ReactionBar targetType="confession" targetId={item.id} userId={userId} />
+            </div>
+          )}
+        </div>
       </div>
+
+      <style>{`
+        @keyframes story-slide-from-right {
+          0% { opacity: 0; transform: translateX(28px) scale(0.98); }
+          100% { opacity: 1; transform: translateX(0) scale(1); }
+        }
+        @keyframes story-slide-from-left {
+          0% { opacity: 0; transform: translateX(-28px) scale(0.98); }
+          100% { opacity: 1; transform: translateX(0) scale(1); }
+        }
+        @keyframes story-pop-in {
+          0% { opacity: 0; transform: scale(0.97); }
+          100% { opacity: 1; transform: scale(1); }
+        }
+      `}</style>
     </div>
   );
 }

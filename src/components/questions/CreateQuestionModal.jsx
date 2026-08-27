@@ -163,6 +163,11 @@ function CreateQuestionModalContent({ onCreated }) {
         }}
       >
         <textarea
+          name="question-composer"
+          autoComplete="off"
+          data-lpignore="true"
+          data-1p-ignore
+          data-form-type="other"
           value={text}
           onChange={(e) => setText(e.target.value.slice(0, MAX_QUESTION_LENGTH))}
           placeholder={

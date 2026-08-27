@@ -366,7 +366,7 @@ function InstagramModal({ open, onClose, onSubmit, loading }) {
         <div style={{ position: 'relative' }}>
           <span style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', color: '#8B8B96', fontWeight: 700 }}>@</span>
           <input
-            autoFocus type="text" value={username} disabled={loading}
+            autoFocus type="text" name="dm-ig-username" autoComplete="off" data-lpignore="true" data-1p-ignore data-form-type="other" value={username} disabled={loading}
             onChange={(e) => setUsername(e.target.value.replace(/^@/, '').trim())}
             onKeyDown={(e) => { if (e.key === 'Enter' && username.trim()) onSubmit(username.trim()); }}
             placeholder="username"
@@ -1166,7 +1166,7 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
               <button onClick={cancelPendingAttachment} disabled={uploading} style={{ border: 'none', background: 'rgba(255,255,255,0.06)', width: 28, height: 28, borderRadius: '50%', color: '#F4F3F0', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{Vectors.Close}</button>
             </div>
             <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-              <input type="text" value={caption} onChange={(e) => setCaption(e.target.value)} placeholder="Add a caption…" disabled={uploading} style={{ flex: 1, border: '1px solid rgba(255,255,255,0.06)', outline: 'none', background: '#15161B', borderRadius: 20, padding: '10px 16px', fontSize: 14, color: '#F4F3F0' }} />
+              <input type="text" name="dm-media-caption" autoComplete="off" data-lpignore="true" data-1p-ignore data-form-type="other" value={caption} onChange={(e) => setCaption(e.target.value)} placeholder="Add a caption…" disabled={uploading} style={{ flex: 1, border: '1px solid rgba(255,255,255,0.06)', outline: 'none', background: '#15161B', borderRadius: 20, padding: '10px 16px', fontSize: 14, color: '#F4F3F0' }} />
               <button type="button" onClick={sendPendingAttachment} disabled={uploading} style={{ width: 44, height: 44, borderRadius: '50%', border: 'none', background: uploading ? 'rgba(255,255,255,0.06)' : '#FF6B35', color: '#fff', cursor: uploading ? 'default' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                 {uploading ? Vectors.Spinner : Vectors.Send}
               </button>

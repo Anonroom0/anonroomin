@@ -97,6 +97,11 @@ function CreateConfessionModalContent({ onCreated }) {
         }}
       >
         <textarea
+          name="add-confession-composer"
+          autoComplete="off"
+          data-lpignore="true"
+          data-1p-ignore
+          data-form-type="other"
           value={text}
           onChange={(e) => setText(e.target.value.slice(0, MAX_CONFESSION_LENGTH))}
           placeholder="Post it straight to the public confessions feed…"
