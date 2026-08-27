@@ -235,6 +235,42 @@ export function isConfessionsFeedPath() {
 }
 
 // ----------------------------------------------------------------------------
+// STORY VIEWER ROUTING (root domain, /stories/<type>[/<slug>])
+// ----------------------------------------------------------------------------
+// Mirrors the /q/<id> and /confessions patterns above so opening a story is a
+// real, deep-linkable route (back button closes it, a shared link reopens
+// the same channel) instead of pure unaddressable local state.
+//
+// 'group' channels are addressed by slug (the same slug the group's own
+// subdomain uses) since a group's id isn't otherwise exposed in any URL;
+// the two virtual channels ('public-confessions' / 'public-questions') have
+// no per-item id, so their path is just the type with no second segment.
+export function buildStoryPath(channel) {
+  if (!channel) return ROOT_PATH;
+  if (channel.type === 'group') {
+    return `/stories/group/${encodeURIComponent(channel.slug || channel.id)}`;
+  }
+  return `/stories/${channel.type}`;
+}
+
+// Returns { type, slug } for the current path if it matches /stories/...,
+// or null otherwise. `slug` is only present (and only meaningful) for
+// type === 'group'.
+export function getStoryTargetFromPath() {
+  const segments = normalizedPathSegments();
+  if (segments[0] !== 'stories' || !segments[1]) return null;
+  const type = decodeURIComponent(segments[1]);
+  if (type === 'group') {
+    if (!segments[2]) return null;
+    return { type, slug: decodeURIComponent(segments[2]) };
+  }
+  if (type === 'public-confessions' || type === 'public-questions') {
+    return { type, slug: null };
+  }
+  return null;
+}
+
+// ----------------------------------------------------------------------------
 // PASSWORD RESET ROUTING (root domain, /reset-password/<token_hash>)
 // ----------------------------------------------------------------------------
 // The email template links straight to /reset-password/{{ .TokenHash }}

@@ -175,7 +175,7 @@ function StoryCircle({ onClick, ring, name, children }) {
   );
 }
 
-export default function StoriesBar({ groups, userId, onOpenStory }) {
+export default function StoriesBar({ groups, userId, onOpenStory, initialTarget, onConsumeInitialTarget }) {
   const [groupIdsWithConfessions, setGroupIdsWithConfessions] = useState(() => new Set());
   const [groupLatestAt, setGroupLatestAt] = useState({}); // group_id -> iso
   const [confessionsLatestAt, setConfessionsLatestAt] = useState(null);
@@ -294,6 +294,29 @@ export default function StoriesBar({ groups, userId, onOpenStory }) {
   function handleOpen(index) {
     onOpenStory(channels, index);
   }
+
+  // Direct-link support: a /stories/<type>[/<slug>] URL hit directly (or a
+  // page refresh while a story was open — see Home.jsx's popstate handling)
+  // arrives here as `initialTarget` before `channels` has necessarily
+  // resolved (group-with-fresh-confessions membership is async). Once
+  // `channels` reflects the real data, find the matching entry and open it
+  // exactly once; onConsumeInitialTarget lets the parent clear the target so
+  // this doesn't refire on every subsequent channels recompute.
+  useEffect(() => {
+    if (!initialTarget) return;
+    const idx = channels.findIndex((c) => {
+      if (c.type !== initialTarget.type) return false;
+      return initialTarget.type === 'group' ? c.slug === initialTarget.slug : true;
+    });
+    if (idx !== -1) {
+      onOpenStory(channels, idx);
+      onConsumeInitialTarget?.();
+    }
+    // If not found yet, it may just not have loaded (or resolved as empty)
+    // this pass — leave initialTarget in place so this effect re-checks
+    // against the next `channels` recompute rather than giving up.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [channels, initialTarget]);
 
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const confessionsUnseen = useMemo(() => isUnseen('public-confessions', confessionsLatestAt), [confessionsLatestAt, seenTick]);

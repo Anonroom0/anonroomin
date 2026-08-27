@@ -24,6 +24,8 @@ import {
   getDmUsernameFromPath,
   buildDmPath,
   buildQuestionPath,
+  buildStoryPath,
+  getStoryTargetFromPath,
   ROOT_PATH,
 } from '../lib/subdomain';
 import { subscribeToPush } from '../lib/pushNotifications';
@@ -271,6 +273,11 @@ export default function Home() {
   const [profileCardUserId, setProfileCardUserId] = useState(null);
   const [showPushPrompt, setShowPushPrompt] = useState(false);
   const [viewingStory, setViewingStory] = useState(null);
+  // A /stories/<type>[/<slug>] hit directly (or on refresh) resolves here
+  // first, then StoriesBar consumes it once its `channels` list is ready
+  // (see StoriesBar.jsx's initialTarget effect) and clears it via
+  // onConsumeInitialTarget so it doesn't keep re-triggering.
+  const [initialStoryTarget, setInitialStoryTarget] = useState(null);
   
   const [createQuestionOpen, setCreateQuestionOpen] = useState(false);
   const [createQuestionType, setCreateQuestionType] = useState('general'); // Default fallback
@@ -371,6 +378,12 @@ export default function Home() {
         return;
       }
 
+      const storyTarget = getStoryTargetFromPath();
+      if (storyTarget) {
+        if (!cancelled) setInitialStoryTarget(storyTarget);
+        return;
+      }
+
       const dmUsername = getDmUsernameFromPath();
       if (dmUsername) {
         const { data, error } = await supabase.from('profiles').select('id, username').eq('username', dmUsername.toLowerCase()).maybeSingle();
@@ -394,6 +407,35 @@ export default function Home() {
   }
 
   function handleOpenGroup(slug) { window.location.href = getGroupUrl(slug); }
+
+  // Opening a story is now a real route (see subdomain.js's buildStoryPath/
+  // getStoryTargetFromPath) rather than pure local state, so it's
+  // deep-linkable and the back button closes it instead of leaving a
+  // dangling overlay over a URL that no longer describes it.
+  function handleOpenStory(channels, startIndex) {
+    setViewingStory({ channels, startIndex });
+    window.history.pushState({}, '', buildStoryPath(channels[startIndex]));
+  }
+
+  const closeStory = useCallback(() => {
+    setViewingStory(null);
+    setInitialStoryTarget(null);
+    window.history.pushState({}, '', ROOT_PATH);
+  }, []);
+
+  // Back button while a story is open should close it (matching the pushed
+  // /stories/... entry) rather than leaving the overlay open over whatever
+  // path the browser just navigated back to.
+  useEffect(() => {
+    function handlePopState() {
+      if (!getStoryTargetFromPath()) {
+        setViewingStory(null);
+        setInitialStoryTarget(null);
+      }
+    }
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
 
   const closeActiveChat = useCallback(() => {
     if (activeChatType === 'group' && activeChatSource === 'subdomain') { window.location.href = getRootDomainUrl(); return; }
@@ -467,7 +509,9 @@ export default function Home() {
               <StoriesBar
                 groups={groups}
                 userId={userId}
-                onOpenStory={(channels, startIndex) => setViewingStory({ channels, startIndex })}
+                onOpenStory={handleOpenStory}
+                initialTarget={initialStoryTarget}
+                onConsumeInitialTarget={() => setInitialStoryTarget(null)}
               />
             </div>
             {/* Segmented Control - Elevated Z-Index */}
@@ -696,9 +740,10 @@ export default function Home() {
           channels={viewingStory.channels}
           startIndex={viewingStory.startIndex}
           userId={userId}
-          onClose={() => setViewingStory(null)}
+          onClose={closeStory}
+          onChannelChange={(channel) => window.history.replaceState({}, '', buildStoryPath(channel))}
           onViewReplies={(questionId) => {
-            setViewingStory(null);
+            closeStory();
             handleOpenChat(questionId, 'question');
           }}
         />

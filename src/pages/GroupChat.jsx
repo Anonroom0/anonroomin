@@ -87,14 +87,9 @@ function formatDayLabel(dateString) {
 }
 function dayKey(dateString) { return new Date(dateString).toDateString(); }
 
-// Resolves a #msg-<id> URL fragment back to a real message id. The
-// fragment can be either an 8-char short id (new share links, see
-// toShortId() in subdomain.js) or a full uuid (anything shared before
-// short ids existed) — this matches whichever shape it finds among the
-// currently-loaded messages. Only loaded messages can be jumped to, same
-// limitation the old full-uuid links already had.
+// Resolves a #msg-<id> or #reply-<id> URL fragment back to a real message id.
 function resolveMessageIdFromHash(hash, messages) {
-  const match = /^#msg-(.+)$/.exec(hash || '');
+  const match = /^#(?:msg|reply)-(.+)$/.exec(hash || '');
   if (!match) return null;
   const target = decodeURIComponent(match[1]);
   const exact = messages.find((m) => m.id === target);
@@ -217,6 +212,7 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
   const [latestMentionId, setLatestMentionId] = useState(null);
   const [highlightedMsgId, setHighlightedMsgId] = useState(null);
   const [pendingJumpId, setPendingJumpId] = useState(null);
+  const [pendingAction, setPendingAction] = useState(null);
   const [isAnonMode, setIsAnonMode] = useState(false);
   const [selectedMessages, setSelectedMessages] = useState([]);
   
@@ -255,6 +251,11 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
   // reload a few times right after opening it.
   const onGroupResolvedRef = useRef(onGroupResolved);
   useEffect(() => { onGroupResolvedRef.current = onGroupResolved; }, [onGroupResolved]);
+
+  const startReply = useCallback((message) => {
+    const replyName = message.is_anon ? 'Anonymous' : (message.instagram_username ? `@${message.instagram_username}` : message.sender_name);
+    setReplyingTo({ id: message.id, sender_name: replyName, text: message.text, media_url: message.media_url, media_type: message.media_type, instagram_username: message.instagram_username });
+  }, []);
 
   useEffect(() => {
     if (!groupSlug) return;
@@ -404,14 +405,19 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
   // DirectMessages.jsx.
   useEffect(() => {
     if (messagesLoading || !group?.id) return;
-    const hashMatch = /^#msg-(.+)$/.exec(window.location.hash || '');
+    const hashMatch = /^#(msg|reply)-(.+)$/.exec(window.location.hash || '');
     if (!hashMatch) return;
-    const rawTarget = decodeURIComponent(hashMatch[1]);
+    const action = hashMatch[1];
+    const rawTarget = decodeURIComponent(hashMatch[2]);
     let cancelled = false;
 
     async function resolveDeepLink() {
       const alreadyLoadedId = resolveMessageIdFromHash(window.location.hash, messagesRef.current);
-      if (alreadyLoadedId) { setPendingJumpId(alreadyLoadedId); return; }
+      if (alreadyLoadedId) { 
+        setPendingJumpId(alreadyLoadedId); 
+        setPendingAction(action);
+        return; 
+      }
 
       const lookup = isShortId(rawTarget)
         ? supabase.from('group_messages').select('*, profiles(avatar_url)').eq('group_id', group.id).eq('link_id', rawTarget).order('created_at', { ascending: false }).limit(1).maybeSingle()
@@ -435,6 +441,7 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
       });
       setHasMoreMessages(true);
       setPendingJumpId(row.id);
+      setPendingAction(action);
     }
 
     resolveDeepLink();
@@ -446,12 +453,21 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
     if (!pendingJumpId) return;
     const el = document.getElementById(`msg-${pendingJumpId}`);
     if (!el) return;
+    
     el.scrollIntoView({ behavior: 'smooth', block: 'center' });
     setHighlightedMsgId(pendingJumpId);
+    
+    if (pendingAction === 'reply') {
+      const msgToReply = messages.find(m => m.id === pendingJumpId);
+      if (msgToReply) startReply(msgToReply);
+      window.history.replaceState(null, '', window.location.pathname + window.location.search);
+    }
+    
     setPendingJumpId(null);
+    setPendingAction(null);
     const t = setTimeout(() => setHighlightedMsgId(null), 2000);
     return () => clearTimeout(t);
-  }, [pendingJumpId, messages]);
+  }, [pendingJumpId, pendingAction, messages, startReply]);
 
   const { pullDistance, isRefreshing, handleTouchStart, handleTouchMove, handleTouchEnd } = usePullToRefresh(fetchMessagesAndReceipts, scrollRef);
 
@@ -545,11 +561,6 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
   };
 
   const currentSenderName = () => (isAnonMode ? 'Anonymous' : (profile?.is_admin ? ADMIN_DISPLAY_NAME : (profile?.username || 'Anonymous')));
-
-  const startReply = useCallback((message) => {
-    const replyName = message.is_anon ? 'Anonymous' : (message.instagram_username ? `@${message.instagram_username}` : message.sender_name);
-    setReplyingTo({ id: message.id, sender_name: replyName, text: message.text, media_url: message.media_url, media_type: message.media_type, instagram_username: message.instagram_username });
-  }, []);
 
   async function handleSend(e) {
     e.preventDefault();

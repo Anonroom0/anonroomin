@@ -70,13 +70,12 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import supabase from '../../lib/supabaseClient';
 import ConfessionBubble from '../shared/ConfessionBubble';
-import { buildQuestionPath, toShortId } from '../../lib/subdomain';
+import { buildQuestionPath, toShortId, getGroupUrl } from '../../lib/subdomain';
 import ReactionBar from '../shared/ReactionBar';
 
 const STORY_WINDOW_MS = 24 * 60 * 60 * 1000; // stories are ephemeral: last 24h only
 const IDLE_HIDE_MS = 4000;
 const STORY_DURATION_MS = 6000; // per-item autoplay duration, IG-ish pace
-const VISITOR_ID_KEY = 'anonroom_visitor_id';
 const SEEN_KEY_PREFIX = 'anonroom_story_seen:';
 
 // ============================================================================
@@ -151,29 +150,22 @@ async function loadChannelItems(channel) {
   return [];
 }
 
-/** Local, file-scoped visitor id for anonymous (unauthenticated) question
- * answers. */
-function getOrCreateVisitorId() {
-  try {
-    let id = window.localStorage.getItem(VISITOR_ID_KEY);
-    if (!id) {
-      id = crypto.randomUUID
-        ? crypto.randomUUID()
-        : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-      window.localStorage.setItem(VISITOR_ID_KEY, id);
-    }
-    return id;
-  } catch {
-    return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
-  }
-}
-
 function buildShareUrl(channel, item) {
   if (channel.type === 'public-questions') {
     return `${window.location.origin}${buildQuestionPath(item.id)}`;
   }
   if (channel.type === 'group' && channel.slug) {
-    return `https://${channel.slug}.anonroom.in/confessions?id=${toShortId(item.id)}`;
+    // A 'group' story item is a confessions row auto-synced FROM a
+    // group_messages row (see source_message_id, populated by
+    // sync_group_confession_to_confessions in the migration) — it never has
+    // group_id set to a value ConfessionsFeed's public feed query would ever
+    // match (that page only loads group_id IS NULL rows), so the old
+    // `/confessions?id=` link 404'd-in-place (loaded the page, item never
+    // appeared). Its real, original home is the group chat message itself —
+    // the same #msg-<id> deep link GroupChat.jsx already resolves via
+    // link_id — so link straight to that instead.
+    const sourceId = item.source_message_id || item.id;
+    return `${getGroupUrl(channel.slug)}#msg-${toShortId(sourceId)}`;
   }
   return `${window.location.origin}/confessions?id=${toShortId(item.id)}`;
 }
@@ -358,15 +350,13 @@ function ProgressBar({ count, activeIndex, progress }) {
 // 5. MAIN EXPORT
 // ============================================================================
 
-export default function StoryViewer({ channels, startIndex = 0, onClose, userId, onViewReplies }) {
+export default function StoryViewer({ channels, startIndex = 0, onClose, userId, onViewReplies, onChannelChange }) {
   const [chIndex, setChIndex] = useState(startIndex);
   const [itemIndex, setItemIndex] = useState(0);
   const [itemsCache, setItemsCache] = useState({});
   const [loadingCh, setLoadingCh] = useState(false);
   const [chromeVisible, setChromeVisible] = useState(true);
   const [menuOpen, setMenuOpen] = useState(false);
-  const [replyText, setReplyText] = useState('');
-  const [posting, setPosting] = useState(false);
   const [progress, setProgress] = useState(0); // 0..1 fill of the active segment
   const [paused, setPaused] = useState(false);
   const [slideDir, setSlideDir] = useState(null); // 'from-right' | 'from-left' | null — channel-crossing animation
@@ -382,6 +372,15 @@ export default function StoryViewer({ channels, startIndex = 0, onClose, userId,
   const channel = channels && channels[chIndex];
   const items = itemsCache[chIndex] || [];
   const item = items[itemIndex >= 0 ? itemIndex : 0];
+
+  // Keep the URL (see Home.jsx's onChannelChange -> history.replaceState)
+  // in sync as the viewer walks between channels via swipe/tap-past-the-end/
+  // auto-advance, so the address bar always reflects whichever channel is
+  // actually on screen, not just the one the viewer was opened on.
+  useEffect(() => {
+    if (channel) onChannelChange?.(channel);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [channel]);
 
   // ---- chrome auto-hide -----------------------------------------------
   const resetIdleTimer = useCallback(() => {
@@ -410,7 +409,6 @@ export default function StoryViewer({ channels, startIndex = 0, onClose, userId,
       setSlideKey((k) => k + 1);
       setChIndex(newIndex);
       setItemIndex(itemPos);
-      setReplyText('');
       setMenuOpen(false);
       setProgress(0);
     },
@@ -456,7 +454,6 @@ export default function StoryViewer({ channels, startIndex = 0, onClose, userId,
   function nextItem() {
     if (itemIndex < items.length - 1) {
       setItemIndex((i) => i + 1);
-      setReplyText('');
       setProgress(0);
     } else {
       goToChannel(chIndex + 1, { dir: 1, itemPos: 0 });
@@ -466,7 +463,6 @@ export default function StoryViewer({ channels, startIndex = 0, onClose, userId,
   function prevItem() {
     if (itemIndex > 0) {
       setItemIndex((i) => i - 1);
-      setReplyText('');
       setProgress(0);
     } else {
       goToChannel(chIndex - 1, { dir: -1, itemPos: -1 });
@@ -560,49 +556,6 @@ export default function StoryViewer({ channels, startIndex = 0, onClose, userId,
     }
   }
 
-  // ---- reply / answer submit ---------------------------------------------
-  async function submitGroupReply(text) {
-    const { error } = await supabase.from('group_messages').insert({
-      group_id: channel.id,
-      user_id: userId,
-      text,
-      is_anon: false,
-      is_confession: false,
-    });
-    if (error) throw error;
-  }
-
-  async function submitQuestionAnswer(text) {
-    const payload = userId
-      ? { question_id: item.id, replier_id: null, visitor_id: null, reply_text: text, is_anon: true }
-      : {
-          question_id: item.id,
-          replier_id: null,
-          visitor_id: getOrCreateVisitorId(),
-          reply_text: text,
-          is_anon: true,
-        };
-    const { error } = await supabase.from('question_replies').insert(payload);
-    if (error) throw error;
-  }
-
-  async function handleSubmitReply() {
-    if (!channel || !item || !replyText.trim() || posting) return;
-    setPosting(true);
-    try {
-      if (channel.type === 'group') {
-        await submitGroupReply(replyText.trim());
-      } else if (channel.type === 'public-questions') {
-        await submitQuestionAnswer(replyText.trim());
-      }
-      setReplyText('');
-    } catch (err) {
-      console.error('Failed to submit story reply:', err);
-    } finally {
-      setPosting(false);
-    }
-  }
-
   if (!channel) return null;
 
   const headerLabel =
@@ -611,9 +564,6 @@ export default function StoryViewer({ channels, startIndex = 0, onClose, userId,
       : channel.type === 'public-confessions'
         ? 'Public Confessions'
         : 'Public Questions';
-
-  const showComposer = channel.type !== 'public-confessions';
-  const composerPlaceholder = channel.type === 'public-questions' ? 'Answer…' : 'Reply…';
 
   return (
     <div
@@ -898,56 +848,57 @@ export default function StoryViewer({ channels, startIndex = 0, onClose, userId,
         )}
 
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-          {showComposer && (
-            <>
-              <input
-                type="text"
-                name="story-reply"
-                autoComplete="off"
-                data-lpignore="true"
-                data-1p-ignore
-                data-form-type="other"
-                value={replyText}
-                onChange={(e) => setReplyText(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter') handleSubmitReply();
-                }}
-                placeholder={composerPlaceholder}
-                disabled={channel.type === 'group' && !userId}
-                style={{
-                  flex: 1,
-                  background: 'var(--glass-white)',
-                  border: '1px solid var(--glass-border)',
-                  borderRadius: 999,
-                  padding: '10px 16px',
-                  color: 'var(--paper)',
-                  fontSize: 14,
-                  outline: 'none',
-                }}
-              />
-              <button
-                type="button"
-                onClick={handleSubmitReply}
-                disabled={!replyText.trim() || posting}
-                style={{
-                  border: 'none',
-                  background: 'var(--ember)',
-                  color: 'var(--paper)',
-                  fontWeight: 700,
-                  fontSize: 14,
-                  borderRadius: 999,
-                  padding: '10px 18px',
-                  cursor: replyText.trim() && !posting ? 'pointer' : 'default',
-                  opacity: replyText.trim() && !posting ? 1 : 0.5,
-                }}
-              >
-                Send
-              </button>
-            </>
+          {channel.type === 'group' && (
+            <button
+              type="button"
+              onClick={() => {
+                if (!channel || !item) return;
+                const sourceId = item.source_message_id || item.id;
+                window.location.href = `${getGroupUrl(channel.slug)}#reply-${toShortId(sourceId)}`;
+              }}
+              style={{
+                flex: 1,
+                background: 'var(--glass-white)',
+                border: '1px solid var(--glass-border)',
+                borderRadius: 999,
+                padding: '10px 16px',
+                color: 'var(--paper)',
+                fontSize: 14,
+                textAlign: 'left',
+                cursor: 'pointer',
+                outline: 'none',
+              }}
+            >
+              Reply in chat…
+            </button>
+          )}
+
+          {channel.type === 'public-questions' && (
+            <button
+              type="button"
+              onClick={() => {
+                if (!item) return;
+                onViewReplies?.(item.id);
+              }}
+              style={{
+                flex: 1,
+                background: 'var(--glass-white)',
+                border: '1px solid var(--glass-border)',
+                borderRadius: 999,
+                padding: '10px 16px',
+                color: 'var(--paper)',
+                fontSize: 14,
+                textAlign: 'left',
+                cursor: 'pointer',
+                outline: 'none',
+              }}
+            >
+              Answer…
+            </button>
           )}
 
           {item && (
-            <div style={{ marginLeft: showComposer ? 0 : 'auto' }}>
+            <div style={{ marginLeft: channel.type !== 'public-confessions' ? 0 : 'auto' }}>
               <ReactionBar targetType="confession" targetId={item.id} userId={userId} />
             </div>
           )}
