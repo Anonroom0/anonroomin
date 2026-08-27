@@ -20,47 +20,13 @@
  * finishing the last group's story flows into Confessions, and finishing
  * Confessions flows into Questions, before the reel closes.
  *
- * LAYOUT — Instagram/Telegram style, no horizontal scrolling:
- * the row measures its own width (see useRowWidth below) and computes one
- * explicit pixel diameter for every circle from that width and the item
- * count, so circles sit right next to each other (small fixed px gap, not
- * a CSS `gap`) and shrink together as more stories appear — never a scroll
- * rail. Width and height are both set to that same literal pixel number
- * (not `aspect-ratio` or a percentage trick), so every circle is a true
- * circle regardless of what the renderer does or doesn't support. Each
- * circle carries its name underneath in a small, truncated label
+ * LAYOUT — Instagram-style: every circle renders at a fixed diameter
+ * (CIRCLE_SIZE) with a fixed gap (CIRCLE_GAP) between them — nothing ever
+ * shrinks to fit. When there are more circles than fit on screen, the row
+ * scrolls horizontally (no visible scrollbar — see .hide-scrollbar in
+ * src/styles/animations.css), exactly like Instagram's own story tray.
+ * Each circle carries its name underneath in a small, truncated label
  * (Instagram-style), bold/bright when unseen and dimmed once viewed.
- *
- * FIX (this pass) — "3 pages / only one giant circle" bug:
- * Root cause was two-fold:
- *  1. Circle size was computed from raw rowWidth without subtracting this
- *     row's own horizontal padding, and that computed number was the ONLY
- *     thing keeping circles small — a single bad measurement (0, a stale
- *     value from a mid-layout read, or a race before ResizeObserver's
- *     first callback) could produce a value that, even after Math.min,
- *     still didn't behave because of how it interacted with a flex parent
- *     that had no `minWidth: 0` (see Home.jsx) — so the strip could blow
- *     out to occupy far more than one screen's width, which is what
- *     rendered as "3 different pages" when scrolled.
- *  2. There was no hard CSS ceiling independent of the JS math — if the
- *     computed `size` value was ever wrong for any reason, nothing stopped
- *     a single circle from rendering oversized and, combined with
- *     `overflow: hidden` on the row, visually swallowing the other circles
- *     (Confessions/Questions were still in the DOM — just pushed offscreen).
- *
- * Fixes applied:
- *  - `usableWidth` subtracts the row's own padding before dividing.
- *  - `justifyContent: 'flex-start'` is now explicit (not just relying on
- *    flex default) so the row can never render centered.
- *  - `minWidth: 0` + `boxSizing: 'border-box'` on the row so it's a
- *    proper shrinkable flex child (pair with the matching Home.jsx change
- *    noted at the bottom of this file's usage).
- *  - Every circle now also gets a hard inline `maxWidth`/`maxHeight` cap of
- *    CIRCLE_MAX as a CSS-level safety net — independent of whatever the JS
- *    size math produces, so a single circle can never blow out the row.
- *  - Pre-measurement fallback size is now CIRCLE_MIN, not CIRCLE_MAX, so
- *    there's no flash of an oversized circle before the first real
- *    measurement lands.
  *
  * Seen/unseen ring: each circle gets a lit conic-gradient ring when it has
  * content newer than the last time this browser opened it, and a flat dim
@@ -77,14 +43,12 @@
  * Dependencies: React, src/lib/supabaseClient
  * ========================================================================= */
 
-import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import supabase from '../../lib/supabaseClient';
 
 const RECENT_WINDOW_HOURS = 24;
-const CIRCLE_MAX = 58;
-const CIRCLE_MIN = 40;
-const CIRCLE_GAP = 8; // fixed px gap between circles — not CSS `gap`
-const ROW_PADDING_X = 10; // matches the container's `padding: '10px 10px'` below
+const CIRCLE_SIZE = 64; // fixed diameter, IG-style — circles never shrink to fit
+const CIRCLE_GAP = 14; // fixed px gap between circles — IG spacing, not CSS `gap`
 const SEEN_KEY_PREFIX = 'anonroom_story_seen:';
 
 function getInitials(name) {
@@ -111,34 +75,6 @@ function isUnseen(key, latestIso) {
   return new Date(latestIso).getTime() > new Date(seenAt).getTime();
 }
 
-/** Measures the row container's actual rendered width so circle diameter
- * can be computed as plain px math (see StoriesBar body) instead of
- * leaning on flexbox grow/shrink or CSS tricks to do it implicitly.
- * Runs in useLayoutEffect (not useEffect) so the real width is known
- * before first paint. Starts at 0 (handled by the CIRCLE_MIN fallback
- * below, not CIRCLE_MAX) so there's never a flash of an oversized row. */
-function useRowWidth() {
-  const ref = useRef(null);
-  const [width, setWidth] = useState(0);
-
-  useLayoutEffect(() => {
-    const el = ref.current;
-    if (!el) return;
-    const measure = () => setWidth(el.clientWidth);
-    measure();
-
-    if (typeof ResizeObserver !== 'undefined') {
-      const ro = new ResizeObserver(measure);
-      ro.observe(el);
-      return () => ro.disconnect();
-    }
-    window.addEventListener('resize', measure);
-    return () => window.removeEventListener('resize', measure);
-  }, []);
-
-  return [ref, width];
-}
-
 // ============================================================================
 // CIRCLE ICONS for the two always-on virtual channels
 // ============================================================================
@@ -162,15 +98,10 @@ function QuestionsIcon() {
 }
 
 // ============================================================================
-// SHARED CIRCLE — Instagram/Telegram-style: ring + avatar + name label.
-// `size` is a literal pixel number computed by the row (see useRowWidth),
-// applied to width AND height directly so the circle can't warp into an
-// oval no matter what the renderer does with aspect-ratio/percentages.
-// maxWidth/maxHeight are a hard CSS-level cap independent of that JS math —
-// this is the safety net that stops a single circle from ever blowing out
-// the row, even if `size` is ever computed wrong for any reason.
+// SHARED CIRCLE — Instagram-style: ring + avatar + name label, always a
+// fixed CIRCLE_SIZE so it can't warp or shrink regardless of item count.
 // ============================================================================
-function StoryCircle({ onClick, ring, name, size, children }) {
+function StoryCircle({ onClick, ring, name, children }) {
   return (
     <button
       type="button"
@@ -187,16 +118,13 @@ function StoryCircle({ onClick, ring, name, size, children }) {
         marginRight: CIRCLE_GAP,
         cursor: 'pointer',
         flexShrink: 0,
-        width: size,
-        maxWidth: CIRCLE_MAX,
+        width: CIRCLE_SIZE,
       }}
     >
       <div
         style={{
-          width: size,
-          height: size,
-          maxWidth: CIRCLE_MAX,
-          maxHeight: CIRCLE_MAX,
+          width: CIRCLE_SIZE,
+          height: CIRCLE_SIZE,
           borderRadius: '50%',
           padding: 2.5,
           boxSizing: 'border-box',
@@ -220,7 +148,7 @@ function StoryCircle({ onClick, ring, name, size, children }) {
               background: 'var(--glass-white)',
               color: 'var(--paper)',
               fontWeight: 700,
-              fontSize: Math.max(11, Math.round(size * 0.26)),
+              fontSize: 17,
             }}
           >
             {children}
@@ -230,8 +158,7 @@ function StoryCircle({ onClick, ring, name, size, children }) {
       <span
         style={{
           marginTop: 4,
-          width: size,
-          maxWidth: CIRCLE_MAX,
+          width: CIRCLE_SIZE,
           textAlign: 'center',
           fontSize: 11,
           lineHeight: 1.2,
@@ -256,8 +183,6 @@ export default function StoriesBar({ groups, userId, onOpenStory }) {
   // Bumped whenever the bar remounts/refreshes seen-state (e.g. coming back
   // from a story) so the ring recomputes against fresh localStorage reads.
   const [seenTick, setSeenTick] = useState(0);
-
-  const [rowRef, rowWidth] = useRowWidth();
 
   const groupIds = useMemo(() => (groups || []).map((g) => g.id), [groups]);
 
@@ -376,10 +301,7 @@ export default function StoriesBar({ groups, userId, onOpenStory }) {
   const questionsUnseen = useMemo(() => isUnseen('public-questions', questionsLatestAt), [questionsLatestAt, seenTick]);
 
   // Single flat render list — groups first, then the two virtual channels —
-  // Confessions and Questions are ALWAYS pushed here regardless of data, so
-  // they must always render as circles even if a sizing bug ever makes one
-  // circle too wide (see the hard maxWidth/maxHeight cap in StoryCircle,
-  // which exists specifically so this list is never visually swallowed).
+  // Confessions and Questions are ALWAYS pushed here regardless of data.
   const items = useMemo(
     () => [
       ...highlightedGroups.map((group, idx) => ({
@@ -413,22 +335,12 @@ export default function StoriesBar({ groups, userId, onOpenStory }) {
     [highlightedGroups, groupLatestAt, confessionsUnseen, questionsUnseen, seenTick]
   );
 
-  // One explicit pixel diameter for every circle: divide the row's actual
-  // *usable* width (measured clientWidth minus this row's own horizontal
-  // padding — see ROW_PADDING_X) by the item count (minus the fixed gaps),
-  // then clamp it — so circles sit snugly side by side and shrink together
-  // as more stories qualify, with no scrolling and no flexbox guesswork.
-  // Fallback while unmeasured (rowWidth === 0) is CIRCLE_MIN, not
-  // CIRCLE_MAX — avoids a flash of an oversized row before first layout.
-  const count = items.length || 1;
-  const usableWidth = Math.max(0, rowWidth - ROW_PADDING_X * 2);
-  const circleSize = usableWidth
-    ? Math.max(CIRCLE_MIN, Math.min(CIRCLE_MAX, Math.floor((usableWidth - CIRCLE_GAP * count) / count)))
-    : CIRCLE_MIN;
-
+  // Every circle renders at a fixed IG-style diameter (CIRCLE_SIZE) with a
+  // fixed gap between them — never shrunk to fit. When there are more
+  // circles than fit on screen, the row scrolls horizontally instead,
+  // exactly like Instagram's story tray.
   return (
     <div
-      ref={rowRef}
       style={{
         display: 'flex',
         flexDirection: 'row',
@@ -436,15 +348,17 @@ export default function StoriesBar({ groups, userId, onOpenStory }) {
         justifyContent: 'flex-start', // explicit — never let this row center
         alignItems: 'flex-start',
         padding: '10px 10px',
-        overflow: 'hidden', // never scroll — the whole strip shares the row
+        overflowX: 'auto',
+        overflowY: 'hidden',
+        WebkitOverflowScrolling: 'touch',
+        scrollbarWidth: 'none', // Firefox
         width: '100%',
-        minWidth: 0, // a flex child otherwise won't shrink below the
-                     // intrinsic width of its (flexShrink:0) circle children
         boxSizing: 'border-box',
       }}
+      className="hide-scrollbar"
     >
       {items.map((item) => (
-        <StoryCircle key={item.key} name={item.name} ring={item.ring} size={circleSize} onClick={() => handleOpen(item.index)}>
+        <StoryCircle key={item.key} name={item.name} ring={item.ring} onClick={() => handleOpen(item.index)}>
           {item.render()}
         </StoryCircle>
       ))}
