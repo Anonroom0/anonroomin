@@ -62,6 +62,10 @@ export default function EditProfile({ open, onClose }) {
   const [birthday, setBirthday] = useState('');
   const [avatarUrl, setAvatarUrl] = useState(null);
   const [notificationPanelOpen, setNotificationPanelOpen] = useState(false);
+  const [testPushTitle, setTestPushTitle] = useState('Test notification');
+  const [testPushBody, setTestPushBody] = useState('Hello from AnonRoom');
+  const [sendingTestPush, setSendingTestPush] = useState(false);
+  const [testPushResult, setTestPushResult] = useState(null);
   const [initial, setInitial] = useState({ bio: '', twitter: '', instagram: '', website: '', birthday: '', avatarUrl: null });
   const [uploadingAvatar, setUploadingAvatar] = useState(false);
   const [saving, setSaving] = useState(false);
@@ -129,6 +133,40 @@ export default function EditProfile({ open, onClose }) {
       setInitial({ bio, twitter, instagram, website, birthday, avatarUrl }); setSuccess('Profile saved successfully.'); refreshProfile();
       setTimeout(() => { handleClose(); }, 1000);
     } catch (err) { setError(err.message || 'Failed to save changes.'); } finally { setSaving(false); }
+  }
+
+  // Admin-only: fires admin-notify with the caller's own session JWT, which
+  // the function verifies server-side (checks profiles.is_admin itself) —
+  // this button being hidden for non-admins is a UI nicety, not the actual
+  // access control. Reuses send-push's 'admin' fan-out under the hood, so
+  // this reaches every user with promotional_enabled = true who has a live
+  // push_subscriptions row, exactly like a real promotional blast would.
+  async function handleSendTestPush() {
+    if (!session?.access_token || sendingTestPush) return;
+    setSendingTestPush(true);
+    setTestPushResult(null);
+    try {
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const functionsUrl = supabaseUrl.replace('.supabase.co', '.functions.supabase.co');
+      const response = await fetch(`${functionsUrl}/admin-notify`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${session.access_token}`,
+        },
+        body: JSON.stringify({ title: testPushTitle, body: testPushBody }),
+      });
+      const result = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        setTestPushResult({ ok: false, message: result?.error || `Request failed (${response.status}).` });
+      } else {
+        setTestPushResult({ ok: true, message: `Sent to ${result.sent ?? 0} device(s), skipped ${result.skipped ?? 0}.` });
+      }
+    } catch (err) {
+      setTestPushResult({ ok: false, message: err.message || 'Failed to reach admin-notify.' });
+    } finally {
+      setSendingTestPush(false);
+    }
   }
 
   if (!open && !isVisible) return null;
@@ -223,6 +261,31 @@ export default function EditProfile({ open, onClose }) {
                 <div style={{ color: '#8B8B96' }}>{Vectors.ChevronRight}</div>
               </button>
             </div>
+
+            {profile?.is_admin && (
+              <div>
+                <h3 style={{ margin: '0 0 8px 12px', fontSize: 13, fontWeight: 600, color: '#8B8B96', textTransform: 'uppercase', letterSpacing: 0.5 }}>Admin: Send Test Push</h3>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 4, background: '#15161B', borderRadius: 16, border: '1px solid rgba(255,255,255,0.06)', padding: '14px 16px' }}>
+                  <p style={{ margin: '0 0 4px', fontSize: 12.5, color: '#8B8B96', lineHeight: 1.4 }}>
+                    Sends to every user with promotional notifications enabled and an active push subscription. Useful for confirming your VAPID keys and edge function are wired up correctly.
+                  </p>
+                  <LiquidInput icon={Vectors.Bell} label="Title" value={testPushTitle} onChange={(e) => setTestPushTitle(e.target.value)} />
+                  <LiquidInput icon={Vectors.Bell} label="Body" value={testPushBody} onChange={(e) => setTestPushBody(e.target.value)} />
+                  <button
+                    onClick={handleSendTestPush}
+                    disabled={sendingTestPush || !testPushTitle.trim() || !testPushBody.trim()}
+                    style={{ marginTop: 8, padding: '12px 0', borderRadius: 14, border: 'none', background: sendingTestPush ? 'rgba(255,255,255,0.06)' : '#FF6B35', color: sendingTestPush ? '#8B8B96' : '#fff', fontWeight: 700, fontSize: 15, cursor: sendingTestPush ? 'default' : 'pointer' }}
+                  >
+                    {sendingTestPush ? 'Sending…' : 'Send Test Push'}
+                  </button>
+                  {testPushResult && (
+                    <div style={{ marginTop: 4, fontSize: 13, fontWeight: 500, color: testPushResult.ok ? '#2FD8C4' : '#FF6B35' }}>
+                      {testPushResult.message}
+                    </div>
+                  )}
+                </div>
+              </div>
+            )}
 
             <div>
               <h3 style={{ margin: '0 0 8px 12px', fontSize: 13, fontWeight: 600, color: '#8B8B96', textTransform: 'uppercase', letterSpacing: 0.5 }}>Social Links</h3>
