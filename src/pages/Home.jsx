@@ -516,7 +516,7 @@ export default function Home() {
               <div style={{ position: 'relative', flex: 1 }}>
                 <span style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--dim)', pointerEvents: 'none' }}>{Icons.Search}</span>
                 <input 
-                  type="text" name="home-search" autoComplete="off" data-lpignore="true" data-1p-ignore data-form-type="other" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} 
+                  type="search" name="home-search-field" autoComplete="off-nope" autoCorrect="off" autoCapitalize="off" spellCheck="false" data-lpignore="true" data-1p-ignore data-form-type="other" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} 
                   onFocus={() => setSearchFocused(true)} onBlur={() => setTimeout(() => setSearchFocused(false), 200)} 
                   placeholder="Search..." 
                   style={{ width: '100%', border: '1px solid rgba(255,255,255,0.06)', background: '#1C1D24', padding: '10px 36px 10px 42px', borderRadius: 14, fontSize: 16, color: 'var(--paper)', outline: 'none', transition: 'background 0.2s', boxSizing: 'border-box' }} 

@@ -255,3 +255,23 @@ input:focus, textarea:focus, button:focus {
 .safe-bottom {
   padding-bottom: env(safe-area-inset-bottom, 0px);
 }
+
+/*
+  Global autofill icon suppression (Chrome/Edge/Safari WebKit browsers).
+  This hides the key/password-manager, credit-card, and address/location
+  autofill icons that Chrome renders INSIDE inputs, regardless of whether
+  each individual input has autocomplete="off" set — that attribute is
+  only a hint, not a guarantee. This CSS is a hard, app-wide block.
+  Does not disable autofill functionality itself, just the inline icon UI.
+*/
+input::-webkit-contacts-auto-fill-button,
+input::-webkit-credentials-auto-fill-button,
+input::-webkit-caps-lock-indicator,
+input::-webkit-strong-password-auto-fill-button,
+input::-webkit-clear-button {
+  visibility: hidden;
+  display: none !important;
+  pointer-events: none;
+  position: absolute;
+  right: 0;
+}

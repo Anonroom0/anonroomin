@@ -427,7 +427,7 @@ if (data?.session) {
                     {Vectors.Mail}
                   </div>
                   <input
-                    type="email" placeholder="Email Address" value={email} required
+                    type="email" name="signin-email" autoComplete="off" data-lpignore="true" data-1p-ignore data-form-type="other" placeholder="Email Address" value={email} required
                     onChange={(e) => setEmail(e.target.value)}
                     onFocus={() => setFocusedField('email')}
                     onBlur={() => setFocusedField(null)}
@@ -440,7 +440,7 @@ if (data?.session) {
                     {Vectors.Lock}
                   </div>
                   <input
-                    type={showPassword ? "text" : "password"} placeholder="Password" value={password} required
+                    type={showPassword ? "text" : "password"} name="signin-password" autoComplete="off" data-lpignore="true" data-1p-ignore data-form-type="other" placeholder="Password" value={password} required
                     onChange={(e) => setPassword(e.target.value)}
                     onFocus={() => setFocusedField('password')}
                     onBlur={() => setFocusedField(null)}
@@ -493,7 +493,7 @@ if (data?.session) {
                     {Vectors.Mail}
                   </div>
                   <input
-                    type="email" placeholder="Email Address" value={email} required
+                    type="email" name="forgot-email" autoComplete="off" data-lpignore="true" data-1p-ignore data-form-type="other" placeholder="Email Address" value={email} required
                     onChange={(e) => setEmail(e.target.value)}
                     onFocus={() => setFocusedField('email')}
                     onBlur={() => setFocusedField(null)}
@@ -527,7 +527,7 @@ if (data?.session) {
                     {Vectors.User}
                   </div>
                   <input
-                    type="text" placeholder="Anonymous Username" value={username} required
+                    type="text" name="signup-username" autoComplete="off" data-lpignore="true" data-1p-ignore data-form-type="other" placeholder="Anonymous Username" value={username} required
                     onChange={(e) => setUsername(e.target.value)}
                     onFocus={() => setFocusedField('username')}
                     onBlur={() => setFocusedField(null)}
@@ -540,7 +540,7 @@ if (data?.session) {
                     {Vectors.Mail}
                   </div>
                   <input
-                    type="email" placeholder="Email Address (Kept Private)" value={email} required
+                    type="email" name="signup-email" autoComplete="off" data-lpignore="true" data-1p-ignore data-form-type="other" placeholder="Email Address (Kept Private)" value={email} required
                     onChange={(e) => setEmail(e.target.value)}
                     onFocus={() => setFocusedField('email')}
                     onBlur={() => setFocusedField(null)}
@@ -553,7 +553,7 @@ if (data?.session) {
                     {Vectors.Lock}
                   </div>
                   <input
-                    type={showPassword ? "text" : "password"} placeholder="Create Password" value={password} required
+                    type={showPassword ? "text" : "password"} name="signup-password" autoComplete="off" data-lpignore="true" data-1p-ignore data-form-type="other" placeholder="Create Password" value={password} required
                     onChange={(e) => setPassword(e.target.value)}
                     onFocus={() => setFocusedField('password')}
                     onBlur={() => setFocusedField(null)}
@@ -574,7 +574,7 @@ if (data?.session) {
                     {Vectors.Lock}
                   </div>
                   <input
-                    type={showConfirmPassword ? "text" : "password"} placeholder="Confirm Password" value={confirmPassword} required
+                    type={showConfirmPassword ? "text" : "password"} name="signup-confirm-password" autoComplete="off" data-lpignore="true" data-1p-ignore data-form-type="other" placeholder="Confirm Password" value={confirmPassword} required
                     onChange={(e) => setConfirmPassword(e.target.value)}
                     onFocus={() => setFocusedField('confirmPassword')}
                     onBlur={() => setFocusedField(null)}

@@ -730,7 +730,7 @@ export default function QuestionThread({ questionId, onBack }) {
             This reply will also be posted to Confessions.
           </div>
         )}
-        <form onSubmit={handleSendReply} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px' }}>
+        <form onSubmit={handleSendReply} autoComplete="off-nope" data-form-type="other" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px' }}>
           {isAuthor && (
             <button
               type="button"
@@ -756,9 +756,12 @@ export default function QuestionThread({ questionId, onBack }) {
             </button>
           )}
           <input
-            type="text"
-            name="question-reply"
-            autoComplete="off"
+            type="search"
+            name="question-reply-f"
+            autoComplete="off-nope"
+            autoCorrect="off"
+            autoCapitalize="off"
+            spellCheck="false"
             data-lpignore="true"
             data-1p-ignore
             data-form-type="other"
