@@ -464,7 +464,7 @@ export default function Home() {
               </button>
             </div>
 
-            <div style={{ padding: '12px 16px 4px', zIndex: 45 }}>
+            <div style={{ padding: '12px 0 4px', zIndex: 45 }}>
               <StoriesBar
                 groups={groups}
                 userId={userId}
