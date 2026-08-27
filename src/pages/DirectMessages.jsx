@@ -30,7 +30,7 @@ import { showToast, friendlyDbError } from '../lib/toast';
 // ============================================================================
 // 1. CONSTANTS & CONFIGURATION
 // ============================================================================
-const MESSAGE_LIMIT = 200;
+const MESSAGE_LIMIT = 20;
 const REPLY_SNIPPET_LENGTH = 80;
 const ADMIN_DISPLAY_NAME = 'ADMIN';
 const UPLOAD_TIMEOUT_MS = 60000;
@@ -468,6 +468,8 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
 
   const [messages, setMessages] = useState([]);
   const [messagesLoading, setMessagesLoading] = useState(true);
+  const [hasMoreMessages, setHasMoreMessages] = useState(true);
+  const [loadingMoreMessages, setLoadingMoreMessages] = useState(false);
 
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
@@ -503,6 +505,27 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
   const photoInputRef = useRef(null);
   const cameraInputRef = useRef(null);
   const cooldownRef = useRef(null);
+  const loadMoreSentinelRef = useRef(null);
+
+  // Mirror refs for the pagination guards below, so the scroll-triggered
+  // loader always reads the latest values instead of whatever was captured
+  // the moment the IntersectionObserver callback was created.
+  const messagesRef = useRef(messages);
+  useEffect(() => { messagesRef.current = messages; }, [messages]);
+  const hasMoreMessagesRef = useRef(true);
+  useEffect(() => { hasMoreMessagesRef.current = hasMoreMessages; }, [hasMoreMessages]);
+  const loadingMoreRef = useRef(false);
+  useEffect(() => { loadingMoreRef.current = loadingMoreMessages; }, [loadingMoreMessages]);
+
+  // Keep the latest onThreadReady in a ref instead of the effect's
+  // dependency array. The parent (Home.jsx) shouldn't need to hand us a
+  // perfectly stable function identity for this to work correctly — if it
+  // ever passes a fresh inline callback again, reading it through a ref
+  // means this effect still only reruns when openThreadWithUserId/userId
+  // actually change, instead of re-fetching the thread (and flashing
+  // loading -> ready) on every unrelated parent re-render.
+  const onThreadReadyRef = useRef(onThreadReady);
+  useEffect(() => { onThreadReadyRef.current = onThreadReady; }, [onThreadReady]);
 
   useEffect(() => {
     if (!openThreadWithUserId) return;
@@ -530,7 +553,7 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
           const resolvedOtherUser = otherProfile || { id: openThreadWithUserId, username: 'Unknown User' };
           setActiveThread({ id: threadRow.id, otherUser: resolvedOtherUser });
           setThreadStatus('ready');
-          if (onThreadReady) onThreadReady({ id: resolvedOtherUser.id, username: resolvedOtherUser.username });
+          if (onThreadReadyRef.current) onThreadReadyRef.current({ id: resolvedOtherUser.id, username: resolvedOtherUser.username });
         }
       } catch (err) {
         console.error('Failed to load thread:', err);
@@ -539,7 +562,7 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
     }
     initializeThread();
     return () => { isMounted = false; };
-  }, [userId, openThreadWithUserId, onThreadReady]);
+  }, [userId, openThreadWithUserId]);
 
   const fetchMessagesAndReceipts = useCallback(async () => {
     if (!activeThread?.id || !userId) return;
@@ -548,18 +571,58 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
     const { data: receiptData } = await supabase.from('dm_read_receipts').select('last_read_at').eq('thread_id', activeThread.id).eq('user_id', userId).maybeSingle();
     const lastReadAt = receiptData?.last_read_at || '1970-01-01T00:00:00.000Z';
 
+    // Only the most recent MESSAGE_LIMIT (20) messages load up front; older
+    // history is fetched on demand as the user scrolls up — see
+    // loadOlderMessages below.
     const { data, error } = await supabase.from('dm_messages').select('*').eq('thread_id', activeThread.id).order('created_at', { ascending: false }).limit(MESSAGE_LIMIT);
 
     if (error) { console.error(error); showToast(friendlyDbError(), 'error'); } 
     else if (isMounted) {
       const fetchedMessages = data || [];
       setMessages(fetchedMessages);
+      setHasMoreMessages(fetchedMessages.length === MESSAGE_LIMIT);
       const unreadMention = fetchedMessages.find(m => m.mentioned_user_ids?.includes(userId) && new Date(m.created_at) > new Date(lastReadAt));
       if (unreadMention) { setHasUnreadMention(true); setLatestMentionId(unreadMention.id); } 
       else { supabase.from('dm_read_receipts').upsert({ thread_id: activeThread.id, user_id: userId, last_read_at: new Date().toISOString() }).then(); }
     }
     setMessagesLoading(false);
   }, [activeThread?.id, userId]);
+
+  // Fetches the next page of older messages (everything before the oldest
+  // one currently loaded) and appends it to the end of the `messages`
+  // array — which, because the list is newest-first, lands it at the top
+  // of what's on screen once column-reverse flips the visual order.
+  const loadOlderMessages = useCallback(async () => {
+    if (!activeThread?.id) return;
+    if (loadingMoreRef.current || !hasMoreMessagesRef.current) return;
+    const oldest = messagesRef.current[messagesRef.current.length - 1];
+    if (!oldest) return;
+
+    loadingMoreRef.current = true;
+    setLoadingMoreMessages(true);
+    try {
+      const { data, error } = await supabase
+        .from('dm_messages')
+        .select('*')
+        .eq('thread_id', activeThread.id)
+        .lt('created_at', oldest.created_at)
+        .order('created_at', { ascending: false })
+        .limit(MESSAGE_LIMIT);
+      if (error) throw error;
+
+      const older = data || [];
+      setMessages((prev) => {
+        const existingIds = new Set(prev.map((m) => m.id));
+        return [...prev, ...older.filter((m) => !existingIds.has(m.id))];
+      });
+      setHasMoreMessages(older.length === MESSAGE_LIMIT);
+    } catch (err) {
+      console.error('Failed to load older messages:', err);
+      showToast(friendlyDbError(), 'error');
+    } finally {
+      setLoadingMoreMessages(false);
+    }
+  }, [activeThread?.id]);
 
   useEffect(() => {
     fetchMessagesAndReceipts();
@@ -586,6 +649,23 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
   }, []);
 
   const { pullDistance, isRefreshing, handleTouchStart, handleTouchMove, handleTouchEnd } = usePullToRefresh(fetchMessagesAndReceipts, scrollRef);
+
+  // Infinite scroll: watch a sentinel rendered at the end of the message
+  // list (visually the top, thanks to column-reverse). When it scrolls
+  // into view, fetch the next page of older messages.
+  useEffect(() => {
+    if (!hasMoreMessages || messagesLoading || isSearching) return;
+    const rootEl = scrollRef.current;
+    const target = loadMoreSentinelRef.current;
+    if (!rootEl || !target) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => { if (entries[0].isIntersecting) loadOlderMessages(); },
+      { root: rootEl, rootMargin: '300px 0px 0px 0px', threshold: 0 }
+    );
+    observer.observe(target);
+    return () => observer.disconnect();
+  }, [hasMoreMessages, messagesLoading, isSearching, loadOlderMessages, activeThread?.id]);
 
   const toggleSelection = (msgId) => {
     if (!isAdmin) return;
@@ -898,17 +978,45 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
                         )}
                       </div>
                       
-                      <span style={{ fontSize: 11, color: '#8B8B96', marginTop: 4, marginInline: 4, fontWeight: 500 }}>{formatTime(message.created_at)}</span>
-
-                      <div style={{ marginTop: 4, display: 'flex', justifyContent: 'center', width: '100%' }}>
+                      {/* Pulled up with a negative margin so the reaction
+                          pills sit tucked into the bottom corner of the
+                          bubble (Telegram-style) instead of floating in
+                          their own full-width row below the timestamp. */}
+                      <div style={{ marginTop: -10, marginBottom: 2, display: 'flex', justifyContent: isOwn ? 'flex-end' : 'flex-start', width: '100%', paddingInline: 6, position: 'relative', zIndex: 2 }}>
                         <ReactionBar 
                            targetType="dm_message" 
                            targetId={message.id} 
                            userId={userId}
+                           align={isOwn ? 'flex-end' : 'flex-start'}
                            showTray={activeReactionMsgId === message.id}
                            onCloseTray={() => setActiveReactionMsgId(null)}
+                           actions={[
+                             {
+                               key: 'share',
+                               label: 'Share',
+                               icon: <span style={{ display: 'flex', color: '#8B8B96' }}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg></span>,
+                               onClick: () => {
+                                 const url = `${window.location.origin}${window.location.pathname}#dm-msg-${message.id}`;
+                                 navigator.clipboard.writeText(url);
+                                 showToast('Link copied to clipboard!', 'info');
+                               },
+                             },
+                             ...(isAdmin ? [{
+                               key: 'delete',
+                               label: 'Delete',
+                               danger: true,
+                               icon: <span style={{ display: 'flex' }}>{Vectors.Trash}</span>,
+                               onClick: async () => {
+                                 setMessages((prev) => prev.filter((m) => m.id !== message.id));
+                                 const { error } = await supabase.from('dm_messages').delete().eq('id', message.id);
+                                 if (error) { console.error(error); showToast(friendlyDbError(), 'error'); fetchMessagesAndReceipts(); }
+                               },
+                             }] : []),
+                           ]}
                         />
                       </div>
+
+                      <span style={{ fontSize: 11, color: '#8B8B96', marginTop: 4, marginInline: 4, fontWeight: 500 }}>{formatTime(message.created_at)}</span>
                     </div>
                   </div>
                 </SwipeableMessage>
@@ -924,6 +1032,18 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
             </React.Fragment>
           );
         })}
+
+        {/* Infinite-scroll trigger + circular loader. Sits after the mapped
+            messages in the DOM, which — because the container uses
+            flex-direction: column-reverse — puts it at the very top of the
+            visible conversation, right where "load more" belongs. */}
+        {!messagesLoading && !isSearching && hasMoreMessages && (
+          <div ref={loadMoreSentinelRef} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px 0', minHeight: 44 }}>
+            {loadingMoreMessages && (
+              <div style={{ color: '#FF6B35', display: 'flex' }}>{Vectors.Spinner}</div>
+            )}
+          </div>
+        )}
       </div>
 
       {hasUnreadMention && (

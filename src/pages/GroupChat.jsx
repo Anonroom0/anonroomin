@@ -28,7 +28,7 @@ import SendButton from '../components/shared/SendButton';
 import { AudioBubble, VideoBubble } from '../components/shared/MediaBubble';
 import InstagramCard from '../components/shared/InstagramCard';
 
-const MESSAGE_LIMIT = 200;
+const MESSAGE_LIMIT = 20;
 const REPLY_SNIPPET_LENGTH = 80;
 const ADMIN_DISPLAY_NAME = 'ADMIN';
 const UPLOAD_TIMEOUT_MS = 60000;
@@ -176,6 +176,8 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
 
   const [messages, setMessages] = useState([]);
   const [messagesLoading, setMessagesLoading] = useState(true);
+  const [hasMoreMessages, setHasMoreMessages] = useState(true);
+  const [loadingMoreMessages, setLoadingMoreMessages] = useState(false);
 
   const [text, setText] = useState('');
   const [sending, setSending] = useState(false);
@@ -216,6 +218,25 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
   const fileInputRef = useRef(null);
   const cameraInputRef = useRef(null);
   const cooldownRef = useRef(null);
+  const loadMoreSentinelRef = useRef(null);
+
+  // Mirror refs for the pagination guards below, so the scroll-triggered
+  // loader always reads the latest values instead of whatever was captured
+  // the moment the IntersectionObserver callback was created.
+  const messagesRef = useRef(messages);
+  useEffect(() => { messagesRef.current = messages; }, [messages]);
+  const hasMoreMessagesRef = useRef(true);
+  useEffect(() => { hasMoreMessagesRef.current = hasMoreMessages; }, [hasMoreMessages]);
+  const loadingMoreRef = useRef(false);
+  useEffect(() => { loadingMoreRef.current = loadingMoreMessages; }, [loadingMoreMessages]);
+
+  // See the matching comment in DirectMessages.jsx — reading the callback
+  // through a ref (rather than the effect's dependency array) means a fresh
+  // inline function from the parent on every render no longer re-triggers
+  // the group lookup, which is what was making the group screen visibly
+  // reload a few times right after opening it.
+  const onGroupResolvedRef = useRef(onGroupResolved);
+  useEffect(() => { onGroupResolvedRef.current = onGroupResolved; }, [onGroupResolved]);
 
   useEffect(() => {
     if (!groupSlug) return;
@@ -227,17 +248,31 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
         const { data, error } = await supabase.from('groups').select('*').eq('slug', groupSlug).maybeSingle();
         if (error) throw error;
         if (isMounted) {
-          if (!data) { setGroupStatus('error'); if (onGroupResolved) onGroupResolved(null); } 
-          else { setGroup(data); setGroupStatus('ready'); if (onGroupResolved) onGroupResolved(data); }
+          if (!data) { setGroupStatus('error'); if (onGroupResolvedRef.current) onGroupResolvedRef.current(null); } 
+          else { setGroup(data); setGroupStatus('ready'); if (onGroupResolvedRef.current) onGroupResolvedRef.current(data); }
         }
       } catch (err) {
         console.error('Failed to load group:', err);
-        if (isMounted) { setGroupStatus('error'); if (onGroupResolved) onGroupResolved(null); }
+        if (isMounted) { setGroupStatus('error'); if (onGroupResolvedRef.current) onGroupResolvedRef.current(null); }
       }
     }
     initializeGroup();
     return () => { isMounted = false; };
-  }, [groupSlug, onGroupResolved]);
+  }, [groupSlug]);
+
+  // Resolves confession_id for any confession-flagged messages in a batch
+  // (shared by the initial load and the older-messages pagination fetch
+  // below, so both paths render ConfessionBubble correctly).
+  const attachConfessionIds = useCallback(async (batch) => {
+    const confessionMsgIds = batch.filter((m) => m.is_confession).map((m) => m.id);
+    if (confessionMsgIds.length === 0) return batch;
+    const { data: confs } = await supabase.from('confessions').select('id, source_message_id').in('source_message_id', confessionMsgIds);
+    if (!confs) return batch;
+    return batch.map((m) => {
+      if (m.is_confession) { const match = confs.find((c) => c.source_message_id === m.id); return { ...m, confession_id: match?.id }; }
+      return m;
+    });
+  }, []);
 
   const fetchMessagesAndReceipts = useCallback(async () => {
     if (!group?.id) return;
@@ -246,22 +281,16 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
     const { data: receiptData } = await supabase.from('group_read_receipts').select('last_read_at').eq('group_id', group.id).eq('user_id', ownUserId).maybeSingle();
     const lastReadAt = receiptData?.last_read_at || '1970-01-01T00:00:00.000Z';
 
+    // Only the most recent MESSAGE_LIMIT (20) messages load up front; older
+    // history is fetched on demand as the user scrolls up — see
+    // loadOlderMessages below.
     const { data, error } = await supabase.from('group_messages').select('*, profiles(avatar_url)').eq('group_id', group.id).order('created_at', { ascending: false }).limit(MESSAGE_LIMIT);
 
     if (!error && isMounted) {
-      let fetchedMessages = data || [];
-      const confessionMsgIds = fetchedMessages.filter(m => m.is_confession).map(m => m.id);
-      if (confessionMsgIds.length > 0) {
-        const { data: confs } = await supabase.from('confessions').select('id, source_message_id').in('source_message_id', confessionMsgIds);
-        if (confs) {
-          fetchedMessages = fetchedMessages.map(m => {
-            if (m.is_confession) { const match = confs.find(c => c.source_message_id === m.id); return { ...m, confession_id: match?.id }; }
-            return m;
-          });
-        }
-      }
+      const fetchedMessages = await attachConfessionIds(data || []);
 
       setMessages(fetchedMessages);
+      setHasMoreMessages(fetchedMessages.length === MESSAGE_LIMIT);
       setMessagesLoading(false);
 
       if (ownUserId) {
@@ -270,7 +299,43 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
         else { supabase.from('group_read_receipts').upsert({ group_id: group.id, user_id: ownUserId, last_read_at: new Date().toISOString() }).then(); }
       }
     }
-  }, [group?.id, ownUserId]);
+  }, [group?.id, ownUserId, attachConfessionIds]);
+
+  // Fetches the next page of older messages (everything before the oldest
+  // one currently loaded) and appends it to the end of the `messages`
+  // array — which, because the list is newest-first, lands it at the top
+  // of what's on screen once column-reverse flips the visual order.
+  const loadOlderMessages = useCallback(async () => {
+    if (!group?.id) return;
+    if (loadingMoreRef.current || !hasMoreMessagesRef.current) return;
+    const oldest = messagesRef.current[messagesRef.current.length - 1];
+    if (!oldest) return;
+
+    loadingMoreRef.current = true;
+    setLoadingMoreMessages(true);
+    try {
+      const { data, error } = await supabase
+        .from('group_messages')
+        .select('*, profiles(avatar_url)')
+        .eq('group_id', group.id)
+        .lt('created_at', oldest.created_at)
+        .order('created_at', { ascending: false })
+        .limit(MESSAGE_LIMIT);
+      if (error) throw error;
+
+      const older = await attachConfessionIds(data || []);
+      setMessages((prev) => {
+        const existingIds = new Set(prev.map((m) => m.id));
+        return [...prev, ...older.filter((m) => !existingIds.has(m.id))];
+      });
+      setHasMoreMessages(older.length === MESSAGE_LIMIT);
+    } catch (err) {
+      console.error('Failed to load older messages:', err);
+      showToast(friendlyDbError(), 'error');
+    } finally {
+      setLoadingMoreMessages(false);
+    }
+  }, [group?.id, attachConfessionIds]);
 
   useEffect(() => {
     fetchMessagesAndReceipts();
@@ -308,6 +373,23 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
   }, []);
 
   const { pullDistance, isRefreshing, handleTouchStart, handleTouchMove, handleTouchEnd } = usePullToRefresh(fetchMessagesAndReceipts, scrollRef);
+
+  // Infinite scroll: watch a sentinel rendered at the end of the message
+  // list (visually the top, thanks to column-reverse). When it scrolls
+  // into view, fetch the next page of older messages.
+  useEffect(() => {
+    if (!hasMoreMessages || messagesLoading || isSearching) return;
+    const rootEl = scrollRef.current;
+    const target = loadMoreSentinelRef.current;
+    if (!rootEl || !target) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => { if (entries[0].isIntersecting) loadOlderMessages(); },
+      { root: rootEl, rootMargin: '300px 0px 0px 0px', threshold: 0 }
+    );
+    observer.observe(target);
+    return () => observer.disconnect();
+  }, [hasMoreMessages, messagesLoading, isSearching, loadOlderMessages, group?.id]);
 
   const toggleSelection = (msgId) => { if (!isAdmin) return; setSelectedMessages((prev) => (prev.includes(msgId) ? prev.filter((id) => id !== msgId) : [...prev, msgId])); };
   const handleLongPress = (msg) => { if (isAdmin) toggleSelection(msg.id); };
@@ -573,8 +655,32 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
                              targetType="confession" 
                              targetId={message.confession_id || message.id} 
                              userId={ownUserId} 
+                             align="center"
                              showTray={activeReactionMsgId === message.id}
                              onCloseTray={() => setActiveReactionMsgId(null)}
+                             actions={[
+                               {
+                                 key: 'share',
+                                 label: 'Share',
+                                 icon: <span style={{ display: 'flex', color: '#8B8B96' }}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg></span>,
+                                 onClick: () => {
+                                   const url = `${window.location.origin}${window.location.pathname}#msg-${message.id}`;
+                                   navigator.clipboard.writeText(url);
+                                   showToast('Link copied to clipboard!', 'info');
+                                 },
+                               },
+                               ...(isAdmin ? [{
+                                 key: 'delete',
+                                 label: 'Delete',
+                                 danger: true,
+                                 icon: <span style={{ display: 'flex' }}>{Vectors.Trash}</span>,
+                                 onClick: async () => {
+                                   setMessages((prev) => prev.filter((m) => m.id !== message.id));
+                                   const { error } = await supabase.from('group_messages').delete().eq('id', message.id);
+                                   if (error) { console.error(error); showToast(friendlyDbError(), 'error'); fetchMessagesAndReceipts(); }
+                                 },
+                               }] : []),
+                             ]}
                            />
                          </div>
                        </div>
@@ -656,18 +762,46 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
                           )}
                         </div>
                         
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4 }}>
-                          <span style={{ fontSize: 11, color: '#8B8B96', marginInline: 4, fontWeight: 500 }}>{formatTime(message.created_at)}</span>
-                        </div>
-
-                        <div style={{ marginTop: 4, display: 'flex', justifyContent: 'center', width: '100%' }}>
+                        {/* Pulled up with a negative margin so the reaction
+                            pills sit tucked into the bottom corner of the
+                            bubble (Telegram-style) instead of floating in
+                            their own full-width row. */}
+                        <div style={{ marginTop: -6, display: 'flex', justifyContent: isOwn ? 'flex-end' : 'flex-start', width: '100%', paddingInline: 6, position: 'relative', zIndex: 2 }}>
                           <ReactionBar 
                              targetType="group_message" 
                              targetId={message.id} 
                              userId={ownUserId}
+                             align={isOwn ? 'flex-end' : 'flex-start'}
                              showTray={activeReactionMsgId === message.id}
                              onCloseTray={() => setActiveReactionMsgId(null)}
+                             actions={[
+                               {
+                                 key: 'share',
+                                 label: 'Share',
+                                 icon: <span style={{ display: 'flex', color: '#8B8B96' }}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg></span>,
+                                 onClick: () => {
+                                   const url = `${window.location.origin}${window.location.pathname}#msg-${message.id}`;
+                                   navigator.clipboard.writeText(url);
+                                   showToast('Link copied to clipboard!', 'info');
+                                 },
+                               },
+                               ...(isAdmin ? [{
+                                 key: 'delete',
+                                 label: 'Delete',
+                                 danger: true,
+                                 icon: <span style={{ display: 'flex' }}>{Vectors.Trash}</span>,
+                                 onClick: async () => {
+                                   setMessages((prev) => prev.filter((m) => m.id !== message.id));
+                                   const { error } = await supabase.from('group_messages').delete().eq('id', message.id);
+                                   if (error) { console.error(error); showToast(friendlyDbError(), 'error'); fetchMessagesAndReceipts(); }
+                                 },
+                               }] : []),
+                             ]}
                           />
+                        </div>
+
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4 }}>
+                          <span style={{ fontSize: 11, color: '#8B8B96', marginInline: 4, fontWeight: 500 }}>{formatTime(message.created_at)}</span>
                         </div>
                       </div>
                     </div>
@@ -685,6 +819,18 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
             </React.Fragment>
           );
         })}
+
+        {/* Infinite-scroll trigger + circular loader. Sits after the mapped
+            messages in the DOM, which — because the container uses
+            flex-direction: column-reverse — puts it at the very top of the
+            visible conversation, right where "load more" belongs. */}
+        {!messagesLoading && !isSearching && hasMoreMessages && (
+          <div ref={loadMoreSentinelRef} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px 0', minHeight: 44 }}>
+            {loadingMoreMessages && (
+              <div style={{ color: '#FF6B35', display: 'flex' }}>{Vectors.Spinner}</div>
+            )}
+          </div>
+        )}
       </div>
 
       {hasUnreadMention && (

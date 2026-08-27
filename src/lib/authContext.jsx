@@ -41,30 +41,40 @@ export function AuthProvider({ children }) {
 
   useEffect(() => {
     let isMounted = true;
+    // Tracks whichever user id we've already kicked a profile fetch off for,
+    // so a redundant auth event for the *same* user (Supabase fires an
+    // immediate INITIAL_SESSION event on subscribe, then may follow up with
+    // SIGNED_IN/TOKEN_REFRESHED for that same session) doesn't re-trigger
+    // fetchProfile/fetchNotificationSettings a second or third time. Each of
+    // those duplicate calls was its own pair of network round-trips plus a
+    // state update, which is what made screens depending on `profile`
+    // visibly "reload" more than once.
+    let lastHandledUserId = null;
 
-    // 1. Fetch initial active session
-    supabase.auth.getSession().then(({ data: { session: initialSession } }) => {
-      if (isMounted) {
-        setSession(initialSession);
-        if (initialSession?.user) {
-          fetchProfile(initialSession.user.id);
-        } else {
-          setLoading(false);
-        }
-      }
-    });
-
-    // 2. Listen for login/logout events dynamically
+    // A single subscription covers both the initial session AND all
+    // subsequent login/logout/refresh events — supabase-js v2 fires this
+    // callback immediately with the current session when you subscribe, so
+    // a separate supabase.auth.getSession() call up front is redundant and
+    // was the other half of the double-fetch.
     const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, currentSession) => {
-      if (isMounted) {
-        setSession(currentSession);
-        if (currentSession?.user) {
-          fetchProfile(currentSession.user.id);
+      if (!isMounted) return;
+      setSession(currentSession);
+
+      const uid = currentSession?.user?.id || null;
+      if (uid) {
+        if (uid !== lastHandledUserId) {
+          lastHandledUserId = uid;
+          fetchProfile(uid);
         } else {
-          setProfile(null);
-          setNotificationSettings(null);
+          // Same user we already fetched — just make sure we're not stuck
+          // showing a loading state.
           setLoading(false);
         }
+      } else {
+        lastHandledUserId = null;
+        setProfile(null);
+        setNotificationSettings(null);
+        setLoading(false);
       }
     });
 

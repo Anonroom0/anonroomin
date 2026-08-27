@@ -389,10 +389,25 @@ export default function Home() {
 
   function handleOpenGroup(slug) { window.location.href = getGroupUrl(slug); }
 
-  function closeActiveChat() {
+  const closeActiveChat = useCallback(() => {
     if (activeChatType === 'group' && activeChatSource === 'subdomain') { window.location.href = getRootDomainUrl(); return; }
     setActiveChatId(null); setActiveChatType(null); setActiveChatSource(null); window.history.pushState({}, '', ROOT_PATH);
-  }
+  }, [activeChatType, activeChatSource]);
+
+  // Stable callback identities for DirectMessages/GroupChat: these were
+  // previously declared inline in JSX, so every unrelated re-render of Home
+  // handed the child a brand-new function reference. Both children read
+  // this prop as an effect dependency, so a new reference re-ran their
+  // "load the thread/group" effect and re-fetched + re-rendered even though
+  // nothing about the chat itself had changed — that's what looked like the
+  // screen "refreshing" a few times right after opening a DM or group.
+  const handleThreadReady = useCallback((identity) => {
+    if (identity?.username) window.history.replaceState({}, '', buildDmPath(identity.username.toLowerCase()));
+  }, []);
+
+  const handleGroupResolved = useCallback((resolvedGroup) => {
+    if (!resolvedGroup && activeChatSource === 'path') closeActiveChat();
+  }, [activeChatSource, closeActiveChat]);
 
   const profileIdentity = session ? { name: profile?.username || 'You', avatar_url: profile?.avatar_url || null, is_admin: false } : null;
   const isChatActive = activeChatId !== null;
@@ -606,9 +621,9 @@ export default function Home() {
           >
             {activeChatId ? (
               activeChatType === 'dm' ? (
-                <DirectMessages openThreadWithUserId={activeChatId} onBack={closeActiveChat} onThreadReady={(identity) => { if (identity?.username) window.history.replaceState({}, '', buildDmPath(identity.username.toLowerCase())); }} />
+                <DirectMessages openThreadWithUserId={activeChatId} onBack={closeActiveChat} onThreadReady={handleThreadReady} />
               ) : activeChatType === 'group' ? (
-                <GroupChat groupSlug={activeChatId} onBack={closeActiveChat} onGroupResolved={(resolvedGroup) => { if (!resolvedGroup && activeChatSource === 'path') closeActiveChat(); }} />
+                <GroupChat groupSlug={activeChatId} onBack={closeActiveChat} onGroupResolved={handleGroupResolved} />
               ) : activeChatType === 'question' ? (
                 <QuestionThread questionId={activeChatId} onBack={closeActiveChat} />
               ) : null
