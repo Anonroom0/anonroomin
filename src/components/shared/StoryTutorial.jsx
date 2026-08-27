@@ -37,8 +37,7 @@ function setDontShowAgain(value) {
     if (value) window.localStorage.setItem(DISMISSED_KEY, 'true');
     else window.localStorage.removeItem(DISMISSED_KEY);
   } catch {
-    // Private-browsing / storage-disabled — the toggle just won't persist
-    // across sessions, which is a reasonable silent degradation here.
+    // Private-browsing / storage-disabled
   }
 }
 
@@ -57,7 +56,7 @@ function StepImage({ src, alt }) {
         style={{
           width: '100%',
           aspectRatio: '9 / 16',
-          maxHeight: 280,
+          maxHeight: 400,
           borderRadius: 20,
           background: 'var(--ink-2)',
           border: '1px solid var(--glass-border)',
@@ -82,10 +81,12 @@ function StepImage({ src, alt }) {
       onError={() => setFailed(true)}
       style={{
         width: '100%',
-        maxHeight: 280,
-        objectFit: 'cover',
+        height: 'auto',
+        maxHeight: '55vh',            // Allows the image to scale naturally but sets a safe cap
+        objectFit: 'contain',         // Ensures the image fully loads without cutting off edges
         borderRadius: 20,
         border: '1px solid var(--glass-border)',
+        background: 'var(--ink-2)',   // Provides a background if the aspect ratio causes letterboxing
         display: 'block',
       }}
     />
@@ -124,15 +125,23 @@ function StoryTutorialContent({ onClose }) {
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 18, padding: '4px 20px 28px' }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+    <div style={{ 
+      display: 'flex', 
+      flexDirection: 'column', 
+      gap: 18, 
+      padding: '16px 20px 28px',
+      maxHeight: 'calc(100dvh - 80px)', // Keeps the modal completely below the top header
+      overflowY: 'auto',                // Enables internal scrolling
+      overscrollBehavior: 'contain',    // Prevents the background page from scrolling
+      WebkitOverflowScrolling: 'touch'  // Smooth momentum scrolling on iOS
+    }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}>
         <div style={{ fontSize: 20, fontWeight: 900, color: 'var(--paper)' }}>Adding your link</div>
         <div style={{ fontSize: 13, fontWeight: 800, color: 'var(--dim)' }}>{stepIndex + 1} / {STEPS.length}</div>
       </div>
 
-      {/* Step dots — order carries real meaning here (these ARE sequential
-          steps), so numbering/dots are appropriate rather than decorative. */}
-      <div style={{ display: 'flex', gap: 6 }}>
+      {/* Step dots */}
+      <div style={{ display: 'flex', gap: 6, flexShrink: 0 }}>
         {STEPS.map((_, i) => (
           <div
             key={i}
@@ -147,14 +156,16 @@ function StoryTutorialContent({ onClose }) {
         ))}
       </div>
 
-      <StepImage src={step.image} alt={step.title} />
+      <div style={{ flexShrink: 0 }}>
+        <StepImage src={step.image} alt={step.title} />
+      </div>
 
-      <div>
+      <div style={{ flexShrink: 0 }}>
         <div style={{ fontSize: 19, fontWeight: 900, color: 'var(--paper)', marginBottom: 6 }}>{step.title}</div>
         <p style={{ margin: 0, fontSize: 15, lineHeight: 1.5, color: 'var(--dim)' }}>{step.body}</p>
       </div>
 
-      <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', userSelect: 'none' }}>
+      <label style={{ display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer', userSelect: 'none', flexShrink: 0 }}>
         <span
           role="checkbox"
           aria-checked={dontShow}
@@ -179,7 +190,7 @@ function StoryTutorialContent({ onClose }) {
         <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--paper)' }}>Don't show this again</span>
       </label>
 
-      <div style={{ display: 'flex', gap: 10 }}>
+      <div style={{ display: 'flex', gap: 10, flexShrink: 0 }}>
         {stepIndex > 0 && (
           <button
             type="button"

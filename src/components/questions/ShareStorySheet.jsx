@@ -209,8 +209,17 @@ function ShareStorySheetContent({ mode, question, reply }) {
     }
   }
 
-  return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 18, padding: '4px 20px 28px' }}>
+    return (
+    <div style={{ 
+      display: 'flex', 
+      flexDirection: 'column', 
+      gap: 18, 
+      padding: '16px 20px 28px',
+      maxHeight: 'calc(100dvh - 80px)', // Keeps the modal completely below the top header
+      overflowY: 'auto',                // Enables internal scrolling
+      overscrollBehavior: 'contain',    // Prevents the background page from scrolling
+      WebkitOverflowScrolling: 'touch'  // Enables smooth momentum scrolling on iOS
+    }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div style={{ fontSize: 20, fontWeight: 900, color: 'var(--paper)' }}>Share to Story</div>
         <button
@@ -222,7 +231,7 @@ function ShareStorySheetContent({ mode, question, reply }) {
         </button>
       </div>
 
-      <div style={{ position: 'relative', width: '100%', maxWidth: 240, margin: '0 auto' }}>
+      <div style={{ position: 'relative', width: '100%', maxWidth: 240, margin: '0 auto', flexShrink: 0 }}>
         <div
           style={{
             width: '100%',
@@ -247,9 +256,7 @@ function ShareStorySheetContent({ mode, question, reply }) {
             </div>
           )}
 
-          {/* Preview-only guide for where the manual IG link sticker goes —
-              matches storyImageGenerator.js's LINK_ZONE, never baked into
-              the exported PNG itself (see that file's banner comment). */}
+          {/* Preview-only guide for where the manual IG link sticker goes */}
           <div
             aria-hidden="true"
             style={{
@@ -273,40 +280,42 @@ function ShareStorySheetContent({ mode, question, reply }) {
         </div>
       </div>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10, flexShrink: 0 }}>
         <PresetPicker label="Header" list={HEADER_COLOR_PRESETS} index={headerIndex} onChange={setHeaderIndex} />
         <PresetPicker label="Background" list={BACKGROUND_PRESETS} index={backgroundIndex} onChange={setBackgroundIndex} />
         <PresetPicker label="Body Style" list={BODY_STYLE_PRESETS} index={bodyIndex} onChange={setBodyIndex} />
       </div>
 
-      <button
-        type="button"
-        onClick={handleShare}
-        disabled={!previewBlob || isSharing}
-        style={{ width: '100%', padding: '16px 0', borderRadius: 20, border: 'none', background: 'var(--ember)', color: 'var(--ink)', fontSize: 16, fontWeight: 900, opacity: !previewBlob || isSharing ? 0.6 : 1 }}
-      >
-        {isSharing ? 'Sharing…' : 'Share to Story'}
-      </button>
-      <p style={{ margin: '-8px 0 0', fontSize: 12, color: 'var(--dim)', lineHeight: 1.4, textAlign: 'center' }}>
-        On iPhone this can open Instagram Stories directly with the photo loaded. Everywhere else, pick Instagram from your share sheet — add the link sticker and music yourself once you're in Instagram.
-      </p>
+      <div style={{ flexShrink: 0 }}>
+        <button
+          type="button"
+          onClick={handleShare}
+          disabled={!previewBlob || isSharing}
+          style={{ width: '100%', padding: '16px 0', borderRadius: 20, border: 'none', background: 'var(--ember)', color: 'var(--ink)', fontSize: 16, fontWeight: 900, opacity: !previewBlob || isSharing ? 0.6 : 1 }}
+        >
+          {isSharing ? 'Sharing…' : 'Share to Story'}
+        </button>
+        <p style={{ margin: '8px 0 16px', fontSize: 12, color: 'var(--dim)', lineHeight: 1.4, textAlign: 'center' }}>
+          On iPhone this can open Instagram Stories directly with the photo loaded. Everywhere else, pick Instagram from your share sheet — add the link sticker and music yourself once you're in Instagram.
+        </p>
 
-      <button
-        type="button"
-        onClick={handleCopyLink}
-        style={{ width: '100%', padding: '14px 16px', borderRadius: 20, border: '1px solid var(--glass-border)', background: 'var(--glass-white)', color: 'var(--paper)', fontSize: 15, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
-      >
-        <span style={{ fontWeight: 700 }}>Copy Link</span>
-        <span style={{ color: 'var(--dim)', fontSize: 13 }}>{replyUrl}</span>
-      </button>
+        <button
+          type="button"
+          onClick={handleCopyLink}
+          style={{ width: '100%', marginBottom: 10, padding: '14px 16px', borderRadius: 20, border: '1px solid var(--glass-border)', background: 'var(--glass-white)', color: 'var(--paper)', fontSize: 15, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
+        >
+          <span style={{ fontWeight: 700 }}>Copy Link</span>
+          <span style={{ color: 'var(--dim)', fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '60%' }}>{replyUrl}</span>
+        </button>
 
-      <button
-        type="button"
-        onClick={requestClose}
-        style={{ width: '100%', padding: '14px 0', borderRadius: 20, border: 'none', background: 'transparent', color: 'var(--dim)', fontSize: 15, fontWeight: 700 }}
-      >
-        Cancel
-      </button>
+        <button
+          type="button"
+          onClick={requestClose}
+          style={{ width: '100%', padding: '14px 0', borderRadius: 20, border: 'none', background: 'transparent', color: 'var(--dim)', fontSize: 15, fontWeight: 700 }}
+        >
+          Cancel
+        </button>
+      </div>
 
       <StoryTutorial open={tutorialOpen} onClose={() => setTutorialOpen(false)} />
     </div>
