@@ -78,6 +78,20 @@ export async function getPushStatus() {
     return false;
   }
 
+  // Fail loud and specific here. Without this check, a missing/blank env
+  // var falls through to urlBase64ToUint8Array(undefined), which throws a
+  // generic "Cannot read properties of undefined (reading 'length')" deep
+  // in a helper — a caller catching that has no way to tell "misconfigured
+  // build" apart from "browser rejected the subscribe call". This is also
+  // why the toggle can look like it silently does nothing: the panel's
+  // catch block just re-probes status and flips the toggle back off.
+  const vapidKey = import.meta.env.VITE_VAPID_PUBLIC_KEY;
+  if (!vapidKey) {
+    throw new Error(
+      'VITE_VAPID_PUBLIC_KEY is not set — push notifications cannot be enabled until it is configured in the build environment.'
+    );
+  }
+
   const permission = await Notification.requestPermission();
   if (permission !== 'granted') {
     return false;
@@ -86,7 +100,7 @@ export async function getPushStatus() {
   const registration = await navigator.serviceWorker.ready;
   const subscription = await registration.pushManager.subscribe({
     userVisibleOnly: true,
-    applicationServerKey: urlBase64ToUint8Array(import.meta.env.VITE_VAPID_PUBLIC_KEY),
+    applicationServerKey: urlBase64ToUint8Array(vapidKey),
   });
 
   const subJSON = subscription.toJSON();
@@ -102,7 +116,16 @@ export async function getPushStatus() {
     onConflict: 'endpoint' 
   });
 
-  if (error) throw error;
+  if (error) {
+    // The browser-level subscribe already succeeded by this point, so
+    // getPushStatus() would report 'subscribed' even though nothing was
+    // ever persisted — the toggle would show "on" while the server has no
+    // way to actually reach this device. Unwind the browser subscription
+    // too so the two states can't drift apart; the caller sees this as a
+    // clean failure instead of a lying success.
+    await subscription.unsubscribe().catch(() => {});
+    throw error;
+  }
 
   return true;
 }

@@ -87,16 +87,21 @@ export function AuthProvider({ children }) {
   // 3. Fetch the custom profile data linked to the auth UUID
   async function fetchProfile(userId) {
     try {
+      // .maybeSingle() (not .single()) — a brand-new auth user whose
+      // profiles row hasn't landed yet is a normal "no row" case, not an
+      // error. .single() forces PostgREST's Accept: vnd.pgrst.object+json
+      // handling, which answers a 0-row result with a 406 instead of just
+      // returning null; .maybeSingle() asks for the same single object but
+      // resolves 0 rows as { data: null, error: null } instead of throwing,
+      // so there's no PGRST116 special-case needed here.
       const { data, error } = await supabase
         .from('profiles')
         .select('*')
         .eq('id', userId)
-        .single();
-        
-      if (error && error.code !== 'PGRST116') {
-        throw error;
-      }
-      
+        .maybeSingle();
+
+      if (error) throw error;
+
       setProfile(data || null);
 
       // Only chase notification settings once we know the profile fetch
@@ -110,21 +115,21 @@ export function AuthProvider({ children }) {
     }
   }
 
-  // 3b. Fetch the caller's notification_settings row. A missing row
-  // (PGRST116, .single() found 0 rows) is not an error state for this app —
-  // it just means the user hasn't customized anything yet, so we fall back
-  // to the table's defaults client-side instead of inserting a row here.
+  // 3b. Fetch the caller's notification_settings row. A missing row is not
+  // an error state for this app — it just means the user hasn't customized
+  // anything yet (or their profile-insert trigger hasn't run yet), so we
+  // fall back to the table's defaults client-side. See fetchProfile() above
+  // for why this uses .maybeSingle() instead of .single(): the latter is
+  // what was turning an ordinary "no row yet" into a logged 406.
   async function fetchNotificationSettings(userId) {
     try {
       const { data, error } = await supabase
         .from('notification_settings')
         .select('*')
         .eq('user_id', userId)
-        .single();
+        .maybeSingle();
 
-      if (error && error.code !== 'PGRST116') {
-        throw error;
-      }
+      if (error) throw error;
 
       setNotificationSettings(data || { user_id: userId, ...DEFAULT_NOTIFICATION_SETTINGS });
     } catch (error) {
