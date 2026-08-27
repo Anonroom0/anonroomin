@@ -26,6 +26,13 @@
  * circle is opened, so the row can stay a clean, uncluttered strip of
  * avatars, IG-style.
  *
+ * Layout: with 4 or fewer total circles (the common case — the 2 virtual
+ * ones, optionally plus a couple of active groups) this renders as a tight,
+ * flush-left, non-scrolling row with a small gap — there's nothing to
+ * scroll to, so it shouldn't look or behave like a scroll rail. Once more
+ * groups qualify than comfortably fit, it switches back to the wider-gap
+ * horizontal-scroll rail.
+ *
  * Seen/unseen ring: each circle gets a lit conic-gradient ring when it has
  * content newer than the last time this browser opened it, and a flat dim
  * ring otherwise (still tappable — a dull ring is not "disabled", it's
@@ -285,14 +292,24 @@ export default function StoriesBar({ groups, userId, onOpenStory }) {
   // eslint-disable-next-line react-hooks/exhaustive-deps
   const questionsUnseen = useMemo(() => isUnseen('public-questions', questionsLatestAt), [questionsLatestAt, seenTick]);
 
+  // Confessions + Questions are always present, plus however many groups
+  // currently qualify. With few circles (the common case — most days it's
+  // just the 2 virtual ones, or those plus a couple of active groups)
+  // there's no reason for this to behave like a scroll rail: lay them out
+  // tight and flush-left with a small gap instead. Once enough groups pile
+  // up that they'd genuinely overflow the screen, switch back to a
+  // horizontal-scroll rail with the old, more finger-friendly gap.
+  const totalCircles = highlightedGroups.length + 2;
+  const isCompact = totalCircles <= 4;
+
   return (
     <div
       className="custom-scrollbar"
       style={{
         display: 'flex',
-        gap: 16,
+        gap: isCompact ? 10 : 16,
         padding: '10px 16px',
-        overflowX: 'auto',
+        overflowX: isCompact ? 'visible' : 'auto',
         overflowY: 'hidden',
         WebkitOverflowScrolling: 'touch',
         flexShrink: 0,
