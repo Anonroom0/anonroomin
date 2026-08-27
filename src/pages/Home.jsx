@@ -463,15 +463,14 @@ export default function Home() {
                 {session ? <LiquidAvatar identity={profileIdentity} size={44} /> : <div style={{ width: '100%', height: '100%', background: 'var(--ember)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '50%' }}>{Icons.Menu}</div>}
               </button>
             </div>
-
-            <div style={{ padding: '12px 0 4px', zIndex: 45 }}>
-              <StoriesBar
-                groups={groups}
-                userId={userId}
-                onOpenStory={(channels, startIndex) => setViewingStory({ channels, startIndex })}
-              />
-            </div>
-
+// Home.jsx — locate this block and update:
+<div style={{ padding: '12px 0 4px', zIndex: 45, minWidth: 0, width: '100%' }}>
+  <StoriesBar
+    groups={groups}
+    userId={userId}
+    onOpenStory={(channels, startIndex) => setViewingStory({ channels, startIndex })}
+  />
+</div>
             {/* Segmented Control - Elevated Z-Index */}
             <div style={{ padding: '8px 16px 12px', borderBottom: '1px solid rgba(255,255,255,0.06)', position: 'relative', zIndex: 40 }}>
               <div style={{ display: 'flex', background: '#1C1D24', borderRadius: 20, padding: 4, boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.06)' }}>
