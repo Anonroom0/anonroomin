@@ -82,9 +82,6 @@ const SEEN_KEY_PREFIX = 'anonroom_story_seen:';
 // 1. DATA HELPERS
 // ============================================================================
 
-// Machine-readable marker QuestionThread.jsx's "Add to Confessions" flow
-// stamps onto the confession text, so a question-reply-turned-confession can
-// be told apart from a plain confession and still show what it answered.
 const QUESTION_REPLY_MARKER = /^❓ Re: "([\s\S]*?)"\n\n([\s\S]*)$/;
 
 function parseQuestionReplyConfession(text) {
@@ -121,7 +118,7 @@ async function loadChannelItems(channel) {
       .select('*')
       .eq('group_id', channel.id)
       .gte('created_at', since)
-      .order('created_at', { ascending: true }); // chronological, standard story order
+      .order('created_at', { ascending: true }); 
     if (error) throw error;
     return data || [];
   }
@@ -132,7 +129,7 @@ async function loadChannelItems(channel) {
       .select('*')
       .is('group_id', null)
       .gte('created_at', since)
-      .order('created_at', { ascending: false }); // spec: newest first
+      .order('created_at', { ascending: false }); 
     if (error) throw error;
     return data || [];
   }
@@ -142,7 +139,7 @@ async function loadChannelItems(channel) {
       .from('questions')
       .select('*')
       .gte('created_at', since)
-      .order('created_at', { ascending: false }); // same cadence as public-confessions
+      .order('created_at', { ascending: false }); 
     if (error) throw error;
     return data || [];
   }
@@ -151,23 +148,10 @@ async function loadChannelItems(channel) {
 }
 
 function buildShareUrl(channel, item) {
-  if (channel.type === 'public-questions') {
-    return `${window.location.origin}${buildQuestionPath(item.id)}`;
-  }
   if (channel.type === 'group' && channel.slug) {
-    // A 'group' story item is a confessions row auto-synced FROM a
-    // group_messages row (see source_message_id, populated by
-    // sync_group_confession_to_confessions in the migration) — it never has
-    // group_id set to a value ConfessionsFeed's public feed query would ever
-    // match (that page only loads group_id IS NULL rows), so the old
-    // `/confessions?id=` link 404'd-in-place (loaded the page, item never
-    // appeared). Its real, original home is the group chat message itself —
-    // the same #msg-<id> deep link GroupChat.jsx already resolves via
-    // link_id — so link straight to that instead.
-    const sourceId = item.source_message_id || item.id;
-    return `${getGroupUrl(channel.slug)}#msg-${toShortId(sourceId)}`;
+    return `${getGroupUrl(channel.slug)}#story-${toShortId(item.id)}`;
   }
-  return `${window.location.origin}/confessions?id=${toShortId(item.id)}`;
+  return `${window.location.origin}/#story-${toShortId(item.id)}`;
 }
 
 // ============================================================================
@@ -227,10 +211,6 @@ export function QuestionStoryCard({ question }) {
   );
 }
 
-/** Wraps a plain <ConfessionBubble> with an "Answered a question" strip
- * when the underlying text carries the QUESTION_REPLY_MARKER — its own
- * distinct story type, separate from both a plain confession and a
- * question card, per the differentiate-everything requirement. */
 function ConfessionOrQuestionReplyCard({ item, userId }) {
   const parsed = useMemo(() => parseQuestionReplyConfession(item.text), [item.text]);
 
@@ -315,7 +295,7 @@ function RepliesIcon() {
 }
 
 // ============================================================================
-// 4. SEGMENTED PROGRESS BAR (Instagram-style)
+// 4. SEGMENTED PROGRESS BAR
 // ============================================================================
 function ProgressBar({ count, activeIndex, progress }) {
   return (
@@ -350,16 +330,16 @@ function ProgressBar({ count, activeIndex, progress }) {
 // 5. MAIN EXPORT
 // ============================================================================
 
-export default function StoryViewer({ channels, startIndex = 0, onClose, userId, onViewReplies, onChannelChange }) {
+export default function StoryViewer({ channels, startIndex = 0, initialItemId, onClose, userId, onViewReplies, onChannelChange }) {
   const [chIndex, setChIndex] = useState(startIndex);
   const [itemIndex, setItemIndex] = useState(0);
   const [itemsCache, setItemsCache] = useState({});
   const [loadingCh, setLoadingCh] = useState(false);
   const [chromeVisible, setChromeVisible] = useState(true);
   const [menuOpen, setMenuOpen] = useState(false);
-  const [progress, setProgress] = useState(0); // 0..1 fill of the active segment
+  const [progress, setProgress] = useState(0); 
   const [paused, setPaused] = useState(false);
-  const [slideDir, setSlideDir] = useState(null); // 'from-right' | 'from-left' | null — channel-crossing animation
+  const [slideDir, setSlideDir] = useState(null); 
   const [slideKey, setSlideKey] = useState(0);
 
   const idleTimerRef = useRef(null);
@@ -368,21 +348,19 @@ export default function StoryViewer({ channels, startIndex = 0, onClose, userId,
   const rafRef = useRef(null);
   const progressStartRef = useRef(null);
   const holdTimerRef = useRef(null);
+  
+  // Track if we've successfully jumped to the initial item so we don't do it twice
+  const initialItemConsumedRef = useRef(false);
 
   const channel = channels && channels[chIndex];
   const items = itemsCache[chIndex] || [];
   const item = items[itemIndex >= 0 ? itemIndex : 0];
 
-  // Keep the URL (see Home.jsx's onChannelChange -> history.replaceState)
-  // in sync as the viewer walks between channels via swipe/tap-past-the-end/
-  // auto-advance, so the address bar always reflects whichever channel is
-  // actually on screen, not just the one the viewer was opened on.
   useEffect(() => {
     if (channel) onChannelChange?.(channel);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [channel]);
 
-  // ---- chrome auto-hide -----------------------------------------------
   const resetIdleTimer = useCallback(() => {
     setChromeVisible(true);
     if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
@@ -396,7 +374,6 @@ export default function StoryViewer({ channels, startIndex = 0, onClose, userId,
     };
   }, [chIndex, itemIndex, resetIdleTimer]);
 
-  // ---- channel navigation ----------------------------------------------
   const goToChannel = useCallback(
     (newIndex, opts = {}) => {
       const { itemPos = 0, dir = 1 } = opts;
@@ -415,7 +392,6 @@ export default function StoryViewer({ channels, startIndex = 0, onClose, userId,
     [channels, onClose]
   );
 
-  // ---- load items for the active channel, skipping empty ones ----------
   useEffect(() => {
     if (!channel) return undefined;
     if (itemsCache[chIndex]) return undefined;
@@ -427,9 +403,16 @@ export default function StoryViewer({ channels, startIndex = 0, onClose, userId,
         if (cancelled) return;
         setItemsCache((prev) => ({ ...prev, [chIndex]: loaded }));
         setLoadingCh(false);
+        
         if (loaded.length === 0) {
-          // Skip empty channel entirely — don't show an empty story.
           goToChannel(chIndex + skipDirRef.current, { dir: skipDirRef.current });
+        } else if (initialItemId && !initialItemConsumedRef.current && chIndex === startIndex) {
+          // If we received an initialItemId from the URL, jump directly to it
+          initialItemConsumedRef.current = true;
+          const targetIdx = loaded.findIndex(i => i.id === initialItemId);
+          if (targetIdx > 0) {
+            setItemIndex(targetIdx);
+          }
         }
       })
       .catch((err) => {
@@ -442,9 +425,8 @@ export default function StoryViewer({ channels, startIndex = 0, onClose, userId,
     return () => {
       cancelled = true;
     };
-  }, [channel, chIndex, itemsCache, goToChannel]);
+  }, [channel, chIndex, itemsCache, goToChannel, initialItemId, startIndex]);
 
-  // Resolve the "-1 = last item" sentinel once that channel's items land.
   useEffect(() => {
     if (itemIndex === -1 && itemsCache[chIndex]) {
       setItemIndex(Math.max(itemsCache[chIndex].length - 1, 0));
@@ -479,7 +461,6 @@ export default function StoryViewer({ channels, startIndex = 0, onClose, userId,
     else prevItem();
   }
 
-  // ---- autoplay progress bar --------------------------------------------
   useEffect(() => {
     if (!item || paused || menuOpen) {
       progressStartRef.current = null;
@@ -507,7 +488,6 @@ export default function StoryViewer({ channels, startIndex = 0, onClose, userId,
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [item, chIndex, itemIndex, paused, menuOpen]);
 
-  // ---- press-and-hold to pause -------------------------------------------
   function handlePressStart() {
     holdTimerRef.current = setTimeout(() => setPaused(true), 180);
   }
@@ -526,7 +506,7 @@ export default function StoryViewer({ channels, startIndex = 0, onClose, userId,
     if (touchStartXRef.current == null) return;
     const dx = e.changedTouches[0].clientX - touchStartXRef.current;
     touchStartXRef.current = null;
-    if (Math.abs(dx) < 50) return; // not a deliberate swipe
+    if (Math.abs(dx) < 50) return; 
     resetIdleTimer();
     if (dx < 0) {
       goToChannel(chIndex + 1, { dir: 1, itemPos: 0 });
@@ -535,12 +515,10 @@ export default function StoryViewer({ channels, startIndex = 0, onClose, userId,
     }
   }
 
-  // ---- mark seen -----------------------------------------------------------
   useEffect(() => {
     if (channel && item) markChannelSeen(channel, item);
   }, [channel, item]);
 
-  // ---- share -------------------------------------------------------------
   async function handleShare() {
     if (!channel || !item) return;
     const url = buildShareUrl(channel, item);
@@ -582,12 +560,10 @@ export default function StoryViewer({ channels, startIndex = 0, onClose, userId,
       onMouseUp={handlePressEnd}
       onMouseLeave={handlePressEnd}
     >
-      {/* Segmented progress bar — Instagram-style */}
       <div style={{ position: 'relative', zIndex: 31, opacity: chromeVisible ? 1 : 0, transition: 'opacity 200ms ease' }}>
         <ProgressBar count={items.length || 1} activeIndex={itemIndex >= 0 ? itemIndex : 0} progress={progress} />
       </div>
 
-      {/* Header */}
       <div
         style={{
           position: 'relative',
@@ -724,7 +700,6 @@ export default function StoryViewer({ channels, startIndex = 0, onClose, userId,
         </div>
       </div>
 
-      {/* Body */}
       <div
         style={{
           flex: 1,
@@ -760,8 +735,6 @@ export default function StoryViewer({ channels, startIndex = 0, onClose, userId,
           </div>
         )}
 
-        {/* Visible chevron nav buttons — pure affordance, same action as a
-            tap on the underlying zone. */}
         {chromeVisible && (
           <>
             <button
@@ -795,8 +768,6 @@ export default function StoryViewer({ channels, startIndex = 0, onClose, userId,
           </>
         )}
 
-        {/* Nav-tap overlay — sits above the card so left/right taps always
-            resolve to navigation unambiguously; sits below the chevrons. */}
         <div
           onClick={() => handleZoneTap('prev')}
           style={{ position: 'absolute', left: 0, top: 0, bottom: 0, width: '50%', zIndex: 20 }}
@@ -807,7 +778,6 @@ export default function StoryViewer({ channels, startIndex = 0, onClose, userId,
         />
       </div>
 
-      {/* Bottom bar */}
       <div
         style={{
           position: 'relative',

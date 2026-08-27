@@ -27,6 +27,7 @@ import {
   buildStoryPath,
   getStoryTargetFromPath,
   ROOT_PATH,
+  isShortId
 } from '../lib/subdomain';
 import { subscribeToPush } from '../lib/pushNotifications';
 
@@ -272,11 +273,10 @@ export default function Home() {
   const [editProfileOpen, setEditProfileOpen] = useState(false);
   const [profileCardUserId, setProfileCardUserId] = useState(null);
   const [showPushPrompt, setShowPushPrompt] = useState(false);
+  
+  // Updated `viewingStory` state to accept an `initialItemId`
   const [viewingStory, setViewingStory] = useState(null);
-  // A /stories/<type>[/<slug>] hit directly (or on refresh) resolves here
-  // first, then StoriesBar consumes it once its `channels` list is ready
-  // (see StoriesBar.jsx's initialTarget effect) and clears it via
-  // onConsumeInitialTarget so it doesn't keep re-triggering.
+  
   const [initialStoryTarget, setInitialStoryTarget] = useState(null);
   
   const [createQuestionOpen, setCreateQuestionOpen] = useState(false);
@@ -396,24 +396,61 @@ export default function Home() {
     return () => { cancelled = true; };
   }, []);
 
+  // Deep Link Resolver for #story-<id>
+  useEffect(() => {
+    const hashMatch = /^#story-(.+)$/.exec(window.location.hash || '');
+    if (!hashMatch) return;
+    const target = decodeURIComponent(hashMatch[1]);
+    let cancelled = false;
+
+    async function openSharedStory() {
+      const isShort = isShortId(target);
+      
+      // 1. Check if it's a Question story
+      const { data: qData } = await (isShort
+        ? supabase.from('questions').select('id').eq('link_id', target).maybeSingle()
+        : supabase.from('questions').select('id').eq('id', target).maybeSingle());
+        
+      if (cancelled) return;
+      if (qData) {
+        handleOpenStory([{ type: 'public-questions', id: 'public-questions', name: 'Public Questions', slug: null }], 0, qData.id);
+        window.history.replaceState(null, '', window.location.pathname + window.location.search);
+        return;
+      }
+
+      // 2. Check if it's a Confession story (Public or Group)
+      const { data: cData } = await (isShort
+        ? supabase.from('confessions').select('id, group_id, groups(id, name, cover_url, slug)').eq('link_id', target).maybeSingle()
+        : supabase.from('confessions').select('id, group_id, groups(id, name, cover_url, slug)').eq('id', target).maybeSingle());
+        
+      if (cancelled) return;
+      if (cData) {
+        if (cData.group_id && cData.groups) {
+          handleOpenStory([{ type: 'group', id: cData.groups.id, name: cData.groups.name, logoUrl: cData.groups.cover_url, slug: cData.groups.slug }], 0, cData.id);
+        } else {
+          handleOpenStory([{ type: 'public-confessions', id: 'public-confessions', name: 'Public Confessions', slug: null }], 0, cData.id);
+        }
+        window.history.replaceState(null, '', window.location.pathname + window.location.search);
+      }
+    }
+
+    openSharedStory();
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   function handleOpenChat(id, type, metaContext) {
     if (type === 'dm' && !userId) { setAuthOpen(true); return; }
     setActiveChatId(id); setActiveChatType(type); setActiveChatSource('path'); setSearchQuery('');
     if (type === 'dm') window.history.pushState({}, '', metaContext ? buildDmPath(metaContext) : ROOT_PATH);
-    // Always push the short 8-char /q/<id> link (same recipe ShareStorySheet's
-    // copy-link button uses) rather than the raw uuid, so the URL bar always
-    // matches what gets shared/copied — this was the "long link" bug.
     else if (type === 'question') window.history.pushState({}, '', buildQuestionPath(id));
   }
 
   function handleOpenGroup(slug) { window.location.href = getGroupUrl(slug); }
 
-  // Opening a story is now a real route (see subdomain.js's buildStoryPath/
-  // getStoryTargetFromPath) rather than pure local state, so it's
-  // deep-linkable and the back button closes it instead of leaving a
-  // dangling overlay over a URL that no longer describes it.
-  function handleOpenStory(channels, startIndex) {
-    setViewingStory({ channels, startIndex });
+  // Now accepts an initialItemId so the viewer can jump directly to that story
+  function handleOpenStory(channels, startIndex, initialItemId = null) {
+    setViewingStory({ channels, startIndex, initialItemId });
     window.history.pushState({}, '', buildStoryPath(channels[startIndex]));
   }
 
@@ -423,9 +460,6 @@ export default function Home() {
     window.history.pushState({}, '', ROOT_PATH);
   }, []);
 
-  // Back button while a story is open should close it (matching the pushed
-  // /stories/... entry) rather than leaving the overlay open over whatever
-  // path the browser just navigated back to.
   useEffect(() => {
     function handlePopState() {
       if (!getStoryTargetFromPath()) {
@@ -442,13 +476,6 @@ export default function Home() {
     setActiveChatId(null); setActiveChatType(null); setActiveChatSource(null); window.history.pushState({}, '', ROOT_PATH);
   }, [activeChatType, activeChatSource]);
 
-  // Stable callback identities for DirectMessages/GroupChat: these were
-  // previously declared inline in JSX, so every unrelated re-render of Home
-  // handed the child a brand-new function reference. Both children read
-  // this prop as an effect dependency, so a new reference re-ran their
-  // "load the thread/group" effect and re-fetched + re-rendered even though
-  // nothing about the chat itself had changed — that's what looked like the
-  // screen "refreshing" a few times right after opening a DM or group.
   const handleThreadReady = useCallback((identity) => {
     if (identity?.username) window.history.replaceState({}, '', buildDmPath(identity.username.toLowerCase()));
   }, []);
@@ -460,9 +487,6 @@ export default function Home() {
   const profileIdentity = session ? { name: profile?.username || 'You', avatar_url: profile?.avatar_url || null, is_admin: false } : null;
   const isChatActive = activeChatId !== null;
 
-  // ==========================================================================
-  // RENDER SEPARATION (FRAGMENTS USED TO FREE MODALS FROM FLEXBOX)
-  // ==========================================================================
   return (
     <>
       <div 
@@ -739,6 +763,7 @@ export default function Home() {
         <StoryViewer
           channels={viewingStory.channels}
           startIndex={viewingStory.startIndex}
+          initialItemId={viewingStory.initialItemId} 
           userId={userId}
           onClose={closeStory}
           onChannelChange={(channel) => window.history.replaceState({}, '', buildStoryPath(channel))}
