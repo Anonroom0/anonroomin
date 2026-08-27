@@ -9,7 +9,7 @@ import supabase from '../lib/supabaseClient';
 import { useAuth } from '../lib/authContext';
 import { createCooldown } from '../lib/rateLimit';
 import { showToast, friendlyDbError } from '../lib/toast';
-import { toShortId } from '../lib/subdomain';
+import { toShortId, isShortId } from '../lib/subdomain';
 
 // Modals / Overlays
 import MediaViewer from './MediaViewer';
@@ -216,6 +216,7 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
   const [hasUnreadMention, setHasUnreadMention] = useState(false);
   const [latestMentionId, setLatestMentionId] = useState(null);
   const [highlightedMsgId, setHighlightedMsgId] = useState(null);
+  const [pendingJumpId, setPendingJumpId] = useState(null);
   const [isAnonMode, setIsAnonMode] = useState(false);
   const [selectedMessages, setSelectedMessages] = useState([]);
   
@@ -391,21 +392,66 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
 
   // Deep-link support for "Share link" on a message (see the share actions
   // below): once messages are loaded, check the URL's #msg-<id> fragment
-  // (short or full id — see resolveMessageIdFromHash) and, if it matches a
-  // currently-loaded message, scroll to it and give it the same brief
-  // highlight flash the mention-jump button uses.
+  // (short or full id — see resolveMessageIdFromHash). If it matches a
+  // currently-loaded message, just scroll/highlight it. Otherwise (the
+  // linked message is older than the initial MESSAGE_LIMIT batch) fetch it
+  // directly — a short id resolves against the real `link_id` column (see
+  // supabase/migrations/0002_link_id_routing.sql), a full uuid resolves
+  // against `id` — then pull ~MESSAGE_LIMIT messages on either side of it so
+  // it opens with real context instead of alone, merge that into `messages`,
+  // and jump to it. Older history above that context still lazy-loads via
+  // the normal infinite-scroll observer below. Mirrors resolveDeepLink in
+  // DirectMessages.jsx.
   useEffect(() => {
-    if (messagesLoading || messages.length === 0) return;
-    const targetId = resolveMessageIdFromHash(window.location.hash, messages);
-    if (!targetId) return;
-    const el = document.getElementById(`msg-${targetId}`);
-    if (el) {
-      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      setHighlightedMsgId(targetId);
-      setTimeout(() => setHighlightedMsgId(null), 2000);
+    if (messagesLoading || !group?.id) return;
+    const hashMatch = /^#msg-(.+)$/.exec(window.location.hash || '');
+    if (!hashMatch) return;
+    const rawTarget = decodeURIComponent(hashMatch[1]);
+    let cancelled = false;
+
+    async function resolveDeepLink() {
+      const alreadyLoadedId = resolveMessageIdFromHash(window.location.hash, messagesRef.current);
+      if (alreadyLoadedId) { setPendingJumpId(alreadyLoadedId); return; }
+
+      const lookup = isShortId(rawTarget)
+        ? supabase.from('group_messages').select('*, profiles(avatar_url)').eq('group_id', group.id).eq('link_id', rawTarget).order('created_at', { ascending: false }).limit(1).maybeSingle()
+        : supabase.from('group_messages').select('*, profiles(avatar_url)').eq('group_id', group.id).eq('id', rawTarget).maybeSingle();
+
+      const { data: row } = await lookup;
+      if (cancelled || !row) return;
+
+      const [{ data: olderCtx }, { data: newerCtx }] = await Promise.all([
+        supabase.from('group_messages').select('*, profiles(avatar_url)').eq('group_id', group.id).lte('created_at', row.created_at).order('created_at', { ascending: false }).limit(MESSAGE_LIMIT),
+        supabase.from('group_messages').select('*, profiles(avatar_url)').eq('group_id', group.id).gt('created_at', row.created_at).order('created_at', { ascending: true }).limit(MESSAGE_LIMIT),
+      ]);
+      if (cancelled) return;
+
+      const context = await attachConfessionIds([...(olderCtx || []), ...(newerCtx || [])]);
+      setMessages((prev) => {
+        const existingIds = new Set(prev.map((m) => m.id));
+        const additions = context.filter((m) => !existingIds.has(m.id));
+        if (additions.length === 0) return prev;
+        return [...prev, ...additions].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+      });
+      setHasMoreMessages(true);
+      setPendingJumpId(row.id);
     }
+
+    resolveDeepLink();
+    return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [messagesLoading, messages.length]);
+  }, [messagesLoading, group?.id]);
+
+  useEffect(() => {
+    if (!pendingJumpId) return;
+    const el = document.getElementById(`msg-${pendingJumpId}`);
+    if (!el) return;
+    el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    setHighlightedMsgId(pendingJumpId);
+    setPendingJumpId(null);
+    const t = setTimeout(() => setHighlightedMsgId(null), 2000);
+    return () => clearTimeout(t);
+  }, [pendingJumpId, messages]);
 
   const { pullDistance, isRefreshing, handleTouchStart, handleTouchMove, handleTouchEnd } = usePullToRefresh(fetchMessagesAndReceipts, scrollRef);
 

@@ -5,7 +5,6 @@
  *   confession={{ id, text, photo_url, is_anon, created_at, group }}
  *   onReply?
  *   size="inline"|"feed"|"story"
- *   userId
  * />
  *
  * One shared component behind three call sites:
@@ -19,8 +18,11 @@
  * sizes: an --ember, low-opacity header strip ("Confession" + relative
  * timestamp) sits above a rectangular --glass-white body (20px radius)
  * with a reserved 4:5 image area (only rendered when photo_url is present),
- * then the confession text, then a bottom row with a reply affordance and
- * an embedded ReactionBar scoped to targetType="confession".
+ * then the confession text, then a bottom row with a reply affordance.
+ * (Reactions were previously shown here via an embedded ReactionBar, but
+ * that has been removed from this component — callers that still want a
+ * reaction bar for a confession render their own ReactionBar externally,
+ * e.g. GroupChat.jsx and StoryViewer.jsx already do.)
  *
  * size="story" fills more of the screen and auto-hides the reply/react
  * chrome until the viewer taps once — the IG/NGL story convention
@@ -39,7 +41,6 @@
  * ========================================================================= */
 
 import React, { useState } from 'react';
-import ReactionBar from './ReactionBar';
 
 // ============================================================================
 // 1. SIZE PRESETS
@@ -94,7 +95,7 @@ function relativeTime(dateString) {
 // 3. MAIN EXPORT
 // ============================================================================
 
-export default function ConfessionBubble({ confession, onReply, onPhotoClick, size = 'inline', userId, showReactions = true }) {
+export default function ConfessionBubble({ confession, onReply, onPhotoClick, size = 'inline' }) {
   const preset = SIZE_PRESETS[size] || SIZE_PRESETS.inline;
   const isStory = size === 'story';
 
@@ -206,56 +207,45 @@ export default function ConfessionBubble({ confession, onReply, onPhotoClick, si
             </div>
           )}
 
-          {/* Bottom row: reply affordance + reactions. In story mode this
-              stays hidden until the chrome is revealed by a tap. */}
-          {showChrome && (onReply || showReactions) && (
+          {/* Bottom row: reply affordance only. Reactions were removed from
+              this component. In story mode this stays hidden until the
+              chrome is revealed by a tap. */}
+          {showChrome && onReply && (
             <div
               style={{
                 display: 'flex',
                 alignItems: 'center',
-                justifyContent: 'space-between',
+                justifyContent: 'flex-start',
                 gap: 10,
                 padding: `10px ${preset.bodyPadding.split(' ')[1]} 14px`,
                 borderTop: confession.text || confession.photo_url ? '1px solid var(--glass-border)' : 'none',
               }}
             >
-              {onReply ? (
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    onReply(confession);
-                  }}
-                  style={{
-                    border: 'none',
-                    background: 'transparent',
-                    color: 'var(--dim)',
-                    fontSize: 13,
-                    fontWeight: 600,
-                    cursor: 'pointer',
-                    padding: 0,
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 6,
-                  }}
-                >
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                    <polyline points="9 17 4 12 9 7" />
-                    <path d="M20 18v-2a4 4 0 0 0-4-4H4" />
-                  </svg>
-                  Reply
-                </button>
-              ) : (
-                <span />
-              )}
-
-              {showReactions ? (
-                <div onClick={(e) => e.stopPropagation()}>
-                  <ReactionBar targetType="confession" targetId={confession.id} userId={userId} />
-                </div>
-              ) : (
-                <span />
-              )}
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onReply(confession);
+                }}
+                style={{
+                  border: 'none',
+                  background: 'transparent',
+                  color: 'var(--dim)',
+                  fontSize: 13,
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                  padding: 0,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 6,
+                }}
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="9 17 4 12 9 7" />
+                  <path d="M20 18v-2a4 4 0 0 0-4-4H4" />
+                </svg>
+                Reply
+              </button>
             </div>
           )}
         </div>

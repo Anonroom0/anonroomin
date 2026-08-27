@@ -19,7 +19,7 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import supabase from '../lib/supabaseClient';
 import { useAuth } from '../lib/authContext';
-import { toShortId, isShortId, shortIdPrefixFilter } from '../lib/subdomain';
+import { toShortId, isShortId } from '../lib/subdomain';
 import { createCooldown } from '../lib/rateLimit';
 import MediaViewer from './MediaViewer';
 import ProfileCard from './ProfileCard';
@@ -679,11 +679,11 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
       const alreadyLoadedId = resolveMessageIdFromHash(window.location.hash, messagesRef.current);
       if (alreadyLoadedId) { setPendingJumpId(alreadyLoadedId); return; }
 
+      // Short ids resolve against the real `link_id` column (populated by a
+      // database trigger — see supabase/migrations/0002_link_id_routing.sql)
+      // instead of casting `id` to text and ILIKE-prefix matching it.
       const lookup = isShortId(rawTarget)
-        ? (() => {
-            const f = shortIdPrefixFilter('id', rawTarget);
-            return supabase.from('dm_messages').select('*').eq('thread_id', activeThread.id).filter(f.column, f.operator, f.value).order('created_at', { ascending: false }).limit(1).maybeSingle();
-          })()
+        ? supabase.from('dm_messages').select('*').eq('thread_id', activeThread.id).eq('link_id', rawTarget).order('created_at', { ascending: false }).limit(1).maybeSingle()
         : supabase.from('dm_messages').select('*').eq('thread_id', activeThread.id).eq('id', rawTarget).maybeSingle();
 
       const { data: row } = await lookup;

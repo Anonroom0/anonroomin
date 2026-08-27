@@ -27,9 +27,17 @@ export const ROOT_PATH = '/';
 //
 // 8 hex characters is 32 bits of the source uuid's randomness — collisions
 // are astronomically unlikely at this app's scale, but a caller resolving a
-// short id back to a row should still treat it as a PREFIX match (see
-// shortIdPrefixFilter below) and handle the rare case of >1 result by
+// short id back to a row should still handle the rare case of >1 result by
 // picking the most recent one, rather than assuming uniqueness outright.
+//
+// RESOLUTION: every table with shareable links (questions, group_messages,
+// dm_messages, confessions) now has its own real `link_id` text column,
+// populated automatically by a database trigger using this exact recipe
+// (see supabase/migrations/0002_link_id_routing.sql). Resolving a short id
+// back to a row is a plain `.eq('link_id', shortId)` lookup against that
+// column — no uuid->text casting or ILIKE wildcard involved. Old links
+// shared before this column existed carry the full uuid instead (see
+// isShortId below) and should still be resolved with `.eq('id', value)`.
 export function toShortId(uuid) {
   if (!uuid || typeof uuid !== 'string') return '';
   return uuid.replace(/-/g, '').slice(0, 8).toLowerCase();
@@ -49,6 +57,11 @@ export function isShortId(value) {
 // Postgres, so this casts the column to text first — the `column::text`
 // syntax is a PostgREST feature supabase-js's `.filter()` passes straight
 // through.
+//
+// DEPRECATED: superseded by each table's `link_id` column (see the
+// RESOLUTION note above) — callers should do `.eq('link_id', shortId)`
+// instead of this cast+ILIKE prefix match. Kept only so any code that still
+// imports it doesn't break; no call site in this codebase uses it anymore.
 //
 // THE WILDCARD CHARACTER MUST BE '*', NOT '%'. PostgREST reserves '%' for
 // standard URI percent-encoding, so for like/ilike it repurposes '*' as the

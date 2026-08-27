@@ -326,10 +326,14 @@ export default function ConfessionsFeed({ focusConfessionId }) {
     const match = confessions.find((c) => c.id === targetId || c.id.replace(/-/g, '').toLowerCase().startsWith(normalizedTarget));
     if (!match) {
       (async () => {
+        // Short ids resolve against the real `link_id` column (populated by
+        // a database trigger — see
+        // supabase/migrations/0002_link_id_routing.sql) instead of casting
+        // `id` to text and ILIKE-prefix matching it.
         const isShort = /^[0-9a-f]{1,32}$/i.test(normalizedTarget);
         const { data } = isShort
           ? await supabase.from('confessions').select('*').is('group_id', null)
-              .filter('id::text', 'ilike', `${normalizedTarget}*`).order('created_at', { ascending: false }).limit(1).maybeSingle()
+              .eq('link_id', normalizedTarget).order('created_at', { ascending: false }).limit(1).maybeSingle()
           : await supabase.from('confessions').select('*').eq('id', targetId).maybeSingle();
         if (data) setConfessions((prev) => prev.some((c) => c.id === data.id) ? prev : [data, ...prev]);
       })();
