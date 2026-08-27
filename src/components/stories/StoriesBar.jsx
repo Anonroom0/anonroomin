@@ -81,8 +81,25 @@ export default function StoriesBar({ groups, userId, onOpenStory }) {
     [groups, groupIdsWithConfessions]
   );
 
+  // StoryViewer expects every channel entry to be an object shaped like
+  // { type, id, name, logoUrl, slug } — it reads channel.type/.id/.name/
+  // .logoUrl/.slug directly. This bar previously pushed the raw group rows
+  // (which use `cover_url`, not `logoUrl`, and have no `type` field at all)
+  // plus two bare strings for the virtual channels, so StoryViewer had
+  // nothing usable to read and the viewer came up blank whenever a story
+  // was tapped.
   const channels = useMemo(
-    () => [...highlightedGroups, 'public-confessions', 'public-questions'],
+    () => [
+      ...highlightedGroups.map((g) => ({
+        type: 'group',
+        id: g.id,
+        name: g.name,
+        logoUrl: g.cover_url || null,
+        slug: g.slug || null,
+      })),
+      { type: 'public-confessions', id: 'public-confessions', name: 'Confessions', logoUrl: null, slug: null },
+      { type: 'public-questions', id: 'public-questions', name: 'Questions', logoUrl: null, slug: null },
+    ],
     [highlightedGroups]
   );
 

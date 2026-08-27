@@ -8,38 +8,44 @@
  * WHY THIS FILE EXISTS: AuthModal.jsx's "Forgot Password?" flow already
  * called supabase.auth.resetPasswordForEmail() correctly and really did
  * send a real email — that part was never fake. What was missing is this
- * page: resetPasswordForEmail's redirectTo previously pointed at the bare
- * app root, so clicking the link in the email landed the visitor back on
- * the home screen with a Supabase recovery token sitting in the URL and
- * nothing in the app that ever did anything with it — a functional dead
- * end. redirectTo now points here (see subdomain.js's
- * getResetPasswordPath(), used in AuthModal.jsx), and this page is what
- * actually lets someone set a new password.
+ * page, and — just as important — a reliable way for it to know a recovery
+ * request is legit.
  *
- * FLOW:
- *   1. supabase-js parses the recovery tokens out of the URL automatically
- *      on load (detectSessionInUrl, on by default) and establishes a
- *      short-lived "recovery" session, firing a PASSWORD_RECOVERY auth
- *      event. That parsing can already have completed by the time this
- *      component's own listener subscribes (AuthProvider's listener in
- *      authContext.jsx mounts first, one level up in App.jsx), so this
- *      component checks BOTH:
- *        - the current session directly via supabase.auth.getSession(),
- *          for the case where parsing already finished, and
- *        - a live onAuthStateChange subscription, for the case where the
- *          PASSWORD_RECOVERY event fires after mount.
- *   2. Once a session is confirmed, the form to set a new password is shown.
- *   3. supabase.auth.updateUser({ password }) applies it — this also signs
- *      the visitor in properly (the recovery session becomes their real
- *      session), so success can go straight back into the app rather than
- *      asking them to sign in again.
- *   4. If no recovery session ever shows up (expired/reused/tampered link),
- *      an explicit "invalid link" state is shown instead of a dead form.
+ * FLOW (token-hash based, NOT the redirect-URL based flow):
+ *   The email links to /reset-password/<token_hash> (see subdomain.js's
+ *   getResetPasswordTokenHash() and supabase/reset-password-email-template.html,
+ *   which uses {{ .TokenHash }} rather than {{ .ConfirmationURL }}).
+ *   1. On mount, this page reads the token hash straight out of its own
+ *      path and calls supabase.auth.verifyOtp({ token_hash, type:
+ *      'recovery' }) directly — a plain client -> Supabase API call. This
+ *      is deliberately NOT the older "let supabase-js auto-parse a
+ *      recovery token out of the URL fragment via detectSessionInUrl"
+ *      approach: that approach depends on Supabase's own server-side
+ *      redirect chain (ConfirmationURL -> project's *.supabase.co domain ->
+ *      redirectTo, only if redirectTo is also on the Auth -> URL
+ *      Configuration -> Redirect URLs allow list in the Supabase
+ *      Dashboard). Miss that dashboard step and Supabase silently falls
+ *      back to the Site URL instead, which looks exactly like "the link
+ *      just logs me in" with no reset form ever shown. Calling verifyOtp()
+ *      ourselves with the token_hash removes that whole failure mode.
+ *   2. A successful verifyOtp() call establishes a real "recovery" session
+ *      immediately (no waiting on an auth-state-change event), so the page
+ *      goes straight from 'verifying' to 'form'.
+ *   3. supabase.auth.updateUser({ password }) applies the new password —
+ *      this also signs the visitor in properly (the recovery session
+ *      becomes their real session), so success can go straight back into
+ *      the app rather than asking them to sign in again.
+ *   4. If the token is missing/expired/already used, verifyOtp() rejects
+ *      and an explicit "invalid link" state is shown instead of a dead form.
  *
- * The URL hash (which briefly carries the raw recovery tokens) is stripped
- * via history.replaceState as soon as a session is confirmed, so the
- * tokens don't linger in the address bar, browser history, or anything the
- * visitor might screenshot/share.
+ * Legacy fallback: a bare /reset-password hit with no token in the path
+ * (an old email already sitting in someone's inbox from before this
+ * change) still gets one chance via the old detectSessionInUrl /
+ * PASSWORD_RECOVERY-event path, so links already sent out don't just break.
+ *
+ * The URL is stripped down to the bare pathname via history.replaceState as
+ * soon as a session is confirmed, so the token doesn't linger in the
+ * address bar, browser history, or anything the visitor might screenshot/share.
  *
  * Dependencies: React, Supabase, src/lib/subdomain.js
  * ============================================================================
@@ -47,7 +53,7 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import supabase from '../lib/supabaseClient';
-import { ROOT_PATH } from '../lib/subdomain';
+import { ROOT_PATH, getResetPasswordTokenHash } from '../lib/subdomain';
 import { showToast } from '../lib/toast';
 
 // How long to wait for a recovery session to show up (either already
@@ -116,27 +122,51 @@ export default function ResetPassword() {
     function markVerified() {
       if (cancelled || settledRef.current) return;
       settledRef.current = true;
-      // Strip the recovery tokens out of the address bar now that the
-      // session built from them is confirmed live.
-      window.history.replaceState({}, '', window.location.pathname);
+      // Strip the token out of the address bar now that the session built
+      // from it is confirmed live.
+      window.history.replaceState({}, '', window.location.pathname.split('/').slice(0, 2).join('/') || '/');
       setStage('form');
     }
 
-    // Already-established session (parsing finished before this mounted).
+    function markInvalid() {
+      if (cancelled || settledRef.current) return;
+      settledRef.current = true;
+      setStage('invalid');
+    }
+
+    const tokenHash = getResetPasswordTokenHash();
+
+    if (tokenHash) {
+      // Primary path: verify the token straight off the URL. No dependence
+      // on Supabase's redirect-URL allow list at all.
+      supabase.auth.verifyOtp({ token_hash: tokenHash, type: 'recovery' }).then(({ data, error }) => {
+        if (error || !data?.session) {
+          markInvalid();
+          return;
+        }
+        markVerified();
+      });
+
+      const timeoutId = setTimeout(markInvalid, VERIFY_TIMEOUT_MS);
+      return () => {
+        cancelled = true;
+        clearTimeout(timeoutId);
+      };
+    }
+
+    // Legacy fallback for a bare /reset-password link with no token in the
+    // path (sent before this page existed): fall back to letting
+    // supabase-js auto-parse a recovery session out of the URL, same as
+    // before.
     supabase.auth.getSession().then(({ data }) => {
       if (data?.session) markVerified();
     });
 
-    // Or the event firing after mount.
     const { data: { subscription } } = supabase.auth.onAuthStateChange((event, session) => {
       if (event === 'PASSWORD_RECOVERY' && session) markVerified();
     });
 
-    const timeoutId = setTimeout(() => {
-      if (cancelled || settledRef.current) return;
-      settledRef.current = true;
-      setStage('invalid');
-    }, VERIFY_TIMEOUT_MS);
+    const timeoutId = setTimeout(markInvalid, VERIFY_TIMEOUT_MS);
 
     return () => {
       cancelled = true;

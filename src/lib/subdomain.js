@@ -235,19 +235,42 @@ export function isConfessionsFeedPath() {
 }
 
 // ----------------------------------------------------------------------------
-// PASSWORD RESET ROUTING (root domain, /reset-password)
+// PASSWORD RESET ROUTING (root domain, /reset-password/<token_hash>)
 // ----------------------------------------------------------------------------
-// AuthModal.jsx's "Forgot Password?" flow calls
-// supabase.auth.resetPasswordForEmail(email, { redirectTo: ... }); this is
-// the dedicated page that redirectTo now points at (see
-// supabase/reset-password-email-template.html and src/pages/
-// ResetPassword.jsx) instead of dumping the visitor back on the bare root
-// with a recovery token in the URL and no UI to do anything with it.
+// The email template links straight to /reset-password/{{ .TokenHash }}
+// (see supabase/reset-password-email-template.html) instead of using
+// Supabase's own {{ .ConfirmationURL }} redirect chain. That redirect chain
+// is what caused the "link just logs me in on the home screen" bug: it
+// bounces through the Supabase project's own domain first and only lands on
+// OUR /reset-password page if this exact URL is also present in the
+// Supabase Dashboard's Auth -> URL Configuration -> Redirect URLs allow
+// list; if it's missing there (easy to forget, and there's no error when it
+// is), Supabase silently falls back to the project's bare Site URL instead,
+// which establishes a normal session with no reset UI in sight — indistinguishable
+// from "the link just logged me in".
+//
+// Calling supabase.auth.verifyOtp({ token_hash, type: 'recovery' }) directly
+// (see ResetPassword.jsx) sidesteps that whole redirect chain: it's a
+// straight client -> Supabase API call using the token in the path, so nothing
+// depends on the Redirect URLs allow list, and the link in the inbox is a
+// clean anonroom.in/reset-password/<token> instead of a long, ugly
+// ConfirmationURL.
 
 export function getResetPasswordPath() {
   return '/reset-password';
 }
 
+// True for both the bare /reset-password path (legacy links / defensive
+// fallback) and /reset-password/<token_hash>.
 export function isResetPasswordPath() {
-  return window.location.pathname.replace(/^\/+|\/+$/g, '') === 'reset-password';
+  const segments = window.location.pathname.split('/').filter(Boolean);
+  return segments[0] === 'reset-password';
+}
+
+// Pulls the token hash out of /reset-password/<token_hash>. Returns null for
+// the bare /reset-password path (no token present).
+export function getResetPasswordTokenHash() {
+  const segments = window.location.pathname.split('/').filter(Boolean);
+  if (segments[0] !== 'reset-password' || !segments[1]) return null;
+  return decodeURIComponent(segments[1]);
 }

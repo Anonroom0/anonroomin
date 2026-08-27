@@ -191,12 +191,14 @@ export default function AuthModal({ open, onClose, initialTab = 'signin', onVeri
 
     setSubmitting(true);
     try {
-      // Previously redirected to the bare app root — the recovery link
-      // landed the visitor back on the home screen with a recovery token
-      // in the URL and no UI anywhere that did anything with it. Now
-      // points at the dedicated /reset-password page (see
-      // src/pages/ResetPassword.jsx and App.jsx's routing) that actually
-      // lets them set a new password.
+      // redirectTo is kept as a harmless fallback for Supabase's own
+      // {{ .ConfirmationURL }} variable, but the email template
+      // (supabase/reset-password-email-template.html) actually links with
+      // {{ .TokenHash }} straight to /reset-password/<token>, and
+      // ResetPassword.jsx verifies that token itself via
+      // supabase.auth.verifyOtp(). That's what actually lets someone set a
+      // new password — see that file's header comment for why the
+      // ConfirmationURL/redirectTo route was dropped as the primary path.
       const { error: resetError } = await supabase.auth.resetPasswordForEmail(
         email.trim(),
         { redirectTo: `${window.location.origin}${getResetPasswordPath()}` }

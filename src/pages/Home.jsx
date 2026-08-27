@@ -463,7 +463,11 @@ export default function Home() {
             </div>
 
             <div style={{ padding: '12px 16px 4px', zIndex: 45 }}>
-              <StoriesBar onOpenStory={(storyData) => setViewingStory(storyData)} />
+              <StoriesBar
+                groups={groups}
+                userId={userId}
+                onOpenStory={(channels, startIndex) => setViewingStory({ channels, startIndex })}
+              />
             </div>
 
             {/* Segmented Control - Elevated Z-Index */}
@@ -670,7 +674,14 @@ export default function Home() {
       <ProfileCard userId={profileCardUserId} open={profileCardUserId !== null} onClose={() => setProfileCardUserId(null)} onMessage={(id) => { setProfileCardUserId(null); handleOpenChat(id, 'dm'); }} />
       <CreateQuestionModal open={createQuestionOpen} onClose={() => setCreateQuestionOpen(false)} initialType={createQuestionType} onCreated={(question) => { setMyQuestions(prev => [question, ...prev]); }} />
       {sharingQuestion && <ShareStorySheet open={!!sharingQuestion} onClose={() => setSharingQuestion(null)} question={sharingQuestion} />}
-      {viewingStory && <StoryViewer story={viewingStory} onClose={() => setViewingStory(null)} />}
+      {viewingStory && (
+        <StoryViewer
+          channels={viewingStory.channels}
+          startIndex={viewingStory.startIndex}
+          userId={userId}
+          onClose={() => setViewingStory(null)}
+        />
+      )}
     </>
   );
 }
