@@ -49,22 +49,22 @@ import React, { useState } from 'react';
 // (header strip -> glass body -> image -> text -> bottom row) is identical.
 const SIZE_PRESETS = {
   inline: {
-    maxWidth: 340,
-    bodyPadding: '14px 16px',
-    textSize: 15,
-    headerTextSize: 12,
+    maxWidth: 300,
+    bodyPadding: '16px 18px',
+    textSize: 15.5,
+    headerTextSize: 11.5,
   },
   feed: {
-    maxWidth: 420,
-    bodyPadding: '16px 18px',
-    textSize: 16,
-    headerTextSize: 12.5,
+    maxWidth: 380,
+    bodyPadding: '18px 20px',
+    textSize: 16.5,
+    headerTextSize: 12,
   },
   story: {
-    maxWidth: 480,
-    bodyPadding: '20px 20px',
-    textSize: 18,
-    headerTextSize: 13,
+    maxWidth: 340,
+    bodyPadding: '22px 22px',
+    textSize: 19,
+    headerTextSize: 12.5,
   },
 };
 
@@ -114,7 +114,7 @@ export default function ConfessionBubble({ confession, onReply, onPhotoClick, si
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center', // always centered — never left/right aligned
-        width: '100%',
+        width: '70%',
         margin: isStory ? 0 : '16px 0',
       }}
     >

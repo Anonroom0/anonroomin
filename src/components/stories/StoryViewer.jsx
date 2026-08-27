@@ -184,7 +184,7 @@ function buildShareUrl(channel, item) {
 
 export function QuestionStoryCard({ question }) {
   return (
-    <div style={{ width: '100%', maxWidth: 480 }}>
+    <div style={{ width: '70%', maxWidth: 340 }}>
       <div
         style={{
           display: 'flex',
@@ -249,7 +249,7 @@ function ConfessionOrQuestionReplyCard({ item, userId }) {
   const cleanedItem = { ...item, text: parsed.replyText };
 
   return (
-    <div style={{ width: '100%', maxWidth: 480 }}>
+    <div style={{ width: '70%', maxWidth: 340 }}>
       <div
         style={{
           display: 'flex',
