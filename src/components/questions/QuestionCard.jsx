@@ -200,7 +200,7 @@ export default function QuestionCard({ question, onOpen, onShare }) {
 
   if (!question) return null;
 
-  const normalizedType = (question.type || 'general').toLowerCase();
+  const normalizedType = (question.question_type || 'general').toLowerCase();
   const typeMeta = TYPE_META[normalizedType] || TYPE_META.general;
   const TypeIcon = normalizedType === 'personal' ? Icons.Person : Icons.Globe;
 

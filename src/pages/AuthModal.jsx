@@ -165,15 +165,29 @@ export default function AuthModal({ open, onClose, initialTab = 'signin', onVeri
       return setError('This username is already taken. Please choose another.');
     }
 
-    const { data, error: signUpError } = await supabase.auth.signUp({
-      email, password, options: { data: { username: normalizedUsername, accepted_terms: true } },
-    });
-    
-    setSubmitting(false);
+   const { data, error: signUpError } = await supabase.auth.signUp({
+  email, password, options: { data: { username: normalizedUsername, accepted_terms: true } },
+});
 
-    if (signUpError) return setError('Registration failed. The email may already be in use or unavailable.');
+setSubmitting(false);
 
-    if (data?.session) {
+if (signUpError) {
+  const msg = (signUpError.message || '').toLowerCase();
+  if (signUpError.code === 'user_already_exists' || msg.includes('already registered') || msg.includes('already exists')) {
+    return setError('An account with this email already exists. Try signing in instead.');
+  }
+  return setError('Registration failed. Please try again.');
+}
+
+// Supabase quirk: with email confirmations ON, signUp() does NOT error on a
+// duplicate email (it avoids leaking which emails are registered). Instead it
+// returns 200 with a fake user whose identities array is empty — that's the
+// real signal the account already exists.
+if (data?.user && Array.isArray(data.user.identities) && data.user.identities.length === 0) {
+  return setError('An account with this email already exists. Try signing in instead.');
+}
+
+if (data?.session) {
       setStage('success');
       captureProfileMetadata();
       setTimeout(() => { handleClose(); onVerified?.(); }, 1200);
