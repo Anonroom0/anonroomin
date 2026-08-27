@@ -13,6 +13,7 @@ export default function ReactionBar({ targetType, targetId, userId, showTray, on
 
   const containerRef = useRef(null);
   const trayRef = useRef(null);
+  const togglePendingRef = useRef(false);
 
   const refresh = useCallback(() => {
     fetchReactionSummary(targetType, targetId)
@@ -81,11 +82,19 @@ export default function ReactionBar({ targetType, targetId, userId, showTray, on
 
   async function handleToggle(emoji) {
     if (!userId) return;
+    // A fast double-tap on the same pill fires this twice before the first
+    // call's insert/select round trip resolves, racing the same (target_type,
+    // target_id, user_id) row and surfacing an avoidable 409 from the unique
+    // constraint. Drop any tap that arrives while one is already in flight.
+    if (togglePendingRef.current) return;
+    togglePendingRef.current = true;
     try {
       await toggleReaction({ targetType, targetId, userId, emoji });
       refresh();
     } catch (err) {
       console.error('Failed to toggle reaction:', err);
+    } finally {
+      togglePendingRef.current = false;
     }
   }
 

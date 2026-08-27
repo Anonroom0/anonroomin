@@ -45,6 +45,30 @@ export async function toggleReaction({ targetType, targetId, userId, emoji }) {
     user_id: userId,
     emoji,
   });
+
+  // A second call for the same (target_type, target_id, user_id) can race
+  // past the select above before either insert lands — the unique
+  // constraint then rejects the loser with a 409/23505. Recover by treating
+  // that as "someone already has a row here now" and updating it instead of
+  // surfacing an avoidable error to the caller.
+  if (error?.code === '23505') {
+    const { data: raced, error: refetchError } = await supabase
+      .from('reactions')
+      .select('id, emoji')
+      .eq('target_type', targetType)
+      .eq('target_id', targetId)
+      .eq('user_id', userId)
+      .maybeSingle();
+    if (refetchError) throw refetchError;
+    if (!raced) throw error;
+
+    if (raced.emoji === emoji) return { action: 'added' };
+
+    const { error: updateError } = await supabase.from('reactions').update({ emoji }).eq('id', raced.id);
+    if (updateError) throw updateError;
+    return { action: 'changed' };
+  }
+
   if (error) throw error;
   return { action: 'added' };
 }
