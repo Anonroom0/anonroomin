@@ -1,97 +1,175 @@
 /** ===========================================================================
- * SHARE STORY SHEET
+ * SHARE STORY SHEET (v2)
  * ============================================================================
- * <ShareStorySheet open onClose question /> — a GlassPanel "sheet" that lets
- * someone turn a question page into a shareable 1080x1920 story image. Shows
- * a live, scaled-down preview of the PNG that storyImageGenerator.js would
- * produce, a horizontal template picker to swipe/tap through TEMPLATES, a
- * "Share to Story" button, and a plain "Copy Link" row.
+ * <ShareStorySheet open onClose mode question reply /> — a GlassPanel sheet
+ * that turns either a question ('mode="question"', the original behavior)
+ * or a single reply someone received ('mode="reply"', new — see
+ * QuestionThread.jsx's per-bubble share button) into a shareable 1080x1920
+ * story image.
  *
- * `open` gates mounting at the call site (this component owns no visibility
- * state of its own beyond that) — GlassPanel's own enter/exit choreography
- * and drag-to-dismiss handle the rest once mounted.
+ * The old fixed-layout template picker (bold-center / sticky-note /
+ * gradient-card) is gone. In its place: three independent left/right
+ * pickers — Header Color, Background, Body Style — each cycling through 10
+ * presets from storyStylePresets.js, so the preview updates live as
+ * someone dials in a combination rather than jumping between three fixed
+ * looks.
  *
- * `question` is expected to carry the fields storyImageGenerator.js's
- * generateQuestionStoryImage() needs: an `id` (for the reply link) plus the
- * question's text and type. The `questions` table backs this component, and
- * since its exact column names aren't attached to this prompt, `text` and
- * `type` are the reasonable guesses kept in one place below — update
- * QUESTION_TEXT_FIELD/QUESTION_TYPE_FIELD if the real columns differ.
+ * `question` needs an `id` (for the reply link) plus its text/type fields.
+ * `reply` (mode="reply" only) needs its own reply text. Column-name guesses
+ * are centralized just below — flip them if the real schema differs.
  * ========================================================================= */
 
 import { useEffect, useRef, useState } from 'react';
 import GlassPanel, { useGlassPanelClose } from '../shared/GlassPanel';
+import StoryTutorial, { shouldShowStoryTutorial } from '../shared/StoryTutorial';
 import {
-  generateQuestionStoryImage,
+  generateStoryImage,
   shareStoryImage,
-  TEMPLATES,
 } from '../../lib/storyImageGenerator';
+import { HEADER_COLOR_PRESETS, BACKGROUND_PRESETS, BODY_STYLE_PRESETS } from '../../lib/storyStylePresets';
 import { buildQuestionPath } from '../../lib/subdomain';
 import { showToast, friendlyDbError } from '../../lib/toast';
 
-// See the file banner above — flip these if the `questions` table's real
-// column names differ from this guess.
+// See the file banner above — flip these if the real column names differ.
 const QUESTION_TEXT_FIELD = 'text';
 const QUESTION_TYPE_FIELD = 'type';
+const REPLY_TEXT_FIELD = 'reply_text';
 
-// Human-readable labels for the template picker. Keys must match TEMPLATES
-// exactly; this is presentation-only and never sent anywhere.
-const TEMPLATE_LABELS = {
-  'bold-center': 'Bold',
-  'sticky-note': 'Sticky Note',
-  'gradient-card': 'Gradient',
-};
-
-// The preview <img> is scaled down from the real 1080x1920 render rather
-// than re-implemented as a separate DOM layout, so what someone sees here
-// is pixel-identical to what actually gets shared.
 const PREVIEW_ASPECT_RATIO = 1080 / 1920;
+// Matches storyImageGenerator.js's LINK_ZONE, expressed as a fraction of
+// the canvas so the preview overlay lines up regardless of preview size.
+const LINK_ZONE_FRACTION = { top: 1620 / 1920, height: 140 / 1920, left: 140 / 1080, width: (1080 - 280) / 1080 };
 
 function buildReplyUrl(questionId) {
   return `https://anonroom.in${buildQuestionPath(questionId)}`;
 }
 
-export default function ShareStorySheet({ open, onClose, question }) {
-  if (!open) return null;
+function cyclePreset(list, index, direction) {
+  const len = list.length;
+  return (index + direction + len) % len;
+}
 
+function PresetPicker({ label, list, index, onChange }) {
+  const current = list[index];
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+      <span style={{ width: 96, flexShrink: 0, fontSize: 13, fontWeight: 800, color: 'var(--dim)' }}>{label}</span>
+      <button
+        type="button"
+        aria-label={`Previous ${label}`}
+        onClick={() => onChange(cyclePreset(list, index, -1))}
+        style={arrowButtonStyle}
+      >
+        ‹
+      </button>
+      <div
+        style={{
+          flex: 1,
+          display: 'flex',
+          alignItems: 'center',
+          gap: 10,
+          padding: '10px 14px',
+          borderRadius: 16,
+          border: '1px solid var(--glass-border)',
+          background: 'var(--ink-2)',
+        }}
+      >
+        <span
+          aria-hidden="true"
+          style={{
+            width: 22,
+            height: 22,
+            borderRadius: 8,
+            flexShrink: 0,
+            background: current.pillBg || (current.colors && current.colors[0]) || 'var(--glass-white)',
+            border: '1px solid var(--glass-border)',
+          }}
+        />
+        <span style={{ fontSize: 14, fontWeight: 800, color: 'var(--paper)' }}>{current.name}</span>
+      </div>
+      <button
+        type="button"
+        aria-label={`Next ${label}`}
+        onClick={() => onChange(cyclePreset(list, index, 1))}
+        style={arrowButtonStyle}
+      >
+        ›
+      </button>
+    </div>
+  );
+}
+
+const arrowButtonStyle = {
+  width: 36,
+  height: 36,
+  flexShrink: 0,
+  borderRadius: '50%',
+  border: '1px solid var(--glass-border)',
+  background: 'var(--glass-white)',
+  color: 'var(--paper)',
+  fontSize: 20,
+  fontWeight: 900,
+  display: 'flex',
+  alignItems: 'center',
+  justifyContent: 'center',
+  cursor: 'pointer',
+};
+
+export default function ShareStorySheet({ open, onClose, mode = 'question', question, reply }) {
+  if (!open) return null;
   return (
     <GlassPanel variant="sheet" onClose={onClose}>
-      <ShareStorySheetContent question={question} />
+      <ShareStorySheetContent mode={mode} question={question} reply={reply} />
     </GlassPanel>
   );
 }
 
-function ShareStorySheetContent({ question }) {
+function ShareStorySheetContent({ mode, question, reply }) {
   const requestClose = useGlassPanelClose();
 
-  const [template, setTemplate] = useState(TEMPLATES[0]);
+  const [headerIndex, setHeaderIndex] = useState(0);
+  const [backgroundIndex, setBackgroundIndex] = useState(0);
+  const [bodyIndex, setBodyIndex] = useState(0);
+
   const [previewUrl, setPreviewUrl] = useState(null);
   const [previewBlob, setPreviewBlob] = useState(null);
   const [isRendering, setIsRendering] = useState(true);
   const [isSharing, setIsSharing] = useState(false);
+  const [tutorialOpen, setTutorialOpen] = useState(false);
 
-  // Tracks the most recent object URL so it can be revoked on the next
-  // render / unmount without racing a stale async render finishing late.
   const previewUrlRef = useRef(null);
   const renderTokenRef = useRef(0);
 
   const questionText = question?.[QUESTION_TEXT_FIELD] || '';
   const questionType = question?.[QUESTION_TYPE_FIELD];
+  const replyText = reply?.[REPLY_TEXT_FIELD] || '';
   const replyUrl = buildReplyUrl(question?.id);
+
+  // First time anyone reaches this sheet, lead with the tutorial rather
+  // than making them go find a help button — shouldShowStoryTutorial()
+  // reads the same localStorage flag its own "don't show again" writes to.
+  useEffect(() => {
+    if (shouldShowStoryTutorial()) setTutorialOpen(true);
+  }, []);
 
   useEffect(() => {
     const token = ++renderTokenRef.current;
     setIsRendering(true);
 
-    generateQuestionStoryImage({ questionText, questionType, replyUrl, template })
+    generateStoryImage({
+      kind: mode,
+      questionText,
+      replyText,
+      questionType,
+      headerColorId: HEADER_COLOR_PRESETS[headerIndex].id,
+      backgroundId: BACKGROUND_PRESETS[backgroundIndex].id,
+      bodyStyleId: BODY_STYLE_PRESETS[bodyIndex].id,
+    })
       .then((blob) => {
-        // A newer render started while this one was in flight — drop it.
         if (renderTokenRef.current !== token) return;
-
         const url = URL.createObjectURL(blob);
         if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
         previewUrlRef.current = url;
-
         setPreviewBlob(blob);
         setPreviewUrl(url);
         setIsRendering(false);
@@ -101,8 +179,8 @@ function ShareStorySheetContent({ question }) {
         setIsRendering(false);
         showToast(friendlyDbError('Could not render the preview. Please try again.'));
       });
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- questionText/questionType/replyUrl are derived from `question`, which is the real dependency
-  }, [question, template]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [mode, questionText, replyText, questionType, headerIndex, backgroundIndex, bodyIndex]);
 
   useEffect(() => {
     return () => {
@@ -114,7 +192,7 @@ function ShareStorySheetContent({ question }) {
     if (!previewBlob || isSharing) return;
     setIsSharing(true);
     try {
-      await shareStoryImage(previewBlob, { title: 'Answer this anonymously' });
+      await shareStoryImage(previewBlob, { title: mode === 'reply' ? 'A reply I got on Anonroom' : 'Answer this anonymously' });
     } catch {
       showToast(friendlyDbError('Could not share the image. Please try again.'));
     } finally {
@@ -132,143 +210,105 @@ function ShareStorySheetContent({ question }) {
   }
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 20, padding: '4px 20px 28px' }}>
-      <div style={{ fontSize: 20, fontWeight: 700, color: 'var(--paper)' }}>Share to Story</div>
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 18, padding: '4px 20px 28px' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+        <div style={{ fontSize: 20, fontWeight: 900, color: 'var(--paper)' }}>Share to Story</div>
+        <button
+          type="button"
+          onClick={() => setTutorialOpen(true)}
+          style={{ fontSize: 13, fontWeight: 800, color: 'var(--ember)', background: 'transparent', border: 'none', padding: '6px 4px' }}
+        >
+          See tutorial
+        </button>
+      </div>
 
-      <div
-        style={{
-          width: '100%',
-          maxWidth: 240,
-          margin: '0 auto',
-          aspectRatio: String(PREVIEW_ASPECT_RATIO),
-          borderRadius: 20,
-          overflow: 'hidden',
-          background: 'var(--glass-white)',
-          border: '1px solid var(--glass-border)',
-          position: 'relative',
-        }}
-      >
-        {previewUrl && (
-          <img
-            src={previewUrl}
-            alt="Story preview"
-            style={{
-              width: '100%',
-              height: '100%',
-              objectFit: 'cover',
-              // Fade the previous frame while a new template renders, rather
-              // than flashing to empty, since generation is async.
-              opacity: isRendering ? 0.5 : 1,
-              transition: 'opacity 150ms ease',
-            }}
-          />
-        )}
-        {isRendering && !previewUrl && (
+      <div style={{ position: 'relative', width: '100%', maxWidth: 240, margin: '0 auto' }}>
+        <div
+          style={{
+            width: '100%',
+            aspectRatio: String(PREVIEW_ASPECT_RATIO),
+            borderRadius: 20,
+            overflow: 'hidden',
+            background: 'var(--glass-white)',
+            border: '1px solid var(--glass-border)',
+            position: 'relative',
+          }}
+        >
+          {previewUrl && (
+            <img
+              src={previewUrl}
+              alt="Story preview"
+              style={{ width: '100%', height: '100%', objectFit: 'cover', opacity: isRendering ? 0.5 : 1, transition: 'opacity 150ms ease' }}
+            />
+          )}
+          {isRendering && !previewUrl && (
+            <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--dim)', fontSize: 14 }}>
+              Rendering…
+            </div>
+          )}
+
+          {/* Preview-only guide for where the manual IG link sticker goes —
+              matches storyImageGenerator.js's LINK_ZONE, never baked into
+              the exported PNG itself (see that file's banner comment). */}
           <div
+            aria-hidden="true"
             style={{
               position: 'absolute',
-              inset: 0,
+              top: `${LINK_ZONE_FRACTION.top * 100}%`,
+              left: `${LINK_ZONE_FRACTION.left * 100}%`,
+              width: `${LINK_ZONE_FRACTION.width * 100}%`,
+              height: `${LINK_ZONE_FRACTION.height * 100}%`,
+              border: '2px dashed rgba(255,255,255,0.45)',
+              borderRadius: 12,
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              color: 'var(--dim)',
-              fontSize: 14,
+              pointerEvents: 'none',
             }}
           >
-            Rendering…
+            <span style={{ fontSize: 10, fontWeight: 800, color: 'rgba(255,255,255,0.75)', textAlign: 'center', padding: '0 6px' }}>
+              Link sticker goes here
+            </span>
           </div>
-        )}
+        </div>
       </div>
 
-      <div
-        style={{
-          display: 'flex',
-          gap: 10,
-          overflowX: 'auto',
-          padding: '2px 2px 4px',
-          scrollSnapType: 'x mandatory',
-        }}
-      >
-        {TEMPLATES.map((id) => {
-          const isActive = id === template;
-          return (
-            <button
-              key={id}
-              type="button"
-              onClick={() => setTemplate(id)}
-              style={{
-                flex: '0 0 auto',
-                scrollSnapAlign: 'start',
-                padding: '10px 18px',
-                borderRadius: 20,
-                border: `1px solid ${isActive ? 'var(--ember)' : 'var(--glass-border)'}`,
-                background: isActive ? 'var(--ember)' : 'var(--glass-white)',
-                color: isActive ? 'var(--ink)' : 'var(--paper)',
-                fontSize: 14,
-                fontWeight: 600,
-                whiteSpace: 'nowrap',
-              }}
-            >
-              {TEMPLATE_LABELS[id] || id}
-            </button>
-          );
-        })}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+        <PresetPicker label="Header" list={HEADER_COLOR_PRESETS} index={headerIndex} onChange={setHeaderIndex} />
+        <PresetPicker label="Background" list={BACKGROUND_PRESETS} index={backgroundIndex} onChange={setBackgroundIndex} />
+        <PresetPicker label="Body Style" list={BODY_STYLE_PRESETS} index={bodyIndex} onChange={setBodyIndex} />
       </div>
 
       <button
         type="button"
         onClick={handleShare}
         disabled={!previewBlob || isSharing}
-        style={{
-          width: '100%',
-          padding: '16px 0',
-          borderRadius: 20,
-          border: 'none',
-          background: 'var(--ember)',
-          color: 'var(--ink)',
-          fontSize: 16,
-          fontWeight: 700,
-          opacity: !previewBlob || isSharing ? 0.6 : 1,
-        }}
+        style={{ width: '100%', padding: '16px 0', borderRadius: 20, border: 'none', background: 'var(--ember)', color: 'var(--ink)', fontSize: 16, fontWeight: 900, opacity: !previewBlob || isSharing ? 0.6 : 1 }}
       >
         {isSharing ? 'Sharing…' : 'Share to Story'}
       </button>
+      <p style={{ margin: '-8px 0 0', fontSize: 12, color: 'var(--dim)', lineHeight: 1.4, textAlign: 'center' }}>
+        On iPhone this can open Instagram Stories directly with the photo loaded. Everywhere else, pick Instagram from your share sheet — add the link sticker and music yourself once you're in Instagram.
+      </p>
 
       <button
         type="button"
         onClick={handleCopyLink}
-        style={{
-          width: '100%',
-          padding: '14px 16px',
-          borderRadius: 20,
-          border: '1px solid var(--glass-border)',
-          background: 'var(--glass-white)',
-          color: 'var(--paper)',
-          fontSize: 15,
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-        }}
+        style={{ width: '100%', padding: '14px 16px', borderRadius: 20, border: '1px solid var(--glass-border)', background: 'var(--glass-white)', color: 'var(--paper)', fontSize: 15, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
       >
-        <span>Copy Link</span>
+        <span style={{ fontWeight: 700 }}>Copy Link</span>
         <span style={{ color: 'var(--dim)', fontSize: 13 }}>{replyUrl}</span>
       </button>
 
       <button
         type="button"
         onClick={requestClose}
-        style={{
-          width: '100%',
-          padding: '14px 0',
-          borderRadius: 20,
-          border: 'none',
-          background: 'transparent',
-          color: 'var(--dim)',
-          fontSize: 15,
-        }}
+        style={{ width: '100%', padding: '14px 0', borderRadius: 20, border: 'none', background: 'transparent', color: 'var(--dim)', fontSize: 15, fontWeight: 700 }}
       >
         Cancel
       </button>
+
+      <StoryTutorial open={tutorialOpen} onClose={() => setTutorialOpen(false)} />
     </div>
   );
 }

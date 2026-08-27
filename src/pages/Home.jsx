@@ -281,7 +281,8 @@ export default function Home() {
   
   const [createQuestionOpen, setCreateQuestionOpen] = useState(false);
   const [createQuestionType, setCreateQuestionType] = useState('general'); // Default fallback
-  const [sharingQuestion, setSharingQuestion] = useState(null);
+const [sharingQuestion, setSharingQuestion] = useState(null);
+const [sharingReply, setSharingReply] = useState(null); // NEW — { question, reply }
   const [createConfessionOpen, setCreateConfessionOpen] = useState(false);
 
   const [threads, setThreads] = useState([]);
@@ -717,8 +718,13 @@ export default function Home() {
               ) : activeChatType === 'group' ? (
                 <GroupChat groupSlug={activeChatId} onBack={closeActiveChat} onGroupResolved={handleGroupResolved} />
               ) : activeChatType === 'question' ? (
-                <QuestionThread questionId={activeChatId} onBack={closeActiveChat} />
-              ) : null
+                
+  <QuestionThread
+    questionId={activeChatId}
+    onBack={closeActiveChat}
+    onShareReply={(question, reply) => setSharingReply({ question, reply })}
+  />
+) : null
             ) : (
               <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: 'var(--dim)' }}>
                 <div style={{ marginBottom: 20, animation: 'pop-in 0.6s cubic-bezier(0.2, 0.8, 0.2, 1)' }}>{Icons.EmptyChat}</div>
@@ -753,26 +759,37 @@ export default function Home() {
       )}
 
       {/* Main Component Overlays */}
-      <AuthModal open={authOpen} onClose={() => setAuthOpen(false)} initialTab="signin" onVerified={() => setAuthOpen(false)} />
-      <EditProfile open={editProfileOpen} onClose={() => setEditProfileOpen(false)} />
-      <ProfileCard userId={profileCardUserId} open={profileCardUserId !== null} onClose={() => setProfileCardUserId(null)} onMessage={(id) => { setProfileCardUserId(null); handleOpenChat(id, 'dm'); }} />
-      <CreateQuestionModal open={createQuestionOpen} onClose={() => setCreateQuestionOpen(false)} initialType={createQuestionType} onCreated={(question) => { setMyQuestions(prev => [question, ...prev]); }} />
-      <CreateConfessionModal open={createConfessionOpen} onClose={() => setCreateConfessionOpen(false)} onCreated={() => {}} />
-      {sharingQuestion && <ShareStorySheet open={!!sharingQuestion} onClose={() => setSharingQuestion(null)} question={sharingQuestion} />}
-      {viewingStory && (
-        <StoryViewer
-          channels={viewingStory.channels}
-          startIndex={viewingStory.startIndex}
-          initialItemId={viewingStory.initialItemId} 
-          userId={userId}
-          onClose={closeStory}
-          onChannelChange={(channel) => window.history.replaceState({}, '', buildStoryPath(channel))}
-          onViewReplies={(questionId) => {
-            closeStory();
-            handleOpenChat(questionId, 'question');
-          }}
-        />
-      )}
-    </>
-  );
+<AuthModal open={authOpen} onClose={() => setAuthOpen(false)} initialTab="signin" onVerified={() => setAuthOpen(false)} />
+<EditProfile open={editProfileOpen} onClose={() => setEditProfileOpen(false)} />
+<ProfileCard userId={profileCardUserId} open={profileCardUserId !== null} onClose={() => setProfileCardUserId(null)} onMessage={(id) => { setProfileCardUserId(null); handleOpenChat(id, 'dm'); }} />
+<CreateQuestionModal open={createQuestionOpen} onClose={() => setCreateQuestionOpen(false)} initialType={createQuestionType} onCreated={(question) => { setMyQuestions(prev => [question, ...prev]); }} />
+<CreateConfessionModal open={createConfessionOpen} onClose={() => setCreateConfessionOpen(false)} onCreated={() => {}} />
+{sharingQuestion && (
+  <ShareStorySheet mode="question" open={!!sharingQuestion} onClose={() => setSharingQuestion(null)} question={sharingQuestion} />
+)}
+{sharingReply && (
+  <ShareStorySheet
+    mode="reply"
+    open={!!sharingReply}
+    onClose={() => setSharingReply(null)}
+    question={sharingReply.question}
+    reply={sharingReply.reply}
+  />
+)}
+{viewingStory && (
+  <StoryViewer
+    channels={viewingStory.channels}
+    startIndex={viewingStory.startIndex}
+    initialItemId={viewingStory.initialItemId} 
+    userId={userId}
+    onClose={closeStory}
+    onChannelChange={(channel) => window.history.replaceState({}, '', buildStoryPath(channel))}
+    onViewReplies={(questionId) => {
+      closeStory();
+      handleOpenChat(questionId, 'question');
+    }}
+  />
+)}
+</>
+);
 }

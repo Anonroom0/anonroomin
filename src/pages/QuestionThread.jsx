@@ -21,44 +21,34 @@
  * small, optional "Sign up" pill is offered in the header for a signed-out
  * visitor who wants one, but nothing in the reply flow requires it.
  *
- * BUG FIXES IN THIS PASS:
- * - Reply insert was writing a `text` key, but `question_replies`' real body
- *   column is `reply_text` (see StoryViewer.jsx's own reply insert, and the
- *   schema in supabase/migrations/0001_anonroom_v2.sql) — every reply insert
- *   was silently rejected by PostgREST ("could not find column"). Replies
- *   are now inserted with `reply_text`, and rendered by reading `reply_text`
- *   first (extractReplyBodyText below) instead of the `text`/`body`/
- *   `content` guesses that only ever matched the *question* row's shape.
- * - "Add to Confessions" was inserting a `user_id` column that doesn't exist
- *   on `confessions` (the real column is `author_id`) — every confession
- *   insert failed, which is why replies sent but never actually showed up
- *   on the Confessions feed. Fixed to match the real schema AND the
- *   confessions_insert_own RLS policy, which requires author_id to be null
- *   whenever is_anon is true.
- * - The "Ask Me" tab was opening this page on the long raw-uuid /q/<uuid>
- *   link instead of the short 8-char /q/<id> link every copied/shared link
- *   uses (fixed at the call site in Home.jsx, not here).
+ * NEW: Reply-to-story. When the signed-in viewer IS the question's author
+ * (session.user.id === question.author_id), every reply bubble gets a small
+ * share icon. Tapping it hands that single reply off to onShareReply, which
+ * Home.jsx wires to <ShareStorySheet mode="reply" question={question}
+ * reply={...} /> — this is the actual "share an answer you received to your
+ * own story" loop the Ask-Me feature is built around, distinct from "Add to
+ * Confessions" below (that posts publicly into the app; this shares outward
+ * to Instagram). Only the author sees the button, matching how private
+ * questions already scope reply visibility to them.
  *
- * NEW: Private replies. When the question's `is_private` flag is set (see
- * the toggle in CreateQuestionModal.jsx), replies are only ever visible to
- * the question's author — enforced at the database level by
- * question_replies' select RLS policy (see
- * supabase/migrations/0003_private_question_replies.sql), not just hidden
- * in this UI. A signed-out or non-owner replier still gets to see their own
- * reply appear the instant they send it (appended straight from the insert
- * response below) even though they can never load anyone else's.
+ * BUG FIXES CARRIED FORWARD FROM THE PREVIOUS PASS:
+ * - Reply insert/read use the real `reply_text` column (not `text`).
+ * - "Add to Confessions" inserts into the real `author_id` column (not
+ *   `user_id`), and leaves it null for is_anon inserts per
+ *   confessions_insert_own's RLS policy.
+ * - The "Ask Me" tab opens the short /q/<id> link (fixed in Home.jsx).
  *
- * Author-only "Add to confessions": when the signed-in viewer IS the
- * question's author (session.user.id === question.author_id), the composer
- * exposes a toggle that — alongside the normal reply insert — also inserts
- * the same text into the standalone `confessions` table (visibility
- * 'public', group_id null). This is a different table/flow than GroupChat's
- * in-chat "is_confession" group_messages, matching the global confessions
- * feed the app already routes to at /confessions.
+ * Private replies (is_private): enforced at the DB level by
+ * question_replies' select RLS policy, not just hidden in this UI. A
+ * signed-out or non-owner replier still gets to see their own reply appear
+ * the instant they send it (appended straight from the insert response)
+ * even though they can never load anyone else's.
  *
  * Dependencies: React, Supabase, AuthContext, src/lib/visitorId.js,
  * src/lib/subdomain.js, src/components/MessageSkeleton.jsx,
- * src/components/SendButton.jsx, src/pages/AuthModal.jsx
+ * src/components/SendButton.jsx, src/pages/AuthModal.jsx,
+ * src/components/questions/ShareStorySheet.jsx (mounted by the parent —
+ * see onShareReply below, this page never imports it directly)
  * ============================================================================
  */
 
@@ -92,9 +82,6 @@ const Icons = {
       <path d="M12 19l-7-7 7-7" />
     </svg>
   ),
-  // Reuses the app's existing anonymous/"ghost" motif (GroupChat.jsx uses
-  // the same shape both for its anon-mode toggle and its confession entry
-  // point), so this toggle reads consistently with that vocabulary.
   Ghost: (
     <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
       <path d="M9 10h.01" />
@@ -122,6 +109,16 @@ const Icons = {
       <circle cx="12" cy="7" r="4" />
     </svg>
   ),
+  // New — per-reply "share to story" affordance, author-only.
+  Share: (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="18" cy="5" r="3" />
+      <circle cx="6" cy="12" r="3" />
+      <circle cx="18" cy="19" r="3" />
+      <line x1="8.59" y1="13.51" x2="15.42" y2="17.49" />
+      <line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
+    </svg>
+  ),
 };
 
 // ============================================================================
@@ -144,16 +141,10 @@ function formatRelativeTime(dateString) {
   return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
 }
 
-// The `questions` row's body column is `text` — this fallback chain, same
-// as QuestionCard.jsx's, hedges across the next-most-likely names too so a
-// header never renders blank if the schema shifts.
 function extractQuestionBodyText(row) {
   return row?.text ?? row?.body ?? row?.content ?? row?.question_text ?? '';
 }
 
-// `question_replies`' real body column is `reply_text` (see
-// supabase/migrations/0001_anonroom_v2.sql and StoryViewer.jsx's insert) —
-// checked first, with the same generic fallbacks after it as a safety net.
 function extractReplyBodyText(row) {
   return row?.reply_text ?? row?.text ?? row?.body ?? row?.content ?? '';
 }
@@ -171,7 +162,7 @@ function QuestionHeaderCard({ question, isPrivate, isAuthor }) {
       style={{
         margin: '16px 16px 8px',
         padding: '20px 22px',
-        borderRadius: 22, // token: cards/rows radius
+        borderRadius: 22,
         background: 'var(--glass-white)',
         border: '1px solid var(--glass-border)',
         backdropFilter: 'blur(20px) saturate(115%)',
@@ -183,7 +174,6 @@ function QuestionHeaderCard({ question, isPrivate, isAuthor }) {
         overflow: 'hidden',
       }}
     >
-      {/* Soft decorative glow behind the type badge — purely cosmetic. */}
       <div
         aria-hidden="true"
         style={{
@@ -240,7 +230,7 @@ function QuestionHeaderCard({ question, isPrivate, isAuthor }) {
         )}
       </div>
 
-      <p style={{ margin: '14px 0 0', fontSize: 18, lineHeight: 1.5, whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontWeight: 500, position: 'relative' }}>
+      <p style={{ margin: '14px 0 0', fontSize: 18, lineHeight: 1.5, whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontWeight: 700, position: 'relative' }}>
         {extractQuestionBodyText(question)}
       </p>
       <span style={{ display: 'block', marginTop: 12, fontSize: 12, color: 'var(--dim)', position: 'relative' }}>
@@ -250,7 +240,7 @@ function QuestionHeaderCard({ question, isPrivate, isAuthor }) {
   );
 }
 
-function ReplyBubble({ reply, isOwn }) {
+function ReplyBubble({ reply, isOwn, canShare, onShare }) {
   return (
     <div
       className={isOwn ? 'bubble-enter-outgoing' : 'bubble-enter'}
@@ -261,7 +251,7 @@ function ReplyBubble({ reply, isOwn }) {
           width: '100%',
           maxWidth: 460,
           padding: '14px 18px',
-          borderRadius: 20, // token: cards/rows radius
+          borderRadius: 20,
           background: isOwn
             ? 'linear-gradient(135deg, var(--ink-2) 0%, #23242e 100%)'
             : 'var(--glass-white)',
@@ -271,6 +261,7 @@ function ReplyBubble({ reply, isOwn }) {
           boxShadow: '0 6px 18px rgba(0,0,0,0.35)',
           color: 'var(--paper)',
           boxSizing: 'border-box',
+          position: 'relative',
         }}
       >
         {isOwn && (
@@ -290,12 +281,38 @@ function ReplyBubble({ reply, isOwn }) {
             {Icons.Ghost} You (anonymous)
           </span>
         )}
-        <p style={{ margin: 0, fontSize: 15, lineHeight: 1.45, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+        <p style={{ margin: 0, paddingRight: canShare ? 34 : 0, fontSize: 15, fontWeight: 600, lineHeight: 1.45, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
           {extractReplyBodyText(reply)}
         </p>
         <span style={{ display: 'block', marginTop: 8, fontSize: 11, color: 'var(--dim)', textAlign: 'right' }}>
           {formatRelativeTime(reply.created_at)}
         </span>
+
+        {canShare && (
+          <button
+            type="button"
+            onClick={() => onShare?.(reply)}
+            aria-label="Share this reply to your story"
+            title="Share this reply to your story"
+            style={{
+              position: 'absolute',
+              top: 12,
+              right: 12,
+              width: 26,
+              height: 26,
+              borderRadius: '50%',
+              border: 'none',
+              background: 'var(--glass-border)',
+              color: 'var(--paper)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              cursor: 'pointer',
+            }}
+          >
+            {Icons.Share}
+          </button>
+        )}
       </div>
     </div>
   );
@@ -357,7 +374,7 @@ function IdentityPill({ session, profile, onSignUp }) {
 // 5. MAIN COMPONENT
 // ============================================================================
 
-export default function QuestionThread({ questionId, onBack }) {
+export default function QuestionThread({ questionId, onBack, onShareReply }) {
   const { session, profile } = useAuth();
   const ownUserId = session?.user?.id || null;
 
@@ -396,13 +413,6 @@ export default function QuestionThread({ questionId, onBack }) {
     setQuestionStatus('loading');
 
     async function loadQuestion() {
-      // /q/<id> now carries a short (8 hex char) id rather than the full
-      // uuid — see toShortId() in subdomain.js. Old links shared before
-      // that change still carry a full uuid, so both shapes are handled
-      // here: a short id resolves against the real `link_id` column
-      // (populated by a database trigger — see
-      // supabase/migrations/0002_link_id_routing.sql), a full uuid resolves
-      // against `id` directly.
       let result;
       if (isShortId(questionId)) {
         result = await supabase.from('questions').select('*').eq('link_id', questionId).order('created_at', { ascending: false }).limit(1).maybeSingle();
@@ -429,11 +439,6 @@ export default function QuestionThread({ questionId, onBack }) {
   // --------------------------------------------------------------------------
   // LOAD + SUBSCRIBE TO REPLIES (same postgres_changes pattern as GroupChat)
   // --------------------------------------------------------------------------
-  // Note: for a private question, RLS on question_replies only lets the
-  // owner select every row — a non-owner replier's own SELECT (and this
-  // realtime subscription) will simply come back empty/silent for rows that
-  // aren't theirs. Their own just-sent reply is appended locally by
-  // handleSendReply below instead of waiting on this round-trip.
   const fetchReplies = useCallback(async () => {
     if (!question?.id) return;
     const { data, error } = await supabase
@@ -485,10 +490,6 @@ export default function QuestionThread({ questionId, onBack }) {
       onBack();
       return;
     }
-    // Full navigation rather than history.pushState: this page is mounted
-    // directly by App.jsx outside Home.jsx's own route-resolution state, so
-    // there's no local sidebar/detail state here that a pushState-only
-    // change would update — a real navigation is the reliable choice.
     window.location.href = ROOT_PATH;
   }
 
@@ -507,10 +508,6 @@ export default function QuestionThread({ questionId, onBack }) {
 
     setSending(true);
 
-    // Generated client-side (same approach as StoryViewer.jsx's own
-    // question_replies insert) so we have a stable id and timestamp to
-    // render locally WITHOUT ever needing a SELECT back from the DB — see
-    // the plain-insert note below for why that matters here.
     const localId = crypto.randomUUID
       ? crypto.randomUUID()
       : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
@@ -519,25 +516,13 @@ export default function QuestionThread({ questionId, onBack }) {
     const replyPayload = {
       id: localId,
       question_id: question.id,
-      // Real column name is `reply_text` (see extractReplyBodyText's
-      // header comment) — inserting under `text` silently failed before.
       reply_text: trimmed,
       replier_id: ownUserId || null,
       visitor_id: ownUserId ? null : visitorId || getOrCreateVisitorId(),
-      // UI never surfaces who replied regardless of this flag (see header
-      // comment), so replies are marked anonymous by default too.
       is_anon: true,
       created_at: localCreatedAt,
     };
 
-    // Plain insert — deliberately NOT chained with .select()/.single().
-    // Postgres gates a RETURNING clause behind the table's SELECT policies,
-    // not just INSERT's WITH CHECK. For a private question, only the owner
-    // can SELECT every reply row, so a non-owner replier's (including every
-    // anon visitor's) own RETURNING row comes back empty and .single() then
-    // throws "no rows returned" — the insert had actually succeeded, but
-    // the reply looked like it failed. StoryViewer.jsx's question-reply
-    // insert already avoids this the same way; this matches it.
     const { error: replyError } = await supabase.from('question_replies').insert(replyPayload);
 
     if (replyError) {
@@ -547,31 +532,16 @@ export default function QuestionThread({ questionId, onBack }) {
       return;
     }
 
-    // Append the locally-built object immediately rather than waiting on
-    // the realtime round-trip or a SELECT — necessary for a private
-    // question, where a non-owner replier has no SELECT visibility into
-    // anyone else's rows (including, functionally, their own insert) but
-    // should still see the reply they just sent land in the thread.
     setReplies((prev) => (prev.some((r) => r.id === replyPayload.id) ? prev : [replyPayload, ...prev]));
 
     if (isAuthor && addToConfessions) {
-      // confessions.author_id is the real column (there is no `user_id`
-      // column on this table) — and per confessions_insert_own's RLS,
-      // is_anon: true requires author_id to stay null, so it's
-      // intentionally omitted rather than set to the author's id.
-      //
-      // The text is tagged with a small machine-readable marker
-      // (`❓ Re: "<question excerpt>"\n\n<reply>`) so the confessions story
-      // reel (StoryViewer.jsx) and feed can tell this apart from a plain
-      // confession and show what question it was answering, without
-      // needing a schema change to link the two tables.
       const questionExcerpt = extractQuestionBodyText(question).slice(0, 140).trim();
       const taggedText = questionExcerpt ? `❓ Re: "${questionExcerpt}"\n\n${trimmed}` : trimmed;
       const { error: confessionError } = await supabase.from('confessions').insert({
         text: taggedText,
         visibility: 'public',
         group_id: null,
-        is_anon: true, // judgment call: confessions read as anonymous-by-default app-wide
+        is_anon: true,
       });
       if (confessionError) {
         console.error(confessionError);
@@ -584,6 +554,14 @@ export default function QuestionThread({ questionId, onBack }) {
     setReplyText('');
     setAddToConfessions(false);
     setSending(false);
+  }
+
+  // --------------------------------------------------------------------------
+  // SHARE-TO-STORY (author only — see file banner)
+  // --------------------------------------------------------------------------
+  function handleShareReply(reply) {
+    if (!isAuthor) return; // defensive — button is already hidden otherwise
+    onShareReply?.(question, reply);
   }
 
   // --------------------------------------------------------------------------
@@ -661,7 +639,7 @@ export default function QuestionThread({ questionId, onBack }) {
           overflowY: 'auto',
           overflowX: 'hidden',
           display: 'flex',
-          flexDirection: 'column-reverse', // newest reply pinned to the bottom, same trick GroupChat.jsx uses
+          flexDirection: 'column-reverse',
           paddingTop: 8,
           paddingBottom: 8,
         }}
@@ -686,7 +664,15 @@ export default function QuestionThread({ questionId, onBack }) {
         )}
 
         {!repliesLoading &&
-          replies.map((reply) => <ReplyBubble key={reply.id} reply={reply} isOwn={isOwnReply(reply)} />)}
+          replies.map((reply) => (
+            <ReplyBubble
+              key={reply.id}
+              reply={reply}
+              isOwn={isOwnReply(reply)}
+              canShare={isAuthor}
+              onShare={handleShareReply}
+            />
+          ))}
       </div>
 
       <div style={{ flexShrink: 0, zIndex: 20, background: 'var(--glass-white)', backdropFilter: 'blur(20px) saturate(115%)', WebkitBackdropFilter: 'blur(20px) saturate(115%)', borderTop: '1px solid var(--glass-border)' }}>
