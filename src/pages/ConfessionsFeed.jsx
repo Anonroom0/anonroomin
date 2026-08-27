@@ -38,6 +38,7 @@ import { showToast, friendlyDbError } from '../lib/toast';
 import ConfessionBubble from '../components/shared/ConfessionBubble';
 import AttachmentSheet from '../components/shared/AttachmentSheet';
 import GlassPanel from '../components/shared/GlassPanel';
+import MediaViewer from './MediaViewer';
 
 // ============================================================================
 // 1. CONSTANTS
@@ -266,6 +267,7 @@ export default function ConfessionsFeed({ focusConfessionId }) {
 
   const [highlightedId, setHighlightedId] = useState(null);
   const hasAutoScrolledRef = useRef(false);
+  const [viewerMedia, setViewerMedia] = useState(null);
 
   // The share/deep-link target: an explicit prop wins (Home.jsx passing a
   // sub-view id), otherwise fall back to a ?id= query param so a bare
@@ -315,17 +317,22 @@ export default function ConfessionsFeed({ focusConfessionId }) {
   // --------------------------------------------------------------------------
   // SHARE / DEEP-LINK: scroll to + flash a specific confession on mount
   // --------------------------------------------------------------------------
+  // targetId may be a full uuid (focusConfessionId prop, or an old-style
+  // link) or an 8-char short id (see toShortId() in subdomain.js) — either
+  // way this resolves it to the real loaded confession before scrolling.
   useEffect(() => {
     if (!targetId || loading || hasAutoScrolledRef.current) return;
-    if (!confessions.some((c) => c.id === targetId)) return;
+    const normalizedTarget = targetId.replace(/-/g, '').toLowerCase();
+    const match = confessions.find((c) => c.id === targetId || c.id.replace(/-/g, '').toLowerCase().startsWith(normalizedTarget));
+    if (!match) return;
 
     hasAutoScrolledRef.current = true;
     // Wait a frame for the card to be in the DOM before measuring/scrolling.
     requestAnimationFrame(() => {
-      const el = document.getElementById(`confession-${targetId}`);
+      const el = document.getElementById(`confession-${match.id}`);
       if (el) {
         el.scrollIntoView({ behavior: 'smooth', block: 'center' });
-        setHighlightedId(targetId);
+        setHighlightedId(match.id);
         setTimeout(() => setHighlightedId(null), HIGHLIGHT_MS);
       }
     });
@@ -431,7 +438,7 @@ export default function ConfessionsFeed({ focusConfessionId }) {
                 background: isHighlighted ? 'color-mix(in srgb, var(--ember) 8%, transparent)' : 'transparent',
               }}
             >
-              <ConfessionBubble confession={confession} size="feed" userId={session?.user?.id} />
+              <ConfessionBubble confession={confession} size="feed" userId={session?.user?.id} onPhotoClick={(c) => setViewerMedia({ url: c.photo_url, type: 'image' })} />
             </div>
           );
         })}
@@ -505,6 +512,8 @@ export default function ConfessionsFeed({ focusConfessionId }) {
         onSubmit={handleComposerSubmit}
         submitting={submitting}
       />
+
+      <MediaViewer mediaUrl={viewerMedia?.url} mediaType={viewerMedia?.type} open={viewerMedia !== null} onClose={() => setViewerMedia(null)} />
     </div>
   );
 }

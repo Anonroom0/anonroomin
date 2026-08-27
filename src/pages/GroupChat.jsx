@@ -9,6 +9,7 @@ import supabase from '../lib/supabaseClient';
 import { useAuth } from '../lib/authContext';
 import { createCooldown } from '../lib/rateLimit';
 import { showToast, friendlyDbError } from '../lib/toast';
+import { toShortId } from '../lib/subdomain';
 
 // Modals / Overlays
 import MediaViewer from './MediaViewer';
@@ -85,6 +86,22 @@ function formatDayLabel(dateString) {
   return date.toLocaleDateString([], { month: 'long', day: 'numeric', year: 'numeric' });
 }
 function dayKey(dateString) { return new Date(dateString).toDateString(); }
+
+// Resolves a #msg-<id> URL fragment back to a real message id. The
+// fragment can be either an 8-char short id (new share links, see
+// toShortId() in subdomain.js) or a full uuid (anything shared before
+// short ids existed) — this matches whichever shape it finds among the
+// currently-loaded messages. Only loaded messages can be jumped to, same
+// limitation the old full-uuid links already had.
+function resolveMessageIdFromHash(hash, messages) {
+  const match = /^#msg-(.+)$/.exec(hash || '');
+  if (!match) return null;
+  const target = decodeURIComponent(match[1]);
+  const exact = messages.find((m) => m.id === target);
+  if (exact) return exact.id;
+  const byPrefix = messages.find((m) => m.id.replace(/-/g, '').toLowerCase().startsWith(target.toLowerCase()));
+  return byPrefix ? byPrefix.id : null;
+}
 
 async function scrapeInstagram(username) {
   try {
@@ -372,6 +389,24 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
     return () => { cooldownRef.current?.cancel(); };
   }, []);
 
+  // Deep-link support for "Share link" on a message (see the share actions
+  // below): once messages are loaded, check the URL's #msg-<id> fragment
+  // (short or full id — see resolveMessageIdFromHash) and, if it matches a
+  // currently-loaded message, scroll to it and give it the same brief
+  // highlight flash the mention-jump button uses.
+  useEffect(() => {
+    if (messagesLoading || messages.length === 0) return;
+    const targetId = resolveMessageIdFromHash(window.location.hash, messages);
+    if (!targetId) return;
+    const el = document.getElementById(`msg-${targetId}`);
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      setHighlightedMsgId(targetId);
+      setTimeout(() => setHighlightedMsgId(null), 2000);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [messagesLoading, messages.length]);
+
   const { pullDistance, isRefreshing, handleTouchStart, handleTouchMove, handleTouchEnd } = usePullToRefresh(fetchMessagesAndReceipts, scrollRef);
 
   // Infinite scroll: watch a sentinel rendered at the end of the message
@@ -395,12 +430,60 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
   const handleLongPress = (msg) => { if (isAdmin) toggleSelection(msg.id); };
   const longPressHook = useLongPress(handleLongPress, 500);
 
+  // Deletes one or more group_messages rows *and* everything that would
+  // otherwise block or orphan that delete:
+  //   1. Any message that REPLIES to one being deleted has its reply_to_id
+  //      cleared first — this just drops the "replying to" preview, it
+  //      never deletes the replying message itself.
+  //   2. Reactions attached to the deleted message(s) are removed too.
+  //      (Confession-flagged messages react under targetType="confession"
+  //      keyed by confession_id rather than the message id — see the
+  //      ReactionBar usage below — so both target shapes are cleaned up.)
+  // Without step 1, a stale reply_to_id pointing at a deleted message could
+  // make the delete itself fail (or, if it silently succeeded, could leave
+  // replies pointing at nothing) — which is what caused deleted messages to
+  // reappear once the view refetched: the delete never actually committed.
+  const deleteMessagesSafely = useCallback(async (msgsToDelete) => {
+    if (!msgsToDelete || msgsToDelete.length === 0) return;
+    const ids = msgsToDelete.map((m) => m.id);
+    const groupMessageReactionIds = msgsToDelete.filter((m) => !m.is_confession).map((m) => m.id);
+    const confessionReactionIds = msgsToDelete.filter((m) => m.is_confession).map((m) => m.confession_id || m.id);
+
+    // Optimistic local update: drop the deleted messages, and strip the
+    // reply link (not the message) from anything still visible that replied
+    // to one of them.
+    setMessages((prev) => prev
+      .filter((m) => !ids.includes(m.id))
+      .map((m) => (m.reply_to_id && ids.includes(m.reply_to_id) ? { ...m, reply_to_id: null } : m))
+    );
+
+    try {
+      const { error: unlinkError } = await supabase.from('group_messages').update({ reply_to_id: null }).in('reply_to_id', ids);
+      if (unlinkError) throw unlinkError;
+
+      if (groupMessageReactionIds.length > 0) {
+        const { error: reactionsError } = await supabase.from('reactions').delete().eq('target_type', 'group_message').in('target_id', groupMessageReactionIds);
+        if (reactionsError) throw reactionsError;
+      }
+      if (confessionReactionIds.length > 0) {
+        const { error: confReactionsError } = await supabase.from('reactions').delete().eq('target_type', 'confession').in('target_id', confessionReactionIds);
+        if (confReactionsError) throw confReactionsError;
+      }
+
+      const { error: deleteError } = await supabase.from('group_messages').delete().in('id', ids);
+      if (deleteError) throw deleteError;
+    } catch (err) {
+      console.error('Failed to delete message(s):', err);
+      showToast(friendlyDbError(), 'error');
+      fetchMessagesAndReceipts();
+    }
+  }, [fetchMessagesAndReceipts]);
+
   const handleDeleteSelected = async () => {
     if (!isAdmin || selectedMessages.length === 0) return;
-    setMessages((prev) => prev.filter((m) => !selectedMessages.includes(m.id)));
-    const { error } = await supabase.from('group_messages').delete().in('id', selectedMessages);
-    if (error) { console.error(error); showToast(friendlyDbError(), 'error'); fetchMessagesAndReceipts(); }
+    const msgsToDelete = messages.filter((m) => selectedMessages.includes(m.id));
     setSelectedMessages([]);
+    await deleteMessagesSafely(msgsToDelete);
   };
 
   const currentSenderName = () => (isAnonMode ? 'Anonymous' : (profile?.is_admin ? ADMIN_DISPLAY_NAME : (profile?.username || 'Anonymous')));
@@ -577,20 +660,65 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
         </div>
       )}
 
-      {messages.filter(m => m.is_confession).length > 0 && !isSearching && (
-        <div style={{ padding: '8px 16px', background: '#1C1D24', borderBottom: '1px solid rgba(255,255,255,0.06)', zIndex: 19, display: 'flex' }}>
-          <button onClick={() => {
-            const confs = messages.filter(m => m.is_confession);
-            if (confs.length === 0) return;
-            const nextIdx = confessionNavIndex + 1 >= confs.length ? 0 : confessionNavIndex + 1;
-            setConfessionNavIndex(nextIdx);
-            const el = document.getElementById(`msg-${confs[nextIdx].id}`);
-            if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); setHighlightedMsgId(confs[nextIdx].id); setTimeout(() => setHighlightedMsgId(null), 2000); }
-          }} style={{ background: '#2A2B36', border: '1px solid rgba(255,255,255,0.06)', color: '#F4F3F0', borderRadius: 20, padding: '8px 16px', fontSize: 13, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}>
-            {Vectors.Ghost} Previous Confession
-          </button>
-        </div>
-      )}
+      {(() => {
+        const confessionMessages = messages.filter((m) => m.is_confession);
+        const hasConfessions = confessionMessages.length > 0 && !isSearching;
+        // Always mounted (never conditionally added/removed from the tree)
+        // and height/opacity-animated instead — previously this whole bar
+        // only rendered once `hasConfessions` became true, which meant
+        // nothing occupied its spot beforehand: the composer/message list
+        // sat flush against the header, then the bar suddenly popped in and
+        // shoved everything down, briefly exposing the plain background
+        // underneath mid-shove. Animating from a collapsed 0-height state
+        // to its real height gives the same end result without that flash.
+        return (
+          <div
+            style={{
+              maxHeight: hasConfessions ? 56 : 0,
+              opacity: hasConfessions ? 1 : 0,
+              overflow: 'hidden',
+              flexShrink: 0,
+              background: '#1C1D24',
+              borderBottom: hasConfessions ? '1px solid rgba(255,255,255,0.06)' : 'none',
+              zIndex: 19,
+              transition: 'max-height 0.32s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.24s ease, border-color 0.24s ease',
+            }}
+          >
+            <div style={{ padding: '10px 16px', display: 'flex' }}>
+              <button
+                onClick={() => {
+                  if (confessionMessages.length === 0) return;
+                  const nextIdx = confessionNavIndex + 1 >= confessionMessages.length ? 0 : confessionNavIndex + 1;
+                  setConfessionNavIndex(nextIdx);
+                  const el = document.getElementById(`msg-${confessionMessages[nextIdx].id}`);
+                  if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); setHighlightedMsgId(confessionMessages[nextIdx].id); setTimeout(() => setHighlightedMsgId(null), 2000); }
+                }}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 8,
+                  background: 'linear-gradient(180deg, rgba(255,107,53,0.16), rgba(255,107,53,0.08))',
+                  border: '1px solid rgba(255,107,53,0.28)',
+                  color: '#F4F3F0', borderRadius: 22, padding: '7px 14px 7px 8px',
+                  fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                  transition: 'transform 0.12s ease-out, background 0.15s ease',
+                }}
+                onMouseDown={(e) => { e.currentTarget.style.transform = 'scale(0.96)'; }}
+                onMouseUp={(e) => { e.currentTarget.style.transform = 'scale(1)'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.transform = 'scale(1)'; }}
+              >
+                <span style={{ width: 24, height: 24, borderRadius: '50%', background: 'rgba(255,107,53,0.2)', color: '#FF6B35', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                  {Vectors.Ghost}
+                </span>
+                Previous Confession
+                {confessionMessages.length > 1 && (
+                  <span style={{ fontSize: 11, fontWeight: 700, color: '#8B8B96', background: 'rgba(255,255,255,0.06)', borderRadius: 10, padding: '2px 7px' }}>
+                    {(confessionNavIndex % confessionMessages.length) + 1}/{confessionMessages.length}
+                  </span>
+                )}
+              </button>
+            </div>
+          </div>
+        );
+      })()}
 
       {/* REFRESH SPINNER */}
       <div style={{ position: 'absolute', top: 120, left: 0, right: 0, height: 60, display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 5, transform: `translateY(${Math.min(pullDistance - 60, 0)}px)`, opacity: pullDistance > 10 ? 1 : 0, transition: isRefreshing ? 'transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1)' : 'none', color: '#FF6B35' }}>
@@ -648,7 +776,7 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
                   {isConfession ? (
                      <div id={`msg-${message.id}`} className={isHighlighted ? 'highlight-flash' : ''} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: '100%', margin: '16px 0' }}>
                        <div style={{ width: '100%', maxWidth: 440, background: isSelected ? 'rgba(255,107,53, 0.15)' : 'transparent', borderRadius: 16 }}>
-                         <ConfessionBubble confession={{ id: message.confession_id || message.id, text: message.text, photo_url: message.media_url, is_anon: message.is_anon, created_at: message.created_at }} onReply={() => { if (selectedMessages.length === 0) startReply(message); }} userId={ownUserId} size="inline" />
+                         <ConfessionBubble confession={{ id: message.confession_id || message.id, text: message.text, photo_url: message.media_url, is_anon: message.is_anon, created_at: message.created_at }} onReply={() => { if (selectedMessages.length === 0) startReply(message); }} onPhotoClick={(c) => setViewerMedia({ url: c.photo_url, type: 'image' })} userId={ownUserId} size="inline" />
                          
                          <div style={{ marginTop: 8, display: 'flex', justifyContent: 'center', width: '100%' }}>
                            <ReactionBar 
@@ -664,7 +792,7 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
                                  label: 'Share',
                                  icon: <span style={{ display: 'flex', color: '#8B8B96' }}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg></span>,
                                  onClick: () => {
-                                   const url = `${window.location.origin}${window.location.pathname}#msg-${message.id}`;
+                                   const url = `${window.location.origin}${window.location.pathname}#msg-${toShortId(message.id)}`;
                                    navigator.clipboard.writeText(url);
                                    showToast('Link copied to clipboard!', 'info');
                                  },
@@ -674,11 +802,7 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
                                  label: 'Delete',
                                  danger: true,
                                  icon: <span style={{ display: 'flex' }}>{Vectors.Trash}</span>,
-                                 onClick: async () => {
-                                   setMessages((prev) => prev.filter((m) => m.id !== message.id));
-                                   const { error } = await supabase.from('group_messages').delete().eq('id', message.id);
-                                   if (error) { console.error(error); showToast(friendlyDbError(), 'error'); fetchMessagesAndReceipts(); }
-                                 },
+                                 onClick: async () => { await deleteMessagesSafely([message]); },
                                }] : []),
                              ]}
                            />
@@ -766,12 +890,13 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
                             pills sit tucked into the bottom corner of the
                             bubble (Telegram-style) instead of floating in
                             their own full-width row. */}
-                        <div style={{ marginTop: -6, display: 'flex', justifyContent: isOwn ? 'flex-end' : 'flex-start', width: '100%', paddingInline: 6, position: 'relative', zIndex: 2 }}>
+                        <div style={{ display: 'flex', justifyContent: isOwn ? 'flex-end' : 'flex-start', width: '100%', paddingInline: 6, position: 'relative', zIndex: 2 }}>
                           <ReactionBar 
                              targetType="group_message" 
                              targetId={message.id} 
                              userId={ownUserId}
                              align={isOwn ? 'flex-end' : 'flex-start'}
+                             pullUp={6}
                              showTray={activeReactionMsgId === message.id}
                              onCloseTray={() => setActiveReactionMsgId(null)}
                              actions={[
@@ -780,7 +905,7 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
                                  label: 'Share',
                                  icon: <span style={{ display: 'flex', color: '#8B8B96' }}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg></span>,
                                  onClick: () => {
-                                   const url = `${window.location.origin}${window.location.pathname}#msg-${message.id}`;
+                                   const url = `${window.location.origin}${window.location.pathname}#msg-${toShortId(message.id)}`;
                                    navigator.clipboard.writeText(url);
                                    showToast('Link copied to clipboard!', 'info');
                                  },
@@ -790,11 +915,7 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
                                  label: 'Delete',
                                  danger: true,
                                  icon: <span style={{ display: 'flex' }}>{Vectors.Trash}</span>,
-                                 onClick: async () => {
-                                   setMessages((prev) => prev.filter((m) => m.id !== message.id));
-                                   const { error } = await supabase.from('group_messages').delete().eq('id', message.id);
-                                   if (error) { console.error(error); showToast(friendlyDbError(), 'error'); fetchMessagesAndReceipts(); }
-                                 },
+                                 onClick: async () => { await deleteMessagesSafely([message]); },
                                }] : []),
                              ]}
                           />

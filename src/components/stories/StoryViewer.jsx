@@ -77,6 +77,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import supabase from '../../lib/supabaseClient';
 import ConfessionBubble from '../shared/ConfessionBubble';
+import { buildQuestionPath, toShortId } from '../../lib/subdomain';
 import ReactionBar from '../shared/ReactionBar';
 
 const STORY_WINDOW_MS = 24 * 60 * 60 * 1000; // stories are ephemeral: last 24h only
@@ -148,14 +149,20 @@ function getOrCreateVisitorId() {
 
 function buildShareUrl(channel, item) {
   if (channel.type === 'public-questions') {
-    return `${window.location.origin}/questions/${item.id}`;
+    // Was previously `/questions/<uuid>` — a path App.jsx never actually
+    // routes (the real question-thread route is /q/<id>, see subdomain.js),
+    // so shared question-story links silently 404'd. Fixed to use the same
+    // buildQuestionPath() the rest of the app shares (also short-id'd).
+    return `${window.location.origin}${buildQuestionPath(item.id)}`;
   }
   if (channel.type === 'group' && channel.slug) {
     // Groups live on their own subdomain — mirrors ConfessionsFeed's
     // focusConfessionId deep-link pattern, just rooted at the group's host.
-    return `https://${channel.slug}.anonroom.in/confessions?focus=${item.id}`;
+    // Query param is `id` (not `focus`) to match what ConfessionsFeed.jsx
+    // actually reads back out of the URL.
+    return `https://${channel.slug}.anonroom.in/confessions?id=${toShortId(item.id)}`;
   }
-  return `${window.location.origin}/confessions?focus=${item.id}`;
+  return `${window.location.origin}/confessions?id=${toShortId(item.id)}`;
 }
 
 // ============================================================================

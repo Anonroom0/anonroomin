@@ -94,7 +94,7 @@ function relativeTime(dateString) {
 // 3. MAIN EXPORT
 // ============================================================================
 
-export default function ConfessionBubble({ confession, onReply, size = 'inline', userId }) {
+export default function ConfessionBubble({ confession, onReply, onPhotoClick, size = 'inline', userId }) {
   const preset = SIZE_PRESETS[size] || SIZE_PRESETS.inline;
   const isStory = size === 'story';
 
@@ -164,10 +164,22 @@ export default function ConfessionBubble({ confession, onReply, size = 'inline',
         >
           {confession.photo_url && (
             <div
+              onClick={(e) => {
+                // The photo has its own tap target: everywhere else on the
+                // card (background, text, reply/react row) tapping toggles
+                // the reaction tray via the caller's outer onClick, but
+                // tapping the photo itself should always open it full-screen
+                // in the media viewer instead — so this stops that outer
+                // handler from ever seeing the click.
+                e.stopPropagation();
+                if (isStory) { handleBodyTap(); return; }
+                if (onPhotoClick) onPhotoClick(confession);
+              }}
               style={{
                 width: '100%',
                 aspectRatio: '4 / 5',
                 background: 'var(--ink-2)',
+                cursor: isStory || onPhotoClick ? 'pointer' : 'default',
               }}
             >
               <img

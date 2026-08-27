@@ -13,6 +13,46 @@ const RESERVED_PATH_SEGMENTS = ['api', 'assets', 'static', 'favicon.ico'];
 
 export const ROOT_PATH = '/';
 
+// ----------------------------------------------------------------------------
+// SHORT ID HELPERS (for copyable links)
+// ----------------------------------------------------------------------------
+// Every table this app links to (questions, group_messages, dm_messages,
+// confessions) keys off a real uuid, but a raw uuid in a shared link is long
+// and ugly to read/type. Rather than adding a parallel "short_id" column
+// (more migrations, another thing to keep in sync), the short id is derived
+// straight FROM the uuid: strip the dashes and take the first 8 hex
+// characters. uuid hex digits are already alphanumeric (0-9a-f), so this
+// satisfies "an up-to-8-alphanumeric-character id" without inventing a new
+// alphabet or a new column.
+//
+// 8 hex characters is 32 bits of the source uuid's randomness — collisions
+// are astronomically unlikely at this app's scale, but a caller resolving a
+// short id back to a row should still treat it as a PREFIX match (see
+// shortIdPrefixFilter below) and handle the rare case of >1 result by
+// picking the most recent one, rather than assuming uniqueness outright.
+export function toShortId(uuid) {
+  if (!uuid || typeof uuid !== 'string') return '';
+  return uuid.replace(/-/g, '').slice(0, 8).toLowerCase();
+}
+
+// True for a short id shaped like the ones toShortId() produces (bare hex,
+// no dashes) — as opposed to a full uuid (which has dashes) — so callers can
+// tell old-style full-uuid links (still valid, for anything shared before
+// this change) apart from new short ones.
+export function isShortId(value) {
+  return typeof value === 'string' && /^[0-9a-f]{1,32}$/i.test(value) && !value.includes('-');
+}
+
+// Builds the {column, operator, value} triple a caller passes to
+// supabase-js's `.filter(column, operator, value)` to resolve a short id
+// back to its row. uuid columns don't support LIKE/ILIKE directly in
+// Postgres, so this casts the column to text first — the `column::text`
+// syntax is a PostgREST feature supabase-js's `.filter()` passes straight
+// through.
+export function shortIdPrefixFilter(column, shortId) {
+  return { column: `${column}::text`, operator: 'ilike', value: `${shortId}%` };
+}
+
 // Resolves which group (if any) should render based on the current URL.
 // Production: groupname.anonroom.in -> 'groupname'; anonroom.in / www -> null.
 // Local/dev/IP hosts have no real subdomain to parse, so fall back to a
@@ -139,7 +179,9 @@ export function buildDmPath(username) {
 // RESERVED_PATH_SEGMENTS filtering as a result.
 
 // Returns the id for the root-level question-thread route (anonroom.in/q/<id>),
-// or null if the current path doesn't match that shape.
+// or null if the current path doesn't match that shape. This can be either
+// an 8-char short id (new links) or a full uuid (anything shared before
+// short ids existed) — QuestionThread.jsx's loader handles both.
 export function getQuestionIdFromPath() {
   const path = window.location.pathname;
   if (!path.startsWith('/q/')) {
@@ -152,8 +194,9 @@ export function getQuestionIdFromPath() {
   return decodeURIComponent(remainder);
 }
 
+// Builds a short, copyable /q/<id> path from a question's real uuid.
 export function buildQuestionPath(id) {
-  return `/q/${encodeURIComponent(id)}`;
+  return `/q/${encodeURIComponent(toShortId(id))}`;
 }
 
 // ----------------------------------------------------------------------------

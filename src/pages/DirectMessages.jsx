@@ -19,6 +19,7 @@
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import supabase from '../lib/supabaseClient';
 import { useAuth } from '../lib/authContext';
+import { toShortId } from '../lib/subdomain';
 import { createCooldown } from '../lib/rateLimit';
 import MediaViewer from './MediaViewer';
 import ProfileCard from './ProfileCard';
@@ -131,6 +132,20 @@ function formatDayLabel(dateString) {
 
 function dayKey(dateString) {
   return new Date(dateString).toDateString();
+}
+
+// Resolves a #dm-msg-<id> URL fragment back to a real message id — the
+// fragment can be an 8-char short id (see toShortId() in subdomain.js) or a
+// full uuid (links shared before short ids existed). Mirrors
+// resolveMessageIdFromHash in GroupChat.jsx.
+function resolveMessageIdFromHash(hash, messages) {
+  const match = /^#dm-msg-(.+)$/.exec(hash || '');
+  if (!match) return null;
+  const target = decodeURIComponent(match[1]);
+  const exact = messages.find((m) => m.id === target);
+  if (exact) return exact.id;
+  const byPrefix = messages.find((m) => m.id.replace(/-/g, '').toLowerCase().startsWith(target.toLowerCase()));
+  return byPrefix ? byPrefix.id : null;
 }
 
 async function scrapeInstagram(username) {
@@ -648,6 +663,23 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
     return () => { cooldownRef.current?.cancel(); };
   }, []);
 
+  // Deep-link support for a DM message's "Share link" action (see the share
+  // actions below): once messages are loaded, check the URL's
+  // #dm-msg-<id> fragment (short or full id) and, if it matches a
+  // currently-loaded message, scroll to it and flash-highlight it.
+  useEffect(() => {
+    if (messagesLoading || messages.length === 0) return;
+    const targetId = resolveMessageIdFromHash(window.location.hash, messages);
+    if (!targetId) return;
+    const el = document.getElementById(`dm-msg-${targetId}`);
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      setHighlightedMsgId(targetId);
+      setTimeout(() => setHighlightedMsgId(null), 2000);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [messagesLoading, messages.length]);
+
   const { pullDistance, isRefreshing, handleTouchStart, handleTouchMove, handleTouchEnd } = usePullToRefresh(fetchMessagesAndReceipts, scrollRef);
 
   // Infinite scroll: watch a sentinel rendered at the end of the message
@@ -675,12 +707,42 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
   const handleLongPress = (msg) => { if (isAdmin) toggleSelection(msg.id); };
   const longPressHook = useLongPress(handleLongPress, 500);
 
+  // Same "delete cleanly" logic as GroupChat.jsx's deleteMessagesSafely:
+  // clear reply_to_id on anything replying to a message being deleted
+  // (keeping that replying message, just dropping its reply preview),
+  // remove that message's reactions, then delete the message itself. Doing
+  // the unlink first is what makes the delete actually stick — previously
+  // a stale reply_to_id could make the delete a no-op, which is why a
+  // "deleted" message would come back after a refresh.
+  const deleteMessagesSafely = useCallback(async (ids) => {
+    if (!ids || ids.length === 0) return;
+
+    setMessages((prev) => prev
+      .filter((m) => !ids.includes(m.id))
+      .map((m) => (m.reply_to_id && ids.includes(m.reply_to_id) ? { ...m, reply_to_id: null } : m))
+    );
+
+    try {
+      const { error: unlinkError } = await supabase.from('dm_messages').update({ reply_to_id: null }).in('reply_to_id', ids);
+      if (unlinkError) throw unlinkError;
+
+      const { error: reactionsError } = await supabase.from('reactions').delete().eq('target_type', 'dm_message').in('target_id', ids);
+      if (reactionsError) throw reactionsError;
+
+      const { error: deleteError } = await supabase.from('dm_messages').delete().in('id', ids);
+      if (deleteError) throw deleteError;
+    } catch (err) {
+      console.error('Failed to delete message(s):', err);
+      showToast(friendlyDbError(), 'error');
+      fetchMessagesAndReceipts();
+    }
+  }, [fetchMessagesAndReceipts]);
+
   const handleDeleteSelected = async () => {
     if (!isAdmin || selectedMessages.length === 0) return;
-    setMessages(prev => prev.filter(m => !selectedMessages.includes(m.id)));
-    const { error } = await supabase.from('dm_messages').delete().in('id', selectedMessages);
-    if (error) { console.error(error); showToast(friendlyDbError(), 'error'); fetchMessagesAndReceipts(); }
+    const ids = [...selectedMessages];
     setSelectedMessages([]);
+    await deleteMessagesSafely(ids);
   };
 
   function handleJumpToMention() {
@@ -982,12 +1044,13 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
                           pills sit tucked into the bottom corner of the
                           bubble (Telegram-style) instead of floating in
                           their own full-width row below the timestamp. */}
-                      <div style={{ marginTop: -10, marginBottom: 2, display: 'flex', justifyContent: isOwn ? 'flex-end' : 'flex-start', width: '100%', paddingInline: 6, position: 'relative', zIndex: 2 }}>
+                      <div style={{ marginBottom: 2, display: 'flex', justifyContent: isOwn ? 'flex-end' : 'flex-start', width: '100%', paddingInline: 6, position: 'relative', zIndex: 2 }}>
                         <ReactionBar 
                            targetType="dm_message" 
                            targetId={message.id} 
                            userId={userId}
                            align={isOwn ? 'flex-end' : 'flex-start'}
+                           pullUp={10}
                            showTray={activeReactionMsgId === message.id}
                            onCloseTray={() => setActiveReactionMsgId(null)}
                            actions={[
@@ -996,7 +1059,7 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
                                label: 'Share',
                                icon: <span style={{ display: 'flex', color: '#8B8B96' }}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg></span>,
                                onClick: () => {
-                                 const url = `${window.location.origin}${window.location.pathname}#dm-msg-${message.id}`;
+                                 const url = `${window.location.origin}${window.location.pathname}#dm-msg-${toShortId(message.id)}`;
                                  navigator.clipboard.writeText(url);
                                  showToast('Link copied to clipboard!', 'info');
                                },
@@ -1006,11 +1069,7 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
                                label: 'Delete',
                                danger: true,
                                icon: <span style={{ display: 'flex' }}>{Vectors.Trash}</span>,
-                               onClick: async () => {
-                                 setMessages((prev) => prev.filter((m) => m.id !== message.id));
-                                 const { error } = await supabase.from('dm_messages').delete().eq('id', message.id);
-                                 if (error) { console.error(error); showToast(friendlyDbError(), 'error'); fetchMessagesAndReceipts(); }
-                               },
+                               onClick: async () => { await deleteMessagesSafely([message.id]); },
                              }] : []),
                            ]}
                         />

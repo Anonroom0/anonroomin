@@ -6,7 +6,7 @@ import EmojiGifPicker from '../../pages/EmojiGifPicker';
 
 const QUICK_EMOJI = ['❤️', '😂', '😮', '😢', '🙏', '🔥', '👍', '😡'];
 
-export default function ReactionBar({ targetType, targetId, userId, showTray, onCloseTray, align = 'center', actions = [] }) {
+export default function ReactionBar({ targetType, targetId, userId, showTray, onCloseTray, align = 'center', actions = [], pullUp = 0 }) {
   const [reactions, setReactions] = useState([]);
   const [fullPickerOpen, setFullPickerOpen] = useState(false);
   const [trayCoords, setTrayCoords] = useState(null);
@@ -101,9 +101,16 @@ export default function ReactionBar({ targetType, targetId, userId, showTray, on
     handleToggle(emoji);
   }
 
-  // Hide container entirely if no reactions exist and the tray isn't open
+  // Hide container entirely if no reactions exist and the tray isn't open.
+  // Deliberately NOT given the `pullUp` negative margin below: that margin
+  // exists purely to tuck the reaction pills into the bottom corner of the
+  // bubble above it, and only makes sense when pills are actually rendered.
+  // Applying it here too (as used to happen, via a hardcoded margin on the
+  // caller's wrapper) pulled the timestamp row up by that same amount even
+  // when there was nothing to compensate for, so timestamps rendered too
+  // close to (or overlapping) the bubble when a message had no reactions.
   if (reactions.length === 0 && !showTray) {
-    return <div ref={containerRef} style={{ height: 0, width: '100%' }} />;
+    return <div ref={containerRef} style={{ height: 0, width: '100%', marginTop: 0 }} />;
   }
 
   return (
@@ -111,7 +118,8 @@ export default function ReactionBar({ targetType, targetId, userId, showTray, on
       ref={containerRef} 
       style={{ 
         display: 'flex', flexWrap: 'wrap', gap: 6, 
-        justifyContent: align, width: '100%' 
+        justifyContent: align, width: '100%',
+        marginTop: pullUp ? -pullUp : 0,
       }}
     >
       {/* Sleeker, Smaller Permanent Reaction Pills — rendered by the caller

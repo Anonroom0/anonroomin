@@ -37,7 +37,7 @@ import React, { useCallback, useEffect, useRef, useState } from 'react';
 import supabase from '../lib/supabaseClient';
 import { useAuth } from '../lib/authContext';
 import { getOrCreateVisitorId } from '../lib/visitorId';
-import { ROOT_PATH } from '../lib/subdomain';
+import { ROOT_PATH, isShortId, shortIdPrefixFilter } from '../lib/subdomain';
 import { showToast, friendlyDbError } from '../lib/toast';
 import MessageSkeleton from '../components/shared/MessageSkeleton';
 import SendButton from '../components/shared/SendButton';
@@ -243,7 +243,20 @@ export default function QuestionThread({ questionId }) {
     setQuestionStatus('loading');
 
     async function loadQuestion() {
-      const { data, error } = await supabase.from('questions').select('*').eq('id', questionId).maybeSingle();
+      // /q/<id> now carries a short (8 hex char) id rather than the full
+      // uuid — see toShortId() in subdomain.js. Old links shared before
+      // that change still carry a full uuid, so both shapes are handled
+      // here: an exact match for a real uuid, a prefix match (cast to text,
+      // since uuid columns don't support LIKE/ILIKE directly) otherwise.
+      let result;
+      if (isShortId(questionId)) {
+        const { column, operator, value } = shortIdPrefixFilter('id', questionId);
+        result = await supabase.from('questions').select('*').filter(column, operator, value).order('created_at', { ascending: false }).limit(1).maybeSingle();
+      } else {
+        result = await supabase.from('questions').select('*').eq('id', questionId).maybeSingle();
+      }
+      const { data, error } = result;
+
       if (cancelled) return;
       if (error || !data) {
         setQuestionStatus('error');
