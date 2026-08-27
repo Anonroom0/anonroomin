@@ -73,7 +73,7 @@ export async function getPushStatus() {
  * failed for any other reason. Throws only on truly unexpected errors so
  * callers can decide how to surface failure (toast, silent, etc).
  */
-export async function subscribeToPush(userId) {
+ export async function subscribeToPush(userId) {
   if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
     return false;
   }
@@ -91,11 +91,15 @@ export async function subscribeToPush(userId) {
 
   const subJSON = subscription.toJSON();
 
-  const { error } = await supabase.from('push_subscriptions').insert({
+  // FIX: Use upsert to prevent errors if the device re-subscribes 
+  // Make sure 'endpoint' is set as a UNIQUE column in your Supabase table!
+  const { error } = await supabase.from('push_subscriptions').upsert({
     user_id: userId,
     endpoint: subJSON.endpoint,
     p256dh: subJSON.keys.p256dh,
     auth: subJSON.keys.auth,
+  }, { 
+    onConflict: 'endpoint' 
   });
 
   if (error) throw error;
@@ -103,12 +107,6 @@ export async function subscribeToPush(userId) {
   return true;
 }
 
-/**
- * Unsubscribes the browser's active push subscription (if any) and removes
- * the matching row(s) from push_subscriptions for this user — mirrors the
- * broad "delete by user_id" behavior the original EditProfile.jsx toggle
- * used, rather than narrowing to a single endpoint.
- */
 export async function unsubscribeFromPush(userId) {
   if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
     return;
@@ -118,9 +116,15 @@ export async function unsubscribeFromPush(userId) {
   const subscription = await registration.pushManager.getSubscription();
 
   if (subscription) {
+    const endpoint = subscription.endpoint; // Grab the endpoint before unsubscribing
     await subscription.unsubscribe();
+    
+    // FIX: Delete only this specific device's endpoint, not the whole user
+    const { error } = await supabase
+      .from('push_subscriptions')
+      .delete()
+      .eq('endpoint', endpoint);
+      
+    if (error) throw error;
   }
-
-  const { error } = await supabase.from('push_subscriptions').delete().eq('user_id', userId);
-  if (error) throw error;
 }

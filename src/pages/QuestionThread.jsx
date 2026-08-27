@@ -24,31 +24,12 @@
  * NEW: Reply-to-story. When the signed-in viewer IS the question's author
  * (session.user.id === question.author_id), every reply bubble gets a small
  * share icon. Tapping it hands that single reply off to onShareReply, which
- * Home.jsx wires to <ShareStorySheet mode="reply" question={question}
- * reply={...} /> — this is the actual "share an answer you received to your
- * own story" loop the Ask-Me feature is built around, distinct from "Add to
- * Confessions" below (that posts publicly into the app; this shares outward
- * to Instagram). Only the author sees the button, matching how private
- * questions already scope reply visibility to them.
- *
- * BUG FIXES CARRIED FORWARD FROM THE PREVIOUS PASS:
- * - Reply insert/read use the real `reply_text` column (not `text`).
- * - "Add to Confessions" inserts into the real `author_id` column (not
- *   `user_id`), and leaves it null for is_anon inserts per
- *   confessions_insert_own's RLS policy.
- * - The "Ask Me" tab opens the short /q/<id> link (fixed in Home.jsx).
- *
- * Private replies (is_private): enforced at the DB level by
- * question_replies' select RLS policy, not just hidden in this UI. A
- * signed-out or non-owner replier still gets to see their own reply appear
- * the instant they send it (appended straight from the insert response)
- * even though they can never load anyone else's.
+ * Home.jsx wires to <ShareStorySheet> OR handles it locally if mounted standalone.
  *
  * Dependencies: React, Supabase, AuthContext, src/lib/visitorId.js,
  * src/lib/subdomain.js, src/components/MessageSkeleton.jsx,
  * src/components/SendButton.jsx, src/pages/AuthModal.jsx,
- * src/components/questions/ShareStorySheet.jsx (mounted by the parent —
- * see onShareReply below, this page never imports it directly)
+ * src/components/questions/ShareStorySheet.jsx
  * ============================================================================
  */
 
@@ -61,6 +42,7 @@ import { showToast, friendlyDbError } from '../lib/toast';
 import MessageSkeleton from '../components/shared/MessageSkeleton';
 import SendButton from '../components/shared/SendButton';
 import AuthModal from './AuthModal';
+import ShareStorySheet from '../components/questions/ShareStorySheet';
 
 // ============================================================================
 // 1. CONSTANTS
@@ -109,7 +91,6 @@ const Icons = {
       <circle cx="12" cy="7" r="4" />
     </svg>
   ),
-  // New — per-reply "share to story" affordance, author-only.
   Share: (
     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
       <circle cx="18" cy="5" r="3" />
@@ -318,8 +299,6 @@ function ReplyBubble({ reply, isOwn, canShare, onShare }) {
   );
 }
 
-// Small identity affordance for the header: shows who's replying when
-// signed in, or an optional (never required) sign-up pill when not.
 function IdentityPill({ session, profile, onSignUp }) {
   if (session?.user) {
     const label = profile?.username || 'Signed in';
@@ -389,6 +368,9 @@ export default function QuestionThread({ questionId, onBack, onShareReply }) {
   const [addToConfessions, setAddToConfessions] = useState(false);
   const [visitorId, setVisitorId] = useState(null);
   const [authOpen, setAuthOpen] = useState(false);
+  
+  // Local state for standalone sharing
+  const [sharingReplyLocal, setSharingReplyLocal] = useState(null);
 
   const scrollRef = useRef(null);
 
@@ -560,8 +542,14 @@ export default function QuestionThread({ questionId, onBack, onShareReply }) {
   // SHARE-TO-STORY (author only — see file banner)
   // --------------------------------------------------------------------------
   function handleShareReply(reply) {
-    if (!isAuthor) return; // defensive — button is already hidden otherwise
-    onShareReply?.(question, reply);
+    if (!isAuthor) return; // defensive
+    
+    // If mounted by Home.jsx, pass it up. Otherwise, open local sheet.
+    if (onShareReply) {
+      onShareReply(question, reply);
+    } else {
+      setSharingReplyLocal(reply);
+    }
   }
 
   // --------------------------------------------------------------------------
@@ -772,6 +760,17 @@ export default function QuestionThread({ questionId, onBack, onShareReply }) {
       </div>
 
       <AuthModal open={authOpen} onClose={() => setAuthOpen(false)} initialTab="signup" onVerified={() => setAuthOpen(false)} />
+      
+      {/* Renders locally when mounted standalone without Home.jsx overriding it */}
+      {sharingReplyLocal && (
+        <ShareStorySheet
+          mode="reply"
+          open={!!sharingReplyLocal}
+          onClose={() => setSharingReplyLocal(null)}
+          question={question}
+          reply={sharingReplyLocal}
+        />
+      )}
     </div>
   );
 }

@@ -246,10 +246,14 @@ function resolveTopLevelView() {
     return <ConfessionsFeed />;
   }
 
-  const questionId = getQuestionIdFromPath();
-  if (questionId) {
-    return <QuestionThread questionId={questionId} />;
-  }
+  // ✅ FIX: Commented out the manual override for `/q/<id>`. 
+  // This forces it to fall through to `<Home />`, which properly handles
+  // putting the chat window in the right-hand panel on desktop!
+  //
+  // const questionId = getQuestionIdFromPath();
+  // if (questionId) {
+  //   return <QuestionThread questionId={questionId} />;
+  // }
 
   return <Home />;
 }
