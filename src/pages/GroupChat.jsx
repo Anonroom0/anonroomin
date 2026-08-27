@@ -107,27 +107,48 @@ async function scrapeInstagram(username) {
 }
 
 function ConfessionModal({ open, onClose, onSubmit }) {
-  const [text, setText] = useState(''); const [anon, setAnon] = useState(true); const [photo, setPhoto] = useState(null); const photoInputRef = useRef(null);
+  const [text, setText] = useState(''); 
+  const [anon, setAnon] = useState(true); 
+  const [media, setMedia] = useState(null); 
+  const mediaInputRef = useRef(null);
+
+  useEffect(() => {
+    return () => { if (media) URL.revokeObjectURL(media.previewUrl); };
+  }, [media]);
+
   if (!open) return null;
+
+  function handleFileChange(e) {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (file) {
+      setMedia({ file, isVideo: file.type.startsWith('video/'), previewUrl: URL.createObjectURL(file) });
+    }
+  }
+
   return (
     <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', zIndex: 50, display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
       <div onClick={(e) => e.stopPropagation()} style={{ width: '100%', maxWidth: 500, margin: '0 auto', background: '#1C1D24', borderRadius: '28px 28px 0 0', padding: '24px 20px', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
         <h3 style={{ margin: '0 0 16px', color: '#F4F3F0', fontSize: 20 }}>New Confession</h3>
         <textarea name="group-confession-composer" autoComplete="off" data-lpignore="true" data-1p-ignore data-form-type="other" value={text} onChange={(e) => setText(e.target.value)} rows={4} placeholder="Type your confession…" style={{ width: '100%', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 16, padding: 14, fontSize: 15, resize: 'none', boxSizing: 'border-box', background: '#15161B', color: '#F4F3F0', outline: 'none' }} />
-        {photo && (
+        {media && (
           <div style={{ position: 'relative', marginTop: 12, width: 80, height: 80 }}>
-            <img src={URL.createObjectURL(photo)} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 12 }} alt="preview" />
-            <button onClick={() => setPhoto(null)} style={{ position: 'absolute', top: -6, right: -6, background: '#2A2B36', color: '#F4F3F0', border: 'none', borderRadius: '50%', width: 24, height: 24, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{Vectors.Close}</button>
+            {media.isVideo ? (
+              <video src={media.previewUrl} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 12 }} />
+            ) : (
+              <img src={media.previewUrl} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 12 }} alt="preview" />
+            )}
+            <button onClick={() => setMedia(null)} style={{ position: 'absolute', top: -6, right: -6, background: '#2A2B36', color: '#F4F3F0', border: 'none', borderRadius: '50%', width: 24, height: 24, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 8px rgba(0,0,0,0.3)' }}>{Vectors.Close}</button>
           </div>
         )}
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', margin: '16px 0' }}>
           <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14, color: '#F4F3F0', cursor: 'pointer' }}>
             <input type="checkbox" checked={anon} onChange={(e) => setAnon(e.target.checked)} /> Post anonymously
           </label>
-          <button onClick={() => photoInputRef.current?.click()} style={{ background: '#2A2B36', border: 'none', color: '#F4F3F0', padding: '8px 12px', borderRadius: 12, cursor: 'pointer', fontSize: 13, display: 'flex', alignItems: 'center', gap: 6, fontWeight: 600 }}>{Vectors.Photo} Attach Photo</button>
-          <input type="file" accept="image/*" ref={photoInputRef} style={{ display: 'none' }} onChange={(e) => { if (e.target.files?.[0]) setPhoto(e.target.files[0]); e.target.value = ''; }} />
+          <button onClick={() => mediaInputRef.current?.click()} style={{ background: '#2A2B36', border: 'none', color: '#F4F3F0', padding: '8px 12px', borderRadius: 12, cursor: 'pointer', fontSize: 13, display: 'flex', alignItems: 'center', gap: 6, fontWeight: 600 }}>{Vectors.Photo} {media ? 'Media Added' : 'Add Media'}</button>
+          <input type="file" accept="image/*,video/*" ref={mediaInputRef} style={{ display: 'none' }} onChange={handleFileChange} />
         </div>
-        <button onClick={() => { if (text.trim() || photo) { onSubmit(text.trim(), anon, photo); setText(''); setPhoto(null); } }} style={{ width: '100%', padding: 16, borderRadius: 20, border: 'none', background: '#FF6B35', color: '#fff', fontWeight: 700, cursor: 'pointer', fontSize: 16 }}>Post Confession</button>
+        <button onClick={() => { if (text.trim() || media) { onSubmit(text.trim(), anon, media?.file); setText(''); setMedia(null); } }} style={{ width: '100%', padding: 16, borderRadius: 20, border: 'none', background: '#FF6B35', color: '#fff', fontWeight: 700, cursor: 'pointer', fontSize: 16 }}>Post Confession</button>
       </div>
     </div>
   );
@@ -624,19 +645,22 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
     else { setReplyingTo(null); cooldownRef.current?.start(); }
   }
 
-  async function handleConfessionSubmit(confessionText, anon, photoFile) {
+  async function handleConfessionSubmit(confessionText, anon, mediaFile) {
     setConfessionModalOpen(false);
     let mediaUrl = null; let mediaType = null;
-    if (photoFile) {
+    
+    if (mediaFile) {
       setUploading(true);
-      const path = `${session.user.id}/confession-${Date.now()}-${photoFile.name.replace(/[^a-zA-Z0-9.\-_]/g, '_')}`;
+      const path = `${session.user.id}/confession-${Date.now()}-${mediaFile.name.replace(/[^a-zA-Z0-9.\-_]/g, '_')}`;
       try {
-        await supabase.storage.from('media').upload(path, photoFile);
+        await supabase.storage.from('media').upload(path, mediaFile);
         const { data: publicUrlData } = supabase.storage.from('media').getPublicUrl(path);
-        mediaUrl = publicUrlData?.publicUrl; mediaType = 'image';
-      } catch (err) { showToast('Failed to upload photo', 'error'); setUploading(false); return; }
+        mediaUrl = publicUrlData?.publicUrl; 
+        mediaType = guessMediaType(mediaFile); 
+      } catch (err) { showToast('Failed to upload media', 'error'); setUploading(false); return; }
       setUploading(false);
     }
+    
     const senderName = anon ? 'Anonymous' : (profile?.is_admin ? ADMIN_DISPLAY_NAME : (profile?.username || 'Anonymous'));
     const { error } = await supabase.from('group_messages').insert({ group_id: group.id, user_id: session.user.id, sender_name: senderName, text: confessionText, is_anon: anon, is_confession: true, media_url: mediaUrl, media_type: mediaType });
     if (error) showToast(friendlyDbError(), 'error');
@@ -845,7 +869,7 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
                   {isConfession ? (
                      <div id={`msg-${message.id}`} className={isHighlighted ? 'highlight-flash' : ''} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: '100%', margin: '16px 0' }}>
                        <div style={{ width: '100%', maxWidth: 440, background: isSelected ? 'rgba(255,107,53, 0.15)' : 'transparent', borderRadius: 16 }}>
-                         <ConfessionBubble confession={{ id: message.confession_id || message.id, text: message.text, photo_url: message.media_url, is_anon: message.is_anon, created_at: message.created_at }} onReply={() => { if (selectedMessages.length === 0) startReply(message); }} onPhotoClick={(c) => setViewerMedia({ url: c.photo_url, type: 'image' })} userId={ownUserId} size="inline" />
+                         <ConfessionBubble confession={{ id: message.confession_id || message.id, text: message.text, photo_url: message.media_url, media_type: message.media_type, is_anon: message.is_anon, created_at: message.created_at }} onReply={() => { if (selectedMessages.length === 0) startReply(message); }} onPhotoClick={(c) => setViewerMedia({ url: c.photo_url || c.media_url, type: c.media_type || 'image' })} userId={ownUserId} size="inline" />
                          
                          <div style={{ marginTop: 8, display: 'flex', justifyContent: 'center', width: '100%' }}>
                            <ReactionBar 
@@ -864,6 +888,16 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
                                    const url = `${window.location.origin}${window.location.pathname}#msg-${toShortId(message.id)}`;
                                    navigator.clipboard.writeText(url);
                                    showToast('Link copied to clipboard!', 'info');
+                                 },
+                               },
+                               {
+                                 key: 'reply-link',
+                                 label: 'Copy Reply Link',
+                                 icon: <span style={{ display: 'flex', color: '#8B8B96' }}>{Vectors.ReplyAction}</span>,
+                                 onClick: () => {
+                                   const url = `${window.location.origin}${window.location.pathname}#reply-${toShortId(message.id)}`;
+                                   navigator.clipboard.writeText(url);
+                                   showToast('Reply link copied!', 'info');
                                  },
                                },
                                ...(isAdmin ? [{
@@ -977,6 +1011,16 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
                                    const url = `${window.location.origin}${window.location.pathname}#msg-${toShortId(message.id)}`;
                                    navigator.clipboard.writeText(url);
                                    showToast('Link copied to clipboard!', 'info');
+                                 },
+                               },
+                               {
+                                 key: 'reply-link',
+                                 label: 'Copy Reply Link',
+                                 icon: <span style={{ display: 'flex', color: '#8B8B96' }}>{Vectors.ReplyAction}</span>,
+                                 onClick: () => {
+                                   const url = `${window.location.origin}${window.location.pathname}#reply-${toShortId(message.id)}`;
+                                   navigator.clipboard.writeText(url);
+                                   showToast('Reply link copied!', 'info');
                                  },
                                },
                                ...(isAdmin ? [{

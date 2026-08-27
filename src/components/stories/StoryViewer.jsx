@@ -1,85 +1,22 @@
 /** ===========================================================================
  * STORY VIEWER — full-screen IG-style story playback
  * ============================================================================
- * <StoryViewer channels startIndex onClose userId onViewReplies? />
- *
- * `channels` is the array StoriesBar.jsx builds — groups (with fresh
- * confessions) first, then the two virtual channels 'public-confessions'
- * and 'public-questions', in that order. Each entry looks like:
- *   {
- *     type: 'group' | 'public-confessions' | 'public-questions',
- *     id:   string,
- *     name: string,
- *     logoUrl: string|null,
- *     slug: string|null,
- *   }
- *
- * Body content, one distinct treatment per type (never reused generically):
- *   - 'group': confessions posted inside that group, via the shared
- *     <ConfessionBubble size="story"/>.
- *   - 'public-confessions': standalone public confessions, same bubble.
- *     A confession that was actually posted as a question-reply (see
- *     QuestionThread.jsx's "Add to Confessions" flow, which tags the text
- *     with a small machine-readable marker) renders with an extra
- *     "Answered a question" strip quoting what it was replying to, so it
- *     reads as its own distinct kind of story rather than a plain
- *     confession.
- *   - 'public-questions' plays `questions` rows through a local
- *     <QuestionStoryCard>, with a "See all replies" button in the bottom
- *     bar (calls onViewReplies(questionId), wired to open QuestionThread).
- *
- * Progress bar: a segmented bar across the header, one segment per item in
- * the *current* channel — same visual language as Instagram. The active
- * segment fills over STORY_DURATION_MS and then auto-advances; completed
- * segments are solid, upcoming segments are empty. A press-and-hold pauses
- * the fill (and the chrome), same as IG's "hold to pause" behavior.
- *
- * Navigation:
- *   - Tap the right/left half of the story area to move within the current
- *     channel; running past either end walks into the neighboring channel
- *     (landing on its first/last item respectively), skipping any channel
- *     that resolves to zero items in the last 24h. Reaching the very end of
- *     the whole channel list closes the viewer.
- *   - Visible chevron nav buttons are layered over the tap zones purely for
- *     affordance/aesthetics — they trigger the exact same navigation as a
- *     tap, just discoverable without guessing.
- *   - A real swipe-left/right gesture jumps straight to the next/previous
- *     channel.
- *   - Whenever a channel boundary is crossed (tap-past-the-end, swipe, or
- *     auto-advance timeout at the last item), the new channel's card slides
- *     in from the appropriate side with a brief animation instead of
- *     popping in — this is the "end of channel" transition.
- *
- * Seen tracking: every time the active item changes, this writes a
- * per-channel "last seen" timestamp to localStorage (read by
- * StoriesBar.jsx to decide the ring highlight) and fires a
- * `anonroom:story-seen` window event so an already-mounted bar can refresh
- * without a reload.
- *
- * Reply/answer backend, per channel type — unchanged from before:
- *   - 'group': posts into group_messages (is_confession: false).
- *   - 'public-questions': posts into question_replies.
- *   - 'public-confessions': no composer — there's no comment table for a
- *     standalone confession, reactions still work.
- * Reactions always post to `reactions` with target_type="confession".
- *
- * Dependencies: React, src/lib/supabaseClient, src/components/shared/
- * ConfessionBubble.jsx, src/components/shared/ReactionBar.jsx.
- * ========================================================================= */
+ */
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import supabase from '../../lib/supabaseClient';
 import ConfessionBubble from '../shared/ConfessionBubble';
 import { buildQuestionPath, toShortId, getGroupUrl } from '../../lib/subdomain';
 import ReactionBar from '../shared/ReactionBar';
+import MediaViewer from '../../pages/MediaViewer';
 
-const STORY_WINDOW_MS = 24 * 60 * 60 * 1000; // stories are ephemeral: last 24h only
+const STORY_WINDOW_MS = 24 * 60 * 60 * 1000;
 const IDLE_HIDE_MS = 4000;
-const STORY_DURATION_MS = 6000; // per-item autoplay duration, IG-ish pace
+const STORY_DURATION_MS = 6000;
 const SEEN_KEY_PREFIX = 'anonroom_story_seen:';
 
 // ============================================================================
-// 1. DATA HELPERS
+// 1. DATA HELPERS & MEDIA DETECTION
 // ============================================================================
 
 const QUESTION_REPLY_MARKER = /^❓ Re: "([\s\S]*?)"\n\n([\s\S]*)$/;
@@ -105,8 +42,21 @@ function markChannelSeen(channel, item) {
     }
     window.dispatchEvent(new Event('anonroom:story-seen'));
   } catch {
-    // localStorage unavailable — seen-state just won't persist, non-fatal.
+    // Non-fatal
   }
+}
+
+function detectMediaType(url, explicitType) {
+  if (explicitType === 'video' || explicitType === 'audio') return explicitType;
+  if (!url) return 'image';
+  const cleanUrl = url.split('?')[0].split('#')[0].toLowerCase();
+  if (/\.(mp4|webm|ogg|mov|m4v|mkv|3gp|quicktime)$/i.test(cleanUrl)) {
+    return 'video';
+  }
+  if (/\.(mp3|wav|ogg|m4a|aac)$/i.test(cleanUrl)) {
+    return 'audio';
+  }
+  return explicitType || 'image';
 }
 
 async function loadChannelItems(channel) {
@@ -155,7 +105,7 @@ function buildShareUrl(channel, item) {
 }
 
 // ============================================================================
-// 2. STORY CARDS (one distinct look per content type)
+// 2. STORY CARDS
 // ============================================================================
 
 export function QuestionStoryCard({ question }) {
@@ -211,11 +161,11 @@ export function QuestionStoryCard({ question }) {
   );
 }
 
-function ConfessionOrQuestionReplyCard({ item, userId }) {
+function ConfessionOrQuestionReplyCard({ item, userId, onPhotoClick }) {
   const parsed = useMemo(() => parseQuestionReplyConfession(item.text), [item.text]);
 
   if (!parsed) {
-    return <ConfessionBubble confession={item} size="story" userId={userId} />;
+    return <ConfessionBubble confession={item} size="story" userId={userId} onPhotoClick={onPhotoClick} />;
   }
 
   const cleanedItem = { ...item, text: parsed.replyText };
@@ -250,7 +200,7 @@ function ConfessionOrQuestionReplyCard({ item, userId }) {
           "{parsed.questionExcerpt}"
         </span>
       </div>
-      <ConfessionBubble confession={cleanedItem} size="story" userId={userId} />
+      <ConfessionBubble confession={cleanedItem} size="story" userId={userId} onPhotoClick={onPhotoClick} />
     </div>
   );
 }
@@ -341,6 +291,8 @@ export default function StoryViewer({ channels, startIndex = 0, initialItemId, o
   const [paused, setPaused] = useState(false);
   const [slideDir, setSlideDir] = useState(null); 
   const [slideKey, setSlideKey] = useState(0);
+  
+  const [viewerMedia, setViewerMedia] = useState(null);
 
   const idleTimerRef = useRef(null);
   const touchStartXRef = useRef(null);
@@ -349,7 +301,6 @@ export default function StoryViewer({ channels, startIndex = 0, initialItemId, o
   const progressStartRef = useRef(null);
   const holdTimerRef = useRef(null);
   
-  // Track if we've successfully jumped to the initial item so we don't do it twice
   const initialItemConsumedRef = useRef(false);
 
   const channel = channels && channels[chIndex];
@@ -407,7 +358,6 @@ export default function StoryViewer({ channels, startIndex = 0, initialItemId, o
         if (loaded.length === 0) {
           goToChannel(chIndex + skipDirRef.current, { dir: skipDirRef.current });
         } else if (initialItemId && !initialItemConsumedRef.current && chIndex === startIndex) {
-          // If we received an initialItemId from the URL, jump directly to it
           initialItemConsumedRef.current = true;
           const targetIdx = loaded.findIndex(i => i.id === initialItemId);
           if (targetIdx > 0) {
@@ -461,8 +411,9 @@ export default function StoryViewer({ channels, startIndex = 0, initialItemId, o
     else prevItem();
   }
 
+  // Story Auto-Advance (Pauses when MediaViewer is opened)
   useEffect(() => {
-    if (!item || paused || menuOpen) {
+    if (!item || paused || menuOpen || viewerMedia) {
       progressStartRef.current = null;
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
       return undefined;
@@ -486,7 +437,7 @@ export default function StoryViewer({ channels, startIndex = 0, initialItemId, o
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [item, chIndex, itemIndex, paused, menuOpen]);
+  }, [item, chIndex, itemIndex, paused, menuOpen, viewerMedia]);
 
   function handlePressStart() {
     holdTimerRef.current = setTimeout(() => setPaused(true), 180);
@@ -722,6 +673,8 @@ export default function StoryViewer({ channels, startIndex = 0, initialItemId, o
               width: '100%',
               display: 'flex',
               justifyContent: 'center',
+              position: 'relative',
+              zIndex: 21,
               animation: slideDir
                 ? `story-slide-${slideDir} 320ms cubic-bezier(0.22, 1, 0.36, 1)`
                 : 'story-pop-in 220ms ease-out',
@@ -730,7 +683,15 @@ export default function StoryViewer({ channels, startIndex = 0, initialItemId, o
             {channel.type === 'public-questions' ? (
               <QuestionStoryCard question={item} />
             ) : (
-              <ConfessionOrQuestionReplyCard item={item} userId={userId} />
+              <ConfessionOrQuestionReplyCard 
+                item={item} 
+                userId={userId} 
+                onPhotoClick={(c) => {
+                  const mediaUrl = c.photo_url || c.media_url;
+                  const mediaType = detectMediaType(mediaUrl, c.media_type);
+                  setViewerMedia({ url: mediaUrl, type: mediaType });
+                }}
+              />
             )}
           </div>
         )}
@@ -874,6 +835,14 @@ export default function StoryViewer({ channels, startIndex = 0, initialItemId, o
           )}
         </div>
       </div>
+      
+      {/* MediaViewer Modal with pause synchronization */}
+      <MediaViewer 
+        mediaUrl={viewerMedia?.url} 
+        mediaType={viewerMedia?.type} 
+        open={viewerMedia !== null} 
+        onClose={() => setViewerMedia(null)} 
+      />
 
       <style>{`
         @keyframes story-slide-from-right {

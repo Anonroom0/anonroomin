@@ -34,19 +34,19 @@
  * inline for is_confession messages (a labeled, gradient-tinted bubble with
  * the confession text and a reply affordance) — restyled to the header-
  * strip + glass-body structure specified here, now with reactions and an
- * optional photo, shared verbatim across all three surfaces instead of
+ * optional photo/video, shared verbatim across all three surfaces instead of
  * being reimplemented per-page.
  *
- * Dependencies: React, src/components/shared/ReactionBar.jsx
+ * Dependencies: React, src/components/shared/ReactionBar.jsx, MediaViewer.jsx
  * ========================================================================= */
+/** ===========================================================================
+ * CONFESSION BUBBLE — shared NGL-style confession card
+ * ============================================================================
+ */
 
 import React, { useState } from 'react';
+import MediaViewer from '../../pages/MediaViewer';
 
-// ============================================================================
-// 1. SIZE PRESETS
-// ============================================================================
-// Each size only varies width/padding/text-scale — the structural shape
-// (header strip -> glass body -> image -> text -> bottom row) is identical.
 const SIZE_PRESETS = {
   inline: {
     maxWidth: 300,
@@ -68,16 +68,6 @@ const SIZE_PRESETS = {
   },
 };
 
-// ============================================================================
-// 2. UTILITY
-// ============================================================================
-
-/**
- * Relative timestamp for the header strip — matches the same rough
- * granularity (today/yesterday-style buckets collapse to hours/days) other
- * relative-time helpers in the app use, kept local since this is the only
- * place ConfessionBubble needs it.
- */
 function relativeTime(dateString) {
   if (!dateString) return '';
   const diffMs = Date.now() - new Date(dateString).getTime();
@@ -91,18 +81,31 @@ function relativeTime(dateString) {
   return new Date(dateString).toLocaleDateString([], { month: 'short', day: 'numeric' });
 }
 
-// ============================================================================
-// 3. MAIN EXPORT
-// ============================================================================
+function detectMediaType(url, explicitType) {
+  if (explicitType === 'video' || explicitType === 'audio') return explicitType;
+  if (!url) return 'image';
+  const cleanUrl = url.split('?')[0].split('#')[0].toLowerCase();
+  if (/\.(mp4|webm|ogg|mov|m4v|mkv|3gp|quicktime)$/i.test(cleanUrl)) {
+    return 'video';
+  }
+  if (/\.(mp3|wav|ogg|m4a|aac)$/i.test(cleanUrl)) {
+    return 'audio';
+  }
+  return explicitType || 'image';
+}
 
 export default function ConfessionBubble({ confession, onReply, onPhotoClick, size = 'inline' }) {
   const preset = SIZE_PRESETS[size] || SIZE_PRESETS.inline;
   const isStory = size === 'story';
 
-  // Story mode starts with chrome hidden and reveals it on a single tap —
-  // the IG/NGL convention. Other sizes always show their chrome.
   const [storyChromeVisible, setStoryChromeVisible] = useState(false);
+  const [localMediaOpen, setLocalMediaOpen] = useState(false);
+
   const showChrome = !isStory || storyChromeVisible;
+
+  const mediaUrl = confession.photo_url || confession.media_url;
+  const mediaType = detectMediaType(mediaUrl, confession.media_type);
+  const isVideo = mediaType === 'video';
 
   function handleBodyTap() {
     if (isStory) setStoryChromeVisible((v) => !v);
@@ -113,13 +116,13 @@ export default function ConfessionBubble({ confession, onReply, onPhotoClick, si
       style={{
         display: 'flex',
         flexDirection: 'column',
-        alignItems: 'center', // always centered — never left/right aligned
+        alignItems: 'center',
         width: '70%',
         margin: isStory ? 0 : '16px 0',
       }}
     >
       <div style={{ width: '100%', maxWidth: preset.maxWidth }}>
-        {/* Header strip: --ember at low opacity, label + relative timestamp */}
+        {/* Header strip */}
         <div
           style={{
             display: 'flex',
@@ -149,9 +152,7 @@ export default function ConfessionBubble({ confession, onReply, onPhotoClick, si
           </span>
         </div>
 
-        {/* Body: rectangular --glass-white, 20px radius (header strip already
-            rounds the top corners, so the body only rounds the bottom two
-            here to read as one continuous card). */}
+        {/* Body */}
         <div
           onClick={handleBodyTap}
           style={{
@@ -163,31 +164,53 @@ export default function ConfessionBubble({ confession, onReply, onPhotoClick, si
             cursor: isStory ? 'pointer' : 'default',
           }}
         >
-          {confession.photo_url && (
+          {mediaUrl && (
             <div
               onClick={(e) => {
-                // The photo has its own tap target: everywhere else on the
-                // card (background, text, reply/react row) tapping toggles
-                // the reaction tray via the caller's outer onClick, but
-                // tapping the photo itself should always open it full-screen
-                // in the media viewer instead — so this stops that outer
-                // handler from ever seeing the click.
                 e.stopPropagation();
-                if (isStory) { handleBodyTap(); return; }
-                if (onPhotoClick) onPhotoClick(confession);
+                if (onPhotoClick) {
+                  onPhotoClick({
+                    ...confession,
+                    photo_url: mediaUrl,
+                    media_url: mediaUrl,
+                    media_type: mediaType,
+                  });
+                } else {
+                  setLocalMediaOpen(true);
+                }
               }}
               style={{
                 width: '100%',
                 aspectRatio: '4 / 5',
                 background: 'var(--ink-2)',
-                cursor: isStory || onPhotoClick ? 'pointer' : 'default',
+                cursor: isStory || onPhotoClick ? 'pointer' : 'zoom-in',
+                position: 'relative',
               }}
             >
-              <img
-                src={confession.photo_url}
-                alt=""
-                style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
-              />
+              {isVideo ? (
+                <video
+                  src={mediaUrl}
+                  style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                  muted
+                  playsInline
+                  loop
+                  autoPlay
+                />
+              ) : (
+                <img
+                  src={mediaUrl}
+                  alt="Confession attachment"
+                  style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
+                />
+              )}
+              
+              {isVideo && (
+                <div style={{ position: 'absolute', top: 12, right: 12, background: 'rgba(0,0,0,0.45)', borderRadius: '50%', width: 28, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(4px)' }}>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="white" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <polygon points="5 3 19 12 5 21 5 3" />
+                  </svg>
+                </div>
+              )}
             </div>
           )}
 
@@ -207,9 +230,6 @@ export default function ConfessionBubble({ confession, onReply, onPhotoClick, si
             </div>
           )}
 
-          {/* Bottom row: reply affordance only. Reactions were removed from
-              this component. In story mode this stays hidden until the
-              chrome is revealed by a tap. */}
           {showChrome && onReply && (
             <div
               style={{
@@ -218,7 +238,7 @@ export default function ConfessionBubble({ confession, onReply, onPhotoClick, si
                 justifyContent: 'flex-start',
                 gap: 10,
                 padding: `10px ${preset.bodyPadding.split(' ')[1]} 14px`,
-                borderTop: confession.text || confession.photo_url ? '1px solid var(--glass-border)' : 'none',
+                borderTop: confession.text || mediaUrl ? '1px solid var(--glass-border)' : 'none',
               }}
             >
               <button
@@ -250,6 +270,14 @@ export default function ConfessionBubble({ confession, onReply, onPhotoClick, si
           )}
         </div>
       </div>
+      
+      {/* Local fallback MediaViewer */}
+      <MediaViewer
+        mediaUrl={mediaUrl}
+        mediaType={isVideo ? 'video' : 'image'}
+        open={localMediaOpen}
+        onClose={() => setLocalMediaOpen(false)}
+      />
     </div>
   );
 }

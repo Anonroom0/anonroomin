@@ -284,6 +284,34 @@ export default function App() {
     };
   }, []);
 
+  // ----------------------------------------------------------------------
+  // Global Browser Autofill Bar Blocker
+  // ----------------------------------------------------------------------
+  useEffect(() => {
+    const sanitizeInputs = () => {
+      const inputs = document.querySelectorAll('input, textarea');
+      inputs.forEach(input => {
+        input.setAttribute('data-lpignore', 'true');
+        input.setAttribute('data-1p-ignore', 'true');
+        
+        if (input.getAttribute('type') === 'password') {
+          // Best for actual password fields
+          input.setAttribute('autoComplete', 'new-password');
+        } else {
+          // The magic bullet for hiding the Key/Card/Pin bar on text fields
+          input.setAttribute('autoComplete', 'one-time-code');
+        }
+      });
+    };
+
+    sanitizeInputs();
+    const observer = new MutationObserver(sanitizeInputs);
+    observer.observe(document.body, { childList: true, subtree: true });
+
+    return () => observer.disconnect();
+  }, []);
+
+
   return (
     <>
       {/* Mounted once, above everything else, so toasts can render no
