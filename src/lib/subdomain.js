@@ -233,3 +233,21 @@ export function getConfessionsFeedPath() {
 export function isConfessionsFeedPath() {
   return window.location.pathname.replace(/^\/+|\/+$/g, '') === 'confessions';
 }
+
+// ----------------------------------------------------------------------------
+// PASSWORD RESET ROUTING (root domain, /reset-password)
+// ----------------------------------------------------------------------------
+// AuthModal.jsx's "Forgot Password?" flow calls
+// supabase.auth.resetPasswordForEmail(email, { redirectTo: ... }); this is
+// the dedicated page that redirectTo now points at (see
+// supabase/reset-password-email-template.html and src/pages/
+// ResetPassword.jsx) instead of dumping the visitor back on the bare root
+// with a recovery token in the URL and no UI to do anything with it.
+
+export function getResetPasswordPath() {
+  return '/reset-password';
+}
+
+export function isResetPasswordPath() {
+  return window.location.pathname.replace(/^\/+|\/+$/g, '') === 'reset-password';
+}

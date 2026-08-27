@@ -44,9 +44,10 @@ import { AuthProvider } from './lib/authContext';
 import Home from './pages/Home';
 import QuestionThread from './pages/QuestionThread';
 import ConfessionsFeed from './pages/ConfessionsFeed';
+import ResetPassword from './pages/ResetPassword';
 import supabase from './lib/supabaseClient';
 import ToastContainer from './components/ToastContainer';
-import { getQuestionIdFromPath, isConfessionsFeedPath } from './lib/subdomain';
+import { getQuestionIdFromPath, isConfessionsFeedPath, isResetPasswordPath } from './lib/subdomain';
 import { getCookie, setCookie, getOrCreateVisitorId } from './lib/visitorId';
 import './styles/tokens.css';
 
@@ -232,6 +233,15 @@ function LocationBanner() {
 // dispatched at this same top level rather than nested inside any
 // login-required or location-gated branch.
 function resolveTopLevelView() {
+  // Checked first: this is where Supabase's password-recovery email link
+  // redirects to (see AuthModal.jsx's resetPasswordForEmail redirectTo),
+  // and it needs to render outside any auth gate exactly like /q/<id> and
+  // /confessions — the visitor isn't "logged in" yet in the normal sense,
+  // they're mid-recovery.
+  if (isResetPasswordPath()) {
+    return <ResetPassword />;
+  }
+
   if (isConfessionsFeedPath()) {
     return <ConfessionsFeed />;
   }

@@ -33,6 +33,7 @@
 import { useState } from 'react';
 import GlassPanel from '../shared/GlassPanel';
 import SendButton from '../shared/SendButton';
+import GlassToggle from '../shared/GlassToggle';
 import ShareStorySheet from './ShareStorySheet';
 import { useAuth } from '../../lib/authContext';
 import supabase from '../../lib/supabaseClient';
@@ -78,6 +79,11 @@ function CreateQuestionModalContent({ onCreated }) {
   const [questionType, setQuestionType] = useState(null);
   const [text, setText] = useState('');
   const [isSubmitting, setIsSubmitting] = useState(false);
+  // Private replies: when on, replies people send to this question are only
+  // ever visible to this question's owner (see question_replies' RLS in
+  // supabase/migrations/0003_private_question_replies.sql) — not shown in a
+  // public thread to every visitor the way replies normally are.
+  const [privateReplies, setPrivateReplies] = useState(false);
 
   const trimmedText = text.trim();
   const canSend = !!questionType && trimmedText.length > 0 && trimmedText.length <= MAX_QUESTION_LENGTH;
@@ -93,6 +99,7 @@ function CreateQuestionModalContent({ onCreated }) {
           author_id: session.user.id,
           question_type: questionType,
           text: trimmedText,
+          is_private: privateReplies,
         })
         .select()
         .single();
@@ -190,6 +197,32 @@ function CreateQuestionModalContent({ onCreated }) {
         >
           {trimmedText.length}/{MAX_QUESTION_LENGTH}
         </div>
+      </div>
+
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: 12,
+          padding: '12px 16px',
+          borderRadius: 20,
+          border: '1px solid var(--glass-border)',
+          background: 'var(--glass-white)',
+          backdropFilter: 'blur(20px) saturate(115%)',
+        }}
+      >
+        <div style={{ minWidth: 0 }}>
+          <span style={{ display: 'block', fontSize: 15, fontWeight: 700, color: 'var(--paper)' }}>
+            Private replies
+          </span>
+          <span style={{ display: 'block', fontSize: 12.5, color: 'var(--dim)', marginTop: 2, lineHeight: 1.35 }}>
+            {privateReplies
+              ? 'Only you will be able to see who replies.'
+              : 'Anyone with the link can see all replies.'}
+          </span>
+        </div>
+        <GlassToggle checked={privateReplies} onChange={setPrivateReplies} />
       </div>
 
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 14 }}>

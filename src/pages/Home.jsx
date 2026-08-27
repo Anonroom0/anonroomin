@@ -23,6 +23,7 @@ import {
   getGroupUrl,
   getDmUsernameFromPath,
   buildDmPath,
+  buildQuestionPath,
   ROOT_PATH,
 } from '../lib/subdomain';
 import { subscribeToPush } from '../lib/pushNotifications';
@@ -384,7 +385,10 @@ export default function Home() {
     if (type === 'dm' && !userId) { setAuthOpen(true); return; }
     setActiveChatId(id); setActiveChatType(type); setActiveChatSource('path'); setSearchQuery('');
     if (type === 'dm') window.history.pushState({}, '', metaContext ? buildDmPath(metaContext) : ROOT_PATH);
-    else if (type === 'question') window.history.pushState({}, '', `/q/${id}`);
+    // Always push the short 8-char /q/<id> link (same recipe ShareStorySheet's
+    // copy-link button uses) rather than the raw uuid, so the URL bar always
+    // matches what gets shared/copied — this was the "long link" bug.
+    else if (type === 'question') window.history.pushState({}, '', buildQuestionPath(id));
   }
 
   function handleOpenGroup(slug) { window.location.href = getGroupUrl(slug); }

@@ -19,6 +19,7 @@ import { createPortal } from 'react-dom';
 import supabase from '../lib/supabaseClient';
 import { useAuth } from '../lib/authContext';
 import GlassToggle from '../components/shared/GlassToggle';
+import { getResetPasswordPath } from '../lib/subdomain';
 
 const RESEND_COOLDOWN_S = 30;
 const ANIMATION_DURATION = 400; 
@@ -190,7 +191,16 @@ export default function AuthModal({ open, onClose, initialTab = 'signin', onVeri
 
     setSubmitting(true);
     try {
-      const { error: resetError } = await supabase.auth.resetPasswordForEmail(email.trim(), { redirectTo: window.location.origin });
+      // Previously redirected to the bare app root — the recovery link
+      // landed the visitor back on the home screen with a recovery token
+      // in the URL and no UI anywhere that did anything with it. Now
+      // points at the dedicated /reset-password page (see
+      // src/pages/ResetPassword.jsx and App.jsx's routing) that actually
+      // lets them set a new password.
+      const { error: resetError } = await supabase.auth.resetPasswordForEmail(
+        email.trim(),
+        { redirectTo: `${window.location.origin}${getResetPasswordPath()}` }
+      );
       if (resetError) throw resetError;
       setStage('success');
       setTimeout(() => handleClose(), 2000);
