@@ -26,6 +26,19 @@
  * share icon. Tapping it hands that single reply off to onShareReply, which
  * Home.jsx wires to <ShareStorySheet> OR handles it locally if mounted standalone.
  *
+ * KEYBOARD HANDLING: the root wrapper tracks window.visualViewport height
+ * instead of trusting 100dvh — on iOS/Android the layout viewport doesn't
+ * shrink when the keyboard opens, only the visual viewport does, which is
+ * why the composer used to end up hidden behind the keyboard. See
+ * useVisualViewportHeight() below.
+ *
+ * AUTOFILL HANDLING: the reply input is mounted readOnly and only becomes
+ * editable on focus, uses a randomized `name` per mount, type="text" (not
+ * "search", which invites native search-history suggestions), and
+ * autoComplete="new-password" as the strongest available anti-autofill
+ * signal. This is a public anonymous field — nothing should ever be
+ * pre-filled into it by a password manager or browser autofill.
+ *
  * Dependencies: React, Supabase, AuthContext, src/lib/visitorId.js,
  * src/lib/subdomain.js, src/components/MessageSkeleton.jsx,
  * src/components/SendButton.jsx, src/pages/AuthModal.jsx,
@@ -130,6 +143,48 @@ function extractQuestionBodyText(row) {
 
 function extractReplyBodyText(row) {
   return row?.reply_text ?? row?.text ?? row?.body ?? row?.content ?? '';
+}
+
+// ============================================================================
+// 3b. VIEWPORT HOOK (keyboard-safe height)
+// ============================================================================
+
+/**
+ * Tracks window.visualViewport.height instead of trusting 100dvh / 100vh.
+ * On iOS Safari (and many Android browsers) the *layout* viewport does not
+ * shrink when the on-screen keyboard opens — only the *visual* viewport
+ * does. A container sized with 100dvh stays full-height and the keyboard
+ * simply covers whatever is at the bottom (our composer). Sizing the root
+ * wrapper to this value instead makes flex layout push the composer up
+ * above the keyboard, since it's a flexShrink:0 child of a container that
+ * has actually gotten shorter.
+ */
+function useVisualViewportHeight() {
+  const getHeight = () =>
+    typeof window !== 'undefined' && window.visualViewport
+      ? window.visualViewport.height
+      : typeof window !== 'undefined'
+      ? window.innerHeight
+      : 0;
+
+  const [vh, setVh] = useState(getHeight);
+
+  useEffect(() => {
+    const vv = window.visualViewport;
+    if (!vv) return undefined;
+
+    const update = () => setVh(vv.height);
+    update();
+
+    vv.addEventListener('resize', update);
+    vv.addEventListener('scroll', update);
+    return () => {
+      vv.removeEventListener('resize', update);
+      vv.removeEventListener('scroll', update);
+    };
+  }, []);
+
+  return vh;
 }
 
 // ============================================================================
@@ -370,11 +425,21 @@ export default function QuestionThread({ questionId, onBack, onShareReply }) {
   const [addToConfessions, setAddToConfessions] = useState(false);
   const [visitorId, setVisitorId] = useState(null);
   const [authOpen, setAuthOpen] = useState(false);
-  
+
   // Local state for standalone sharing
   const [sharingReplyLocal, setSharingReplyLocal] = useState(null);
 
+  // Anti-autofill: field starts readOnly and only becomes editable once the
+  // user actually focuses it. Combined with a randomized `name` below, this
+  // stops browsers/password managers from populating it on mount.
+  const [replyFieldLocked, setReplyFieldLocked] = useState(true);
+  const replyFieldNameRef = useRef(`rf-${Math.random().toString(36).slice(2)}`);
+
   const scrollRef = useRef(null);
+  const composerInputRef = useRef(null);
+
+  // Keyboard-safe height for the whole page (see useVisualViewportHeight above).
+  const viewportHeight = useVisualViewportHeight();
 
   const isAuthor = !!(ownUserId && question?.author_id && ownUserId === question.author_id);
   const isPrivate = !!question?.is_private;
@@ -485,6 +550,15 @@ export default function QuestionThread({ questionId, onBack, onShareReply }) {
     return !!visitorId && reply.visitor_id === visitorId;
   }
 
+  function handleComposerFocus() {
+    setReplyFieldLocked(false);
+    // Nudge the composer into view above the keyboard once it opens. The
+    // rAF gives the keyboard-open resize a moment to fire first.
+    requestAnimationFrame(() => {
+      composerInputRef.current?.scrollIntoView({ block: 'end', behavior: 'smooth' });
+    });
+  }
+
   async function handleSendReply(e) {
     e.preventDefault();
     const trimmed = replyText.trim();
@@ -547,7 +621,7 @@ export default function QuestionThread({ questionId, onBack, onShareReply }) {
   // --------------------------------------------------------------------------
   function handleShareReply(reply) {
     if (!isAuthor) return; // defensive
-    
+
     // If mounted by Home.jsx, pass it up. Otherwise, open local sheet.
     if (onShareReply) {
       onShareReply(question, reply);
@@ -586,7 +660,11 @@ export default function QuestionThread({ questionId, onBack, onShareReply }) {
       style={{
         display: 'flex',
         flexDirection: 'column',
-        height: '100dvh',
+        // Was: height: '100dvh'. On iOS/Android the layout viewport doesn't
+        // shrink when the keyboard opens, so 100dvh left the composer
+        // hidden under the keyboard. window.visualViewport.height does
+        // shrink, so we track it live via useVisualViewportHeight().
+        height: viewportHeight ? `${viewportHeight}px` : '100dvh',
         width: '100%',
         overflow: 'hidden',
         background: 'radial-gradient(circle at 50% 0%, rgba(255,107,53,0.06), transparent 55%), var(--ink)',
@@ -708,7 +786,7 @@ export default function QuestionThread({ questionId, onBack, onShareReply }) {
             This reply will also be posted to Confessions.
           </div>
         )}
-        <form onSubmit={handleSendReply} autoComplete="off-nope" data-form-type="other" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px' }}>
+        <form onSubmit={handleSendReply} autoComplete="off" data-form-type="other" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px' }}>
           {isAuthor && (
             <button
               type="button"
@@ -734,9 +812,12 @@ export default function QuestionThread({ questionId, onBack, onShareReply }) {
             </button>
           )}
           <input
-            type="search"
-            name="question-reply-f"
-            autoComplete="off-nope"
+            ref={composerInputRef}
+            type="text"
+            name={replyFieldNameRef.current}
+            readOnly={replyFieldLocked}
+            onFocus={handleComposerFocus}
+            autoComplete="new-password"
             autoCorrect="off"
             autoCapitalize="off"
             spellCheck="false"
@@ -764,7 +845,7 @@ export default function QuestionThread({ questionId, onBack, onShareReply }) {
       </div>
 
       <AuthModal open={authOpen} onClose={() => setAuthOpen(false)} initialTab="signup" onVerified={() => setAuthOpen(false)} />
-      
+
       {/* Renders locally when mounted standalone without Home.jsx overriding it */}
       {sharingReplyLocal && (
         <ShareStorySheet

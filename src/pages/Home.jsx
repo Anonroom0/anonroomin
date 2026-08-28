@@ -9,6 +9,12 @@
  * - Single "Ask Question" button implemented with premium Group Chat style layout.
  * - Solid Matte colors enforced globally. 
  * - Z-indexes completely re-tiered to guarantee perfect layering.
+ * - KEYBOARD FIX: app-viewport / left panel / right panel no longer trust
+ *   100dvh. They now track window.visualViewport.height via
+ *   useVisualViewportHeight() (same approach used in QuestionThread.jsx),
+ *   because 100dvh does not reliably shrink for the on-screen keyboard on
+ *   iOS/Android and was letting the right-panel content (including
+ *   QuestionThread's composer) sit under the keyboard.
  * 
  * Dependencies: React, Supabase, AuthContext, Shared Components
  * ============================================================================
@@ -167,6 +173,45 @@ function usePullToRefresh(onRefresh, scrollRef) {
   return { pullDistance, isRefreshing, handleTouchStart, handleTouchMove, handleTouchEnd };
 }
 
+/**
+ * Tracks window.visualViewport.height instead of trusting 100dvh / 100vh.
+ * The whole app shell (app-viewport + both master/detail panels) used to be
+ * pinned to 100dvh with position:fixed + overflow:hidden. On iOS Safari
+ * (and some Android browsers) the *layout* viewport doesn't shrink when the
+ * keyboard opens — only the *visual* viewport does — so anything anchored
+ * to the bottom of a 100dvh container (like QuestionThread's composer,
+ * mounted inside the right panel here) ends up under the keyboard. Sizing
+ * these containers off this hook instead keeps them accurate. Mirrors the
+ * identical hook in QuestionThread.jsx.
+ */
+function useVisualViewportHeight() {
+  const getHeight = () =>
+    typeof window !== 'undefined' && window.visualViewport
+      ? window.visualViewport.height
+      : typeof window !== 'undefined'
+      ? window.innerHeight
+      : 0;
+
+  const [vh, setVh] = useState(getHeight);
+
+  useEffect(() => {
+    const vv = window.visualViewport;
+    if (!vv) return undefined;
+
+    const update = () => setVh(vv.height);
+    update();
+
+    vv.addEventListener('resize', update);
+    vv.addEventListener('scroll', update);
+    return () => {
+      vv.removeEventListener('resize', update);
+      vv.removeEventListener('scroll', update);
+    };
+  }, []);
+
+  return vh;
+}
+
 // ============================================================================
 // 4. UI SUB-COMPONENTS
 // ============================================================================
@@ -263,6 +308,10 @@ export default function Home() {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
   const isMobile = windowWidth < MOBILE_BREAKPOINT_PX;
+
+  // Keyboard-safe height for the whole app shell — see hook comment above.
+  const viewportHeight = useVisualViewportHeight();
+  const shellHeight = viewportHeight ? `${viewportHeight}px` : '100dvh';
 
   const [activeChatId, setActiveChatId] = useState(null); 
   const [activeChatType, setActiveChatType] = useState(null); 
@@ -497,7 +546,7 @@ const [sharingReply, setSharingReply] = useState(null); // NEW — { question, r
       <div 
         className="app-viewport no-copy-text" 
         style={{ 
-          display: 'flex', width: '100vw', height: '100dvh', maxHeight: '100dvh',
+          display: 'flex', width: '100vw', height: shellHeight, maxHeight: shellHeight,
           overflow: 'hidden', position: 'fixed', inset: 0,
           userSelect: 'none', WebkitUserSelect: 'none', msUserSelect: 'none'
         }}
@@ -512,7 +561,7 @@ const [sharingReply, setSharingReply] = useState(null); // NEW — { question, r
             style={{ 
               display: 'flex', flexDirection: 'column',
               width: isMobile ? '100%' : '25%', minWidth: isMobile ? '100%' : 280, 
-              height: '100dvh', borderRight: '1px solid rgba(255,255,255,0.06)', 
+              height: shellHeight, borderRight: '1px solid rgba(255,255,255,0.06)', 
               zIndex: 10, background: 'var(--ink-2)', position: 'relative'
             }}
           >
@@ -712,7 +761,7 @@ const [sharingReply, setSharingReply] = useState(null); // NEW — { question, r
           <div 
             style={{ 
               flex: 1, display: 'flex', flexDirection: 'column', position: 'relative', 
-              width: isMobile ? '100%' : undefined, height: '100dvh', borderRadius: 0, 
+              width: isMobile ? '100%' : undefined, height: shellHeight, borderRadius: 0, 
               zIndex: 1, background: 'var(--ink)', boxShadow: '-4px 0 24px rgba(0,0,0,0.2)' 
             }}
           >
