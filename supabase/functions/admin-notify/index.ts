@@ -28,10 +28,23 @@ const supabaseAdmin = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
   auth: { persistSession: false },
 });
 
+// This function is called directly from the browser (EditProfile.jsx's
+// "Send Test Push" button), unlike send-push which is only ever called
+// server-to-server (by the DB trigger and by this function). Without CORS
+// headers, the browser blocks both the preflight OPTIONS request and the
+// real response before any JS ever sees them — fetch() just reports a
+// generic "Failed to fetch" with no other detail, regardless of what this
+// function actually returned.
+const corsHeaders = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Headers': 'authorization, content-type',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+};
+
 function jsonResponse(body, status = 200) {
   return new Response(JSON.stringify(body), {
     status,
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...corsHeaders },
   });
 }
 
@@ -52,6 +65,14 @@ function resolveSendPushUrl() {
 }
 
 Deno.serve(async (req) => {
+  // The browser sends this preflight before the real POST because the
+  // request carries an Authorization header and a JSON content type.
+  // Answering it without CORS headers is exactly what was causing the
+  // "Failed to fetch" — the browser never even gets to the POST.
+  if (req.method === 'OPTIONS') {
+    return new Response(null, { status: 204, headers: corsHeaders });
+  }
+
   if (req.method !== 'POST') {
     return jsonResponse({ error: 'method not allowed' }, 405);
   }

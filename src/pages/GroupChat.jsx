@@ -318,8 +318,19 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
     if (!group?.id) return;
     let isMounted = true;
 
-    const { data: receiptData } = await supabase.from('group_read_receipts').select('last_read_at').eq('group_id', group.id).eq('user_id', ownUserId).maybeSingle();
-    const lastReadAt = receiptData?.last_read_at || '1970-01-01T00:00:00.000Z';
+    // Guests browsing a group without signing in have no ownUserId at all
+    // (that's a real, permanent state here — see the "Sign in to send
+    // message" composer below — not just "not loaded yet"), and this same
+    // effect also fires once ownUserId first resolves for an in-progress
+    // login. Either way, a read-receipt lookup makes no sense without a
+    // user id: skip the query rather than sending user_id=eq.undefined,
+    // which Postgres rejects outright (can't cast the literal string
+    // "undefined" to uuid).
+    let lastReadAt = '1970-01-01T00:00:00.000Z';
+    if (ownUserId) {
+      const { data: receiptData } = await supabase.from('group_read_receipts').select('last_read_at').eq('group_id', group.id).eq('user_id', ownUserId).maybeSingle();
+      lastReadAt = receiptData?.last_read_at || lastReadAt;
+    }
 
     // Only the most recent MESSAGE_LIMIT (20) messages load up front; older
     // history is fetched on demand as the user scrolls up — see

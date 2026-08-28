@@ -102,6 +102,19 @@ export function getGroupSlugFromHost() {
   return firstSegment;
 }
 
+// True when the current page is a specific group's subdomain (or, on
+// local/dev hosts, the ?group= query-param equivalent) rather than the
+// root app. Permission prompts (location, push notifications) are
+// intentionally root-domain-only — see LocationBanner in App.jsx and
+// subscribeToPush() in pushNotifications.js — since a visitor's first-ever
+// touch with the site is very often a shared group link straight to
+// slug.anonroom.in, and immediately hitting them with browser permission
+// dialogs there makes for a much worse first impression than on the root
+// app, where they've already chosen to engage more deeply.
+export function isGroupSubdomain() {
+  return Boolean(getGroupSlugFromHost());
+}
+
 // Builds the URL for "leave this group and go back to the main app" (used
 // by GroupChat's back button when it's mounted standalone on a
 // slug.anonroom.in route with no sidebar to return to). On local/dev hosts

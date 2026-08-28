@@ -14,6 +14,7 @@
  * ========================================================================= */
 
 import supabase from './supabaseClient';
+import { isGroupSubdomain } from './subdomain';
 
 /**
  * Converts a URL-safe base64 VAPID public key into the Uint8Array shape the
@@ -76,6 +77,17 @@ export async function getPushStatus() {
  export async function subscribeToPush(userId) {
   if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
     return false;
+  }
+
+  // Never prompt for push permission from a group subdomain — see
+  // isGroupSubdomain()'s comment in subdomain.js. This mirrors the
+  // LocationBanner guard in App.jsx: permission prompts are root-domain-only.
+  // Also technically necessary, not just a UX choice — the Push API scopes
+  // subscriptions per-origin, so a subscription created here wouldn't be
+  // reachable from the root app anyway; better to fail closed with a clear
+  // reason than silently create an orphaned, unusable subscription.
+  if (isGroupSubdomain()) {
+    throw new Error('Push notifications can only be enabled from the main site, not from a group page.');
   }
 
   // Fail loud and specific here. Without this check, a missing/blank env

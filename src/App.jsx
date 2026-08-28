@@ -47,7 +47,7 @@ import ConfessionsFeed from './pages/ConfessionsFeed';
 import ResetPassword from './pages/ResetPassword';
 import supabase from './lib/supabaseClient';
 import ToastContainer from './components/ToastContainer';
-import { getQuestionIdFromPath, isConfessionsFeedPath, isResetPasswordPath } from './lib/subdomain';
+import { getQuestionIdFromPath, isConfessionsFeedPath, isResetPasswordPath, isGroupSubdomain } from './lib/subdomain';
 import { getCookie, setCookie, getOrCreateVisitorId } from './lib/visitorId';
 import './styles/tokens.css';
 
@@ -78,6 +78,12 @@ function LocationBanner() {
   const [requesting, setRequesting] = useState(false);
 
   useEffect(() => {
+    // Never show this on a group subdomain — see isGroupSubdomain()'s
+    // comment in subdomain.js for why. Root-domain visits are unaffected.
+    if (isGroupSubdomain()) {
+      setVisible(false);
+      return;
+    }
     const alreadyGranted = getCookie(LOCATION_VERIFIED_COOKIE) === 'true';
     const alreadyDismissed = localStorage.getItem(LOCATION_BANNER_DISMISSED_KEY) === 'true';
     setVisible(!alreadyGranted && !alreadyDismissed);

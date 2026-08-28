@@ -3,19 +3,30 @@
  * ============================================================================
  * supabase/functions/send-push/index.ts
  *
- * Invoked either by the notify_on_relevant_insert() Postgres trigger (see
- * migration 0002_confessions_questions_reactions.sql — it posts here with a
- * service-role bearer token on every group_messages / dm_messages /
- * confessions insert) or directly by an admin action for a promotional
- * blast.
+ * Invoked by:
+ *   - notify_on_relevant_insert() (Postgres trigger, migration 0001) on every
+ *     group_messages / dm_messages insert, with a service-role bearer token.
+ *   - send_confession_digest() (pg_cron, migration 0006) once an hour, with
+ *     target_type 'confession_digest' — confessions no longer notify
+ *     per-insert; see that migration for why.
+ *   - admin-notify, for a promotional blast.
  *
- * Body: { target_type: 'group_message'|'dm_message'|'confession'|'admin',
- *         target_id, actor_id, title?, body?, url? }
+ * Body: { target_type: 'group_message'|'dm_message'|'confession_digest'|'admin',
+ *         target_id?, actor_id?, title?, body?, url? }
  *
- * Looks up the source row with the service-role client, resolves the
- * recipient list per notification_settings, sends a Web Push message to
- * every push_subscriptions row for each recipient, prunes dead
- * subscriptions on 404/410, and returns { sent, skipped }.
+ * NOTIFICATION VOLUME RULES (this is the part that changed):
+ *   - DM messages: unchanged, one push per message.
+ *   - Group messages: an @mention still pushes immediately, one-to-one, to
+ *     the mentioned user(s) — that's the one case where losing immediacy
+ *     would defeat the point. Everyone else with groups_enabled only gets
+ *     notified once every GROUP_MESSAGE_BATCH_SIZE messages, as a single
+ *     "N new messages" digest, instead of once per message. A very active
+ *     group was otherwise paging every member on every line typed.
+ *   - Confessions: no longer push per-confession at all (same problem, worse
+ *     — a confession dump could fire dozens of pushes back to back). A
+ *     cron-driven hourly digest checks for any new confession in the past
+ *     hour and, only if one exists, sends a single "new confessions"
+ *     notification instead.
  * ========================================================================= */
 
 import { createClient } from 'npm:@supabase/supabase-js@2';
@@ -23,11 +34,38 @@ import webpush from 'npm:web-push@3';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-const VAPID_PUBLIC_KEY = Deno.env.get('VAPID_PUBLIC_KEY')!;
-const VAPID_PRIVATE_KEY = Deno.env.get('VAPID_PRIVATE_KEY')!;
-const VAPID_SUBJECT = Deno.env.get('VAPID_SUBJECT')!;
+const VAPID_PUBLIC_KEY = Deno.env.get('VAPID_PUBLIC_KEY');
+const VAPID_PRIVATE_KEY = Deno.env.get('VAPID_PRIVATE_KEY');
+const VAPID_SUBJECT = Deno.env.get('VAPID_SUBJECT');
 
-webpush.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
+// A group message notification only actually reaches non-mentioned members
+// once every this-many messages, as a single digest. Mentions are exempt —
+// see the file header.
+const GROUP_MESSAGE_BATCH_SIZE = 200;
+
+// Judgment call: web-push's setVapidDetails() throws synchronously on a
+// missing/malformed key or a subject that doesn't start with mailto:/https:.
+// That used to run at module load time (outside any request handler), so a
+// misconfigured secret crashed the whole isolate for every request with an
+// opaque WORKER_ERROR instead of a readable response. Deferring it into a
+// lazy, memoized call inside the request handler turns "secrets are wrong"
+// into a normal 500 JSON response you can actually see in the client.
+let vapidConfigured = false;
+let vapidConfigError = null;
+function ensureVapidConfigured() {
+  if (vapidConfigured || vapidConfigError) return;
+  try {
+    if (!VAPID_PUBLIC_KEY || !VAPID_PRIVATE_KEY || !VAPID_SUBJECT) {
+      throw new Error(
+        'VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY, and VAPID_SUBJECT must all be set (supabase secrets set ...).'
+      );
+    }
+    webpush.setVapidDetails(VAPID_SUBJECT, VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
+    vapidConfigured = true;
+  } catch (err) {
+    vapidConfigError = err instanceof Error ? err.message : String(err);
+  }
+}
 
 const supabase = createClient(SUPABASE_URL, SERVICE_ROLE_KEY, {
   auth: { persistSession: false },
@@ -73,13 +111,71 @@ function settingValue(settingsRow, column) {
   return column !== 'promotional_enabled';
 }
 
+/**
+ * Actually sends a Web Push message to every push_subscriptions row for the
+ * given recipient user ids, pruning dead subscriptions on 404/410. Pulled
+ * out as its own helper because group_message notifications now need to
+ * send two DIFFERENT payloads (an immediate one to mentioned users, a
+ * digest one to everyone else) out of a single trigger invocation, instead
+ * of always sending one payload to one recipient list.
+ */
+async function sendToRecipients(recipientIds, title, body, url) {
+  if (recipientIds.length === 0) return { sent: 0, skipped: 0 };
+
+  const { data: subs } = await supabase
+    .from('push_subscriptions')
+    .select('id, user_id, endpoint, p256dh, auth')
+    .in('user_id', recipientIds);
+
+  let sent = 0;
+  let skipped = 0;
+
+  await Promise.all(
+    (subs ?? []).map(async (sub) => {
+      const subscription = {
+        endpoint: sub.endpoint,
+        keys: { p256dh: sub.p256dh, auth: sub.auth },
+      };
+      // Shape must match what public/sw.js reads off event.data.json().
+      const payloadJson = JSON.stringify({ title, body, icon: '/vite.svg', url });
+
+      try {
+        await webpush.sendNotification(subscription, payloadJson);
+        sent += 1;
+      } catch (err) {
+        const statusCode = err?.statusCode;
+        if (statusCode === 404 || statusCode === 410) {
+          // Expired/unsubscribed endpoint — clean it up so future sends
+          // don't keep paying for a dead subscription.
+          await supabase.from('push_subscriptions').delete().eq('id', sub.id);
+        }
+        skipped += 1;
+      }
+    }),
+  );
+
+  return { sent, skipped };
+}
+
+/**
+ * Splits a group message's audience into two lists:
+ *   - mentionRecipients: @mentioned members with mentions_enabled — always
+ *     notified immediately, regardless of message count.
+ *   - milestoneRecipients: everyone else with groups_enabled — only
+ *     populated (non-empty) when this message happens to be the Nth
+ *     (GROUP_MESSAGE_BATCH_SIZE-th) message in the group, so the caller
+ *     sends them a single digest instead of a per-message push.
+ * A member who is both mentioned AND happens to land on a milestone
+ * message only appears in mentionRecipients, so they get one push, not two.
+ */
 async function resolveGroupMessageRecipients(row, actorId) {
-  if (!row.group_id) return { recipients: [], groupName: null };
+  const empty = { mentionRecipients: [], milestoneRecipients: [], groupName: null, messageCount: 0 };
+  if (!row.group_id) return empty;
 
   const memberIds = await getGroupMemberIds(row.group_id, actorId);
-  if (memberIds.length === 0) return { recipients: [], groupName: null };
+  if (memberIds.length === 0) return empty;
 
-  const [{ data: settingsRows }, { data: profileRows }, { data: groupRow }] =
+  const [{ data: settingsRows }, { data: profileRows }, { data: groupRow }, { count: messageCount }] =
     await Promise.all([
       supabase
         .from('notification_settings')
@@ -87,22 +183,38 @@ async function resolveGroupMessageRecipients(row, actorId) {
         .in('user_id', memberIds),
       supabase.from('profiles').select('id, username').in('id', memberIds),
       supabase.from('groups').select('name').eq('id', row.group_id).maybeSingle(),
+      supabase.from('group_messages').select('id', { count: 'exact', head: true }).eq('group_id', row.group_id),
     ]);
 
   const settingsByUser = new Map((settingsRows ?? []).map((s) => [s.user_id, s]));
   const usernameByUser = new Map((profileRows ?? []).map((p) => [p.id, p.username]));
   const lowerText = (row.text ?? '').toLowerCase();
 
-  const recipients = memberIds.filter((id) => {
+  const isMilestone = messageCount > 0 && messageCount % GROUP_MESSAGE_BATCH_SIZE === 0;
+
+  const mentionRecipients = [];
+  const milestoneCandidates = [];
+
+  for (const id of memberIds) {
     const settings = settingsByUser.get(id);
     const groupsEnabled = settingValue(settings, 'groups_enabled');
     const mentionsEnabled = settingValue(settings, 'mentions_enabled');
     const username = usernameByUser.get(id);
     const mentioned = !!username && lowerText.includes(`@${username.toLowerCase()}`);
-    return groupsEnabled || (mentioned && mentionsEnabled);
-  });
 
-  return { recipients, groupName: groupRow?.name ?? null };
+    if (mentioned && mentionsEnabled) {
+      mentionRecipients.push(id);
+    } else if (groupsEnabled) {
+      milestoneCandidates.push(id);
+    }
+  }
+
+  return {
+    mentionRecipients,
+    milestoneRecipients: isMilestone ? milestoneCandidates : [],
+    groupName: groupRow?.name ?? null,
+    messageCount: messageCount ?? 0,
+  };
 }
 
 async function resolveDmRecipient(row, actorId) {
@@ -137,20 +249,17 @@ async function filterByConfessionsEnabled(candidateIds) {
   );
 }
 
-async function resolveConfessionRecipients(row, actorId) {
-  if (row.group_id) {
-    const memberIds = await getGroupMemberIds(row.group_id, actorId);
-    return { recipients: await filterByConfessionsEnabled(memberIds) };
-  }
-
-  // Public confession: every profile except the actor (author_id is null
-  // for anonymous confessions, so actorId may itself be null/undefined —
-  // .neq with a null value matches nothing usefully in Postgres, so guard it).
-  let query = supabase.from('profiles').select('id');
-  if (actorId) query = query.neq('id', actorId);
-  const { data: profileRows } = await query;
-  const candidateIds = (profileRows ?? []).map((p) => p.id);
-  return { recipients: await filterByConfessionsEnabled(candidateIds) };
+/**
+ * Hourly digest recipients: every profile (minus the confessions_enabled
+ * opt-out) is a candidate — this intentionally doesn't scope to a single
+ * group's members the way the old per-confession push did, since "new
+ * confessions are up" is a site-wide digest now, not a per-confession,
+ * per-group event. See migration 0006 for the cron side of this.
+ */
+async function resolveConfessionDigestRecipients() {
+  const { data: profileRows } = await supabase.from('profiles').select('id');
+  const allIds = (profileRows ?? []).map((p) => p.id);
+  return { recipients: await filterByConfessionsEnabled(allIds) };
 }
 
 async function resolveAdminRecipients() {
@@ -175,12 +284,22 @@ Deno.serve(async (req) => {
     return jsonResponse({ error: 'method not allowed' }, 405);
   }
 
-  // The DB trigger calls this with `Authorization: Bearer <service_role_key>`
-  // (see migration 0002's notify_on_relevant_insert()). Require the same
-  // key here so this endpoint can't be used to spam arbitrary push
-  // notifications by anyone who finds the URL, even with verify_jwt off.
-  const authHeader = req.headers.get('Authorization') ?? '';
-  if (authHeader !== `Bearer ${SERVICE_ROLE_KEY}`) {
+  ensureVapidConfigured();
+  if (vapidConfigError) {
+    console.error('send-push: VAPID misconfigured:', vapidConfigError);
+    return jsonResponse({ error: 'VAPID misconfigured', detail: vapidConfigError }, 500);
+  }
+
+  // The DB trigger/cron job calls this with
+  // `Authorization: Bearer <service_role_key>`. Require the same key here
+  // so this endpoint can't be used to spam arbitrary push notifications by
+  // anyone who finds the URL, even with verify_jwt off. .trim() on both
+  // sides guards against a trailing newline picked up from a copy-paste
+  // into Vault, which is invisible in most SQL result viewers but would
+  // otherwise fail this exact-match check.
+  const authHeader = (req.headers.get('Authorization') ?? '').trim();
+  const expected = `Bearer ${SERVICE_ROLE_KEY.trim()}`;
+  if (authHeader !== expected) {
     return jsonResponse({ error: 'unauthorized' }, 401);
   }
 
@@ -204,9 +323,6 @@ Deno.serve(async (req) => {
     return jsonResponse({ error: 'target_type is required' }, 400);
   }
 
-  let recipients = [];
-  let title = titleOverride;
-  let body = bodyOverride;
   const url = urlOverride ?? '/';
 
   try {
@@ -218,11 +334,41 @@ Deno.serve(async (req) => {
         .maybeSingle();
       if (!row) return jsonResponse({ sent: 0, skipped: 0 });
 
-      const { recipients: r, groupName } = await resolveGroupMessageRecipients(row, actorId);
-      recipients = r;
-      title = title ?? `New message in ${groupName ?? 'a group'}`;
-      body = body ?? truncate(row.text, 120);
-    } else if (targetType === 'dm_message') {
+      const { mentionRecipients, milestoneRecipients, groupName, messageCount } =
+        await resolveGroupMessageRecipients(row, actorId);
+
+      let sent = 0;
+      let skipped = 0;
+
+      // Mentions: immediate, one-to-one, with the actual message text.
+      if (mentionRecipients.length > 0) {
+        const r = await sendToRecipients(
+          mentionRecipients,
+          titleOverride ?? 'You were mentioned',
+          bodyOverride ?? truncate(row.text, 120),
+          url,
+        );
+        sent += r.sent;
+        skipped += r.skipped;
+      }
+
+      // Everyone else: only fires at all on a milestone message, and gets a
+      // digest-style notification rather than this message's actual text.
+      if (milestoneRecipients.length > 0) {
+        const r = await sendToRecipients(
+          milestoneRecipients,
+          titleOverride ?? `${messageCount} new messages in ${groupName ?? 'a group'}`,
+          bodyOverride ?? 'Catch up on the conversation',
+          url,
+        );
+        sent += r.sent;
+        skipped += r.skipped;
+      }
+
+      return jsonResponse({ sent, skipped });
+    }
+
+    if (targetType === 'dm_message') {
       const { data: row } = await supabase
         .from('dm_messages')
         .select('id, thread_id, text')
@@ -230,70 +376,54 @@ Deno.serve(async (req) => {
         .maybeSingle();
       if (!row) return jsonResponse({ sent: 0, skipped: 0 });
 
-      const { recipients: r } = await resolveDmRecipient(row, actorId);
-      recipients = r;
-      title = title ?? 'New message';
-      body = body ?? truncate(row.text, 120);
-    } else if (targetType === 'confession') {
-      const { data: row } = await supabase
-        .from('confessions')
-        .select('id, group_id, text')
-        .eq('id', targetId)
-        .maybeSingle();
-      if (!row) return jsonResponse({ sent: 0, skipped: 0 });
-
-      const { recipients: r } = await resolveConfessionRecipients(row, actorId);
-      recipients = r;
-      title = title ?? 'New confession';
-      body = body ?? truncate(row.text, 120);
-    } else if (targetType === 'admin') {
-      const { recipients: r } = await resolveAdminRecipients();
-      recipients = r;
-      title = title ?? 'Anonroom';
-      body = body ?? '';
-    } else {
-      return jsonResponse({ error: `unknown target_type: ${targetType}` }, 400);
+      const { recipients } = await resolveDmRecipient(row, actorId);
+      const result = await sendToRecipients(
+        recipients,
+        titleOverride ?? 'New message',
+        bodyOverride ?? truncate(row.text, 120),
+        url,
+      );
+      return jsonResponse(result);
     }
-  } catch (err) {
-    console.error('send-push: failed resolving recipients', err);
-    return jsonResponse({ error: 'failed to resolve recipients' }, 500);
-  }
 
-  if (recipients.length === 0) {
-    return jsonResponse({ sent: 0, skipped: 0 });
-  }
+    if (targetType === 'confession_digest') {
+      // No target_id — this is a scheduled, time-windowed check, not tied
+      // to any single confession. See migration 0006's
+      // send_confession_digest(), which calls this once an hour.
+      const sinceIso = new Date(Date.now() - 60 * 60 * 1000).toISOString();
+      const { count } = await supabase
+        .from('confessions')
+        .select('id', { count: 'exact', head: true })
+        .gt('created_at', sinceIso);
 
-  const { data: subs } = await supabase
-    .from('push_subscriptions')
-    .select('id, user_id, endpoint, p256dh, auth')
-    .in('user_id', recipients);
-
-  let sent = 0;
-  let skipped = 0;
-
-  await Promise.all(
-    (subs ?? []).map(async (sub) => {
-      const subscription = {
-        endpoint: sub.endpoint,
-        keys: { p256dh: sub.p256dh, auth: sub.auth },
-      };
-      // Shape must match what public/sw.js reads off event.data.json().
-      const payloadJson = JSON.stringify({ title, body, icon: '/vite.svg', url });
-
-      try {
-        await webpush.sendNotification(subscription, payloadJson);
-        sent += 1;
-      } catch (err) {
-        const statusCode = err?.statusCode;
-        if (statusCode === 404 || statusCode === 410) {
-          // Expired/unsubscribed endpoint — clean it up so future sends
-          // don't keep paying for a dead subscription.
-          await supabase.from('push_subscriptions').delete().eq('id', sub.id);
-        }
-        skipped += 1;
+      if (!count) {
+        return jsonResponse({ sent: 0, skipped: 0, reason: 'no new confessions in the last hour' });
       }
-    }),
-  );
 
-  return jsonResponse({ sent, skipped });
+      const { recipients } = await resolveConfessionDigestRecipients();
+      const result = await sendToRecipients(
+        recipients,
+        titleOverride ?? 'New confessions',
+        bodyOverride ?? 'New confessions have been shared — check them out.',
+        urlOverride ?? '/confessions',
+      );
+      return jsonResponse(result);
+    }
+
+    if (targetType === 'admin') {
+      const { recipients } = await resolveAdminRecipients();
+      const result = await sendToRecipients(
+        recipients,
+        titleOverride ?? 'Anonroom',
+        bodyOverride ?? '',
+        url,
+      );
+      return jsonResponse(result);
+    }
+
+    return jsonResponse({ error: `unknown target_type: ${targetType}` }, 400);
+  } catch (err) {
+    console.error('send-push: failed', err);
+    return jsonResponse({ error: 'failed to send push' }, 500);
+  }
 });
