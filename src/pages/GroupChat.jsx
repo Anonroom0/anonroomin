@@ -21,6 +21,7 @@ import AuthModal from './AuthModal';
 import EmojiGifPicker from './EmojiGifPicker';
 
 // Shared Components
+import GlassPanel from '../components/shared/GlassPanel';
 import LiquidAvatar from '../components/shared/LiquidAvatar';
 import MessageSkeleton from '../components/shared/MessageSkeleton';
 import AttachmentSheet from '../components/shared/AttachmentSheet';
@@ -30,9 +31,11 @@ import SwipeableMessage from '../components/shared/SwipeableMessage';
 import SendButton from '../components/shared/SendButton';
 import { AudioBubble, VideoBubble } from '../components/shared/MediaBubble';
 import InstagramCard from '../components/shared/InstagramCard';
+import ShareStorySheet from '../components/questions/ShareStorySheet';
 
 const MESSAGE_LIMIT = 20;
 const REPLY_SNIPPET_LENGTH = 80;
+const MAX_TEXT_LENGTH = 500;
 const ADMIN_DISPLAY_NAME = 'ADMIN';
 const UPLOAD_TIMEOUT_MS = 60000;
 
@@ -128,31 +131,64 @@ function ConfessionModal({ open, onClose, onSubmit }) {
     }
   }
 
+  // Mirrors CreateConfessionModal.jsx's (Ask Me tab) layout: rendered through
+  // GlassPanel's portal-based sheet (so it repositions correctly above the
+  // on-screen keyboard instead of a hand-rolled fixed overlay), with the
+  // "Add Media" button living inline right under the textarea rather than
+  // in a separate row that can end up hidden behind the keyboard.
   return (
-    <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', zIndex: 50, display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
-      <div onClick={(e) => e.stopPropagation()} style={{ width: '100%', maxWidth: 500, margin: '0 auto', background: '#1C1D24', borderRadius: '28px 28px 0 0', padding: '24px 20px', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
-        <h3 style={{ margin: '0 0 16px', color: '#F4F3F0', fontSize: 20 }}>New Confession</h3>
-        <textarea name="group-confession-composer" autoComplete="off" data-lpignore="true" data-1p-ignore data-form-type="other" value={text} onChange={(e) => setText(e.target.value)} rows={4} placeholder="Type your confession…" style={{ width: '100%', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 16, padding: 14, fontSize: 15, resize: 'none', boxSizing: 'border-box', background: '#15161B', color: '#F4F3F0', outline: 'none' }} />
-        {media && (
-          <div style={{ position: 'relative', marginTop: 12, width: 80, height: 80 }}>
-            {media.isVideo ? (
-              <video src={media.previewUrl} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 12 }} />
-            ) : (
-              <img src={media.previewUrl} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 12 }} alt="preview" />
-            )}
-            <button onClick={() => setMedia(null)} style={{ position: 'absolute', top: -6, right: -6, background: '#2A2B36', color: '#F4F3F0', border: 'none', borderRadius: '50%', width: 24, height: 24, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 8px rgba(0,0,0,0.3)' }}>{Vectors.Close}</button>
+    <GlassPanel variant="sheet" onClose={onClose}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 20, padding: '4px 20px 28px' }}>
+        <div style={{ fontSize: 20, fontWeight: 700, color: '#F4F3F0' }}>New Confession</div>
+
+        <div style={{ borderRadius: 20, border: '1px solid rgba(255,255,255,0.06)', background: '#15161B', padding: '4px 4px 0' }}>
+          <textarea
+            name="group-confession-composer"
+            autoComplete="off"
+            data-lpignore="true"
+            data-1p-ignore
+            data-form-type="other"
+            value={text}
+            onChange={(e) => setText(e.target.value.slice(0, MAX_TEXT_LENGTH))}
+            maxLength={MAX_TEXT_LENGTH}
+            placeholder="Type your confession…"
+            rows={media ? 3 : 5}
+            style={{ width: '100%', resize: 'none', border: 'none', outline: 'none', background: 'transparent', color: '#F4F3F0', fontSize: 16, fontFamily: 'inherit', padding: '14px 16px 4px', boxSizing: 'border-box' }}
+          />
+
+          {media && (
+            <div style={{ position: 'relative', width: 80, height: 80, margin: '0 16px 12px' }}>
+              {media.isVideo ? (
+                <video src={media.previewUrl} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 12 }} />
+              ) : (
+                <img src={media.previewUrl} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 12 }} alt="preview" />
+              )}
+              <button onClick={() => setMedia(null)} style={{ position: 'absolute', top: -6, right: -6, background: '#2A2B36', color: '#F4F3F0', border: 'none', borderRadius: '50%', width: 22, height: 22, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 8px rgba(0,0,0,0.3)' }}>{Vectors.Close}</button>
+            </div>
+          )}
+
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 16px 10px' }}>
+            <button
+              type="button"
+              onClick={() => mediaInputRef.current?.click()}
+              disabled={!!media}
+              style={{ background: 'transparent', border: 'none', color: media ? 'rgba(255,255,255,0.1)' : '#8B8B96', cursor: media ? 'default' : 'pointer', display: 'flex', alignItems: 'center', gap: 6, padding: 0, fontSize: 13, fontWeight: 600 }}
+            >
+              {Vectors.Photo} {media ? 'Media Added' : 'Add Media'}
+            </button>
+            <input type="file" accept="image/*,video/*" ref={mediaInputRef} style={{ display: 'none' }} onChange={handleFileChange} />
+            <div style={{ fontSize: 12, color: '#8B8B96' }}>{text.length}/{MAX_TEXT_LENGTH}</div>
           </div>
-        )}
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', margin: '16px 0' }}>
-          <label style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 14, color: '#F4F3F0', cursor: 'pointer' }}>
-            <input type="checkbox" checked={anon} onChange={(e) => setAnon(e.target.checked)} /> Post anonymously
-          </label>
-          <button onClick={() => mediaInputRef.current?.click()} style={{ background: '#2A2B36', border: 'none', color: '#F4F3F0', padding: '8px 12px', borderRadius: 12, cursor: 'pointer', fontSize: 13, display: 'flex', alignItems: 'center', gap: 6, fontWeight: 600 }}>{Vectors.Photo} {media ? 'Media Added' : 'Add Media'}</button>
-          <input type="file" accept="image/*,video/*" ref={mediaInputRef} style={{ display: 'none' }} onChange={handleFileChange} />
         </div>
+
+        <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '12px 16px', borderRadius: 20, border: '1px solid rgba(255,255,255,0.06)', background: '#15161B', cursor: 'pointer' }}>
+          <span style={{ fontSize: 15, fontWeight: 700, color: '#F4F3F0' }}>Post anonymously</span>
+          <input type="checkbox" checked={anon} onChange={(e) => setAnon(e.target.checked)} />
+        </label>
+
         <button onClick={() => { if (text.trim() || media) { onSubmit(text.trim(), anon, media?.file); setText(''); setMedia(null); } }} style={{ width: '100%', padding: 16, borderRadius: 20, border: 'none', background: '#FF6B35', color: '#fff', fontWeight: 700, cursor: 'pointer', fontSize: 16 }}>Post Confession</button>
       </div>
-    </div>
+    </GlassPanel>
   );
 }
 
@@ -240,6 +276,11 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
   const [selectedMessages, setSelectedMessages] = useState([]);
   
   const [activeReactionMsgId, setActiveReactionMsgId] = useState(null);
+  // Holds the flat { id, text, sender_name, avatar_url, is_anon, media_url,
+  // media_type } shape ShareStorySheet's mode="message" expects —
+  // normalized from either a group_messages row or a confession-flagged one
+  // (see "Share as Story" action below), or null when the sheet is closed.
+  const [sharingMessage, setSharingMessage] = useState(null);
 
   const [pendingFile, setPendingFile] = useState(null); 
   const [caption, setCaption] = useState('');
@@ -765,7 +806,6 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
           <div style={{ flex: 1, position: 'relative' }}>
             <span style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#8B8B96', pointerEvents: 'none' }}>{Vectors.SearchSmall}</span>
             <input autoFocus type="search" name="group-chat-search-f" autoComplete="off-nope" autoCorrect="off" autoCapitalize="off" spellCheck="false" data-lpignore="true" data-1p-ignore data-form-type="other" value={chatSearchQuery} onChange={(e) => setChatSearchQuery(e.target.value)} placeholder="Search or type @username..." style={{ width: '100%', padding: '8px 12px 8px 36px', borderRadius: 16, border: 'none', background: '#15161B', color: '#F4F3F0', fontSize: 14, outline: 'none', boxSizing: 'border-box' }} />
-            {chatSearchQuery && <button onClick={() => setChatSearchQuery('')} style={{ position: 'absolute', right: 8, top: '50%', transform: 'translateY(-50%)', background: 'rgba(255,255,255,0.1)', border: 'none', borderRadius: '50%', width: 20, height: 20, fontSize: 10, fontWeight: 'bold', color: '#F4F3F0', cursor: 'pointer' }}>✕</button>}
           </div>
           <button onClick={() => { setIsSearching(false); setChatSearchQuery(''); }} style={{ background: 'none', border: 'none', color: '#8B8B96', fontWeight: 600, cursor: 'pointer', fontSize: 14 }}>Cancel</button>
         </div>
@@ -909,13 +949,19 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
                                  },
                                },
                                {
-                                 key: 'reply-link',
-                                 label: 'Copy Reply Link',
-                                 icon: <span style={{ display: 'flex', color: '#8B8B96' }}>{Vectors.ReplyAction}</span>,
+                                 key: 'share-story',
+                                 label: 'Share as Story',
+                                 icon: <span style={{ display: 'flex', color: '#8B8B96' }}>{Vectors.Instagram}</span>,
                                  onClick: () => {
-                                   const url = `${window.location.origin}${window.location.pathname}#reply-${toShortId(message.id)}`;
-                                   navigator.clipboard.writeText(url);
-                                   showToast('Reply link copied!', 'info');
+                                   setSharingMessage({
+                                     id: message.confession_id || message.id,
+                                     text: message.text || (message.media_type ? `Sent a ${message.media_type}` : ''),
+                                     sender_name: message.is_anon ? 'Anonymous' : message.sender_name,
+                                     avatar_url: message.is_anon ? null : (message.profiles?.avatar_url || null),
+                                     is_anon: message.is_anon,
+                                     media_url: message.media_url || null,
+                                     media_type: message.media_type || null,
+                                   });
                                  },
                                },
                                ...(isAdmin ? [{
@@ -931,26 +977,31 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
                        </div>
                      </div>
                   ) : (
-                    <div id={`msg-${message.id}`} className={isHighlighted ? 'highlight-flash' : ''} style={{ display: 'flex', flexDirection: isOwn ? 'row-reverse' : 'row', alignItems: 'flex-end', gap: 8, marginBottom: 16, borderRadius: 16, padding: '4px 8px', background: isSelected ? 'rgba(255,107,53, 0.15)' : 'transparent', animation: 'slideUpFade 0.3s cubic-bezier(0.2, 0.8, 0.2, 1) both', transition: 'background 0.2s' }}>
+                    <div id={`msg-${message.id}`} className={isHighlighted ? 'highlight-flash' : ''} style={{ display: 'flex', flexDirection: 'column', width: '100%', marginBottom: 16, borderRadius: 16, padding: '4px 8px', background: isSelected ? 'rgba(255,107,53, 0.15)' : 'transparent', animation: 'slideUpFade 0.3s cubic-bezier(0.2, 0.8, 0.2, 1) both', transition: 'background 0.2s' }}>
                       {selectedMessages.length > 0 && isAdmin && (
-                        <div style={{ margin: '0 8px 16px', color: isSelected ? '#FF6B35' : 'rgba(255,255,255,0.1)' }}>
+                        <div style={{ display: 'flex', justifyContent: isOwn ? 'flex-end' : 'flex-start', margin: '0 0 8px', color: isSelected ? '#FF6B35' : 'rgba(255,255,255,0.1)' }}>
                           {isSelected ? Vectors.CheckCircle : <div style={{ width: 20, height: 20, borderRadius: '50%', border: '2px solid currentColor' }} />}
                         </div>
                       )}
 
+                      {/* Sender pfp + username rendered in their own row,
+                          completely above the bubble, instead of sharing
+                          vertical space with it via a negative-margin hack —
+                          so they never overlap message content regardless
+                          of how tall the bubble/reply-preview/reactions end
+                          up being. */}
                       {!isOwn && (
-                        <button onClick={(e) => { e.stopPropagation(); if (!isAnonMsg && selectedMessages.length === 0) setProfileCardUserId(message.user_id); }} disabled={isAnonMsg || selectedMessages.length > 0} style={{ border: 'none', background: 'transparent', padding: 0, cursor: isAnonMsg ? 'default' : 'pointer', marginBottom: 20 }}>
-                          <LiquidAvatar identity={{ name: message.sender_name, avatar_url: senderAvatarUrl, is_admin: isAdminMsg }} size={36} isAnon={isAnonMsg} />
-                        </button>
-                      )}
-
-                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: isOwn ? 'flex-end' : 'flex-start', maxWidth: '85%' }}>
-                        {!isOwn && (
-                          <button onClick={(e) => { e.stopPropagation(); if (!isAnonMsg && selectedMessages.length === 0) setProfileCardUserId(message.user_id); }} disabled={isAnonMsg || selectedMessages.length > 0} style={{ fontSize: 13, fontWeight: 700, marginBottom: 4, marginLeft: 6, color: isAdminMsg ? 'var(--admin-1)' : (isAnonMsg ? '#8B8B96' : '#F4F3F0'), display: 'flex', alignItems: 'center', gap: 4, border: 'none', background: 'transparent', padding: 0, cursor: isAnonMsg ? 'default' : 'pointer' }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6, paddingLeft: 2 }}>
+                          <button onClick={(e) => { e.stopPropagation(); if (!isAnonMsg && selectedMessages.length === 0) setProfileCardUserId(message.user_id); }} disabled={isAnonMsg || selectedMessages.length > 0} style={{ border: 'none', background: 'transparent', padding: 0, display: 'flex', cursor: isAnonMsg ? 'default' : 'pointer' }}>
+                            <LiquidAvatar identity={{ name: message.sender_name, avatar_url: senderAvatarUrl, is_admin: isAdminMsg }} size={26} isAnon={isAnonMsg} />
+                          </button>
+                          <button onClick={(e) => { e.stopPropagation(); if (!isAnonMsg && selectedMessages.length === 0) setProfileCardUserId(message.user_id); }} disabled={isAnonMsg || selectedMessages.length > 0} style={{ fontSize: 13, fontWeight: 700, color: isAdminMsg ? 'var(--admin-1)' : (isAnonMsg ? '#8B8B96' : '#F4F3F0'), display: 'flex', alignItems: 'center', gap: 4, border: 'none', background: 'transparent', padding: 0, cursor: isAnonMsg ? 'default' : 'pointer' }}>
                             {isAnonMsg ? 'Anonymous' : (isAdminMsg ? ADMIN_DISPLAY_NAME : message.sender_name)} {isAdminMsg && !isAnonMsg && Vectors.AdminShield}
                           </button>
-                        )}
+                        </div>
+                      )}
 
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: isOwn ? 'flex-end' : 'flex-start', maxWidth: '85%', marginLeft: isOwn ? 0 : 34, alignSelf: isOwn ? 'flex-end' : 'flex-start' }}>
                         <div style={{ maxWidth: '100%', padding: isInstagram ? '4px' : ((message.media_url && !isStickerOrGif) ? '4px' : (isStickerOrGif ? 0 : '10px 16px')), borderRadius: isStickerOrGif ? 0 : 20, borderBottomRightRadius: isStickerOrGif ? 0 : (isOwn ? 4 : 20), borderBottomLeftRadius: isStickerOrGif ? 0 : (isOwn ? 20 : 4), background: bubbleBackground, color: bubbleColor, border: isStickerOrGif ? 'none' : (isOwn ? '1px solid rgba(255,255,255,0.08)' : '1px solid rgba(255,255,255,0.04)'), boxShadow: isStickerOrGif ? 'none' : '0 6px 18px rgba(0,0,0,0.2)' }}>
                           {message.reply_to_id && (
                             <div 
@@ -1032,13 +1083,19 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
                                  },
                                },
                                {
-                                 key: 'reply-link',
-                                 label: 'Copy Reply Link',
-                                 icon: <span style={{ display: 'flex', color: '#8B8B96' }}>{Vectors.ReplyAction}</span>,
+                                 key: 'share-story',
+                                 label: 'Share as Story',
+                                 icon: <span style={{ display: 'flex', color: '#8B8B96' }}>{Vectors.Instagram}</span>,
                                  onClick: () => {
-                                   const url = `${window.location.origin}${window.location.pathname}#reply-${toShortId(message.id)}`;
-                                   navigator.clipboard.writeText(url);
-                                   showToast('Reply link copied!', 'info');
+                                   setSharingMessage({
+                                     id: message.id,
+                                     text: message.text || (message.media_type ? `Sent a ${message.media_type}` : ''),
+                                     sender_name: message.is_anon ? 'Anonymous' : (isSenderAdmin(message) ? ADMIN_DISPLAY_NAME : message.sender_name),
+                                     avatar_url: message.is_anon ? null : senderAvatarUrl,
+                                     is_anon: message.is_anon,
+                                     media_url: message.media_url || null,
+                                     media_type: message.media_type || null,
+                                   });
                                  },
                                },
                                ...(isAdmin ? [{
@@ -1108,7 +1165,7 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
                   <button onClick={cancelPendingAttachment} disabled={uploading} style={{ border: 'none', background: 'rgba(255,255,255,0.06)', width: 28, height: 28, borderRadius: '50%', color: '#F4F3F0', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{Vectors.Close}</button>
                 </div>
                 <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-                  <input type="search" name="group-media-caption-f" autoComplete="off-nope" autoCorrect="off" autoCapitalize="off" spellCheck="false" data-lpignore="true" data-1p-ignore data-form-type="other" value={caption} onChange={(e) => setCaption(e.target.value)} placeholder="Add a caption…" disabled={uploading} style={{ flex: 1, border: '1px solid rgba(255,255,255,0.06)', outline: 'none', background: '#15161B', borderRadius: 20, padding: '10px 16px', fontSize: 14, color: '#F4F3F0' }} />
+                  <input type="search" name="group-media-caption-f" autoComplete="off-nope" autoCorrect="off" autoCapitalize="off" spellCheck="false" data-lpignore="true" data-1p-ignore data-form-type="other" value={caption} onChange={(e) => setCaption(e.target.value.slice(0, MAX_TEXT_LENGTH))} maxLength={MAX_TEXT_LENGTH} placeholder="Add a caption…" disabled={uploading} style={{ flex: 1, border: '1px solid rgba(255,255,255,0.06)', outline: 'none', background: '#15161B', borderRadius: 20, padding: '10px 16px', fontSize: 14, color: '#F4F3F0' }} />
                   <button type="button" onClick={sendPendingAttachment} disabled={uploading} style={{ width: 44, height: 44, borderRadius: '50%', border: 'none', background: uploading ? 'rgba(255,255,255,0.06)' : '#FF6B35', color: '#fff', cursor: uploading ? 'default' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{uploading ? Vectors.Spinner : Vectors.Attach}</button>
                 </div>
               </div>
@@ -1130,7 +1187,7 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
               <input ref={fileInputRef} type="file" onChange={handleAttachmentSelected} style={{ position: 'absolute', width: 1, height: 1, padding: 0, margin: -1, overflow: 'hidden', clip: 'rect(0,0,0,0)', whiteSpace: 'nowrap', border: 0, opacity: 0, pointerEvents: 'none' }} />
               <input ref={cameraInputRef} type="file" accept="image/*,video/*" onChange={handleAttachmentSelected} style={{ position: 'absolute', width: 1, height: 1, padding: 0, margin: -1, overflow: 'hidden', clip: 'rect(0,0,0,0)', whiteSpace: 'nowrap', border: 0, opacity: 0, pointerEvents: 'none' }} />
               <button type="button" onClick={() => setPickerOpen((v) => !v)} disabled={uploading || selectedMessages.length > 0} style={{ width: 36, height: 36, borderRadius: '50%', border: 'none', background: pickerOpen ? 'rgba(255,255,255,0.06)' : 'transparent', color: pickerOpen ? '#F4F3F0' : '#8B8B96', cursor: 'pointer', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{Vectors.Smiley}</button>
-              <input type="search" name="group-chat-message-f" autoComplete="off-nope" autoCorrect="off" autoCapitalize="off" spellCheck="false" data-lpignore="true" data-1p-ignore data-form-type="other" value={text} onChange={(e) => setText(e.target.value)} onFocus={() => setPickerOpen(false)} placeholder={uploading ? 'Uploading media...' : 'Message'} disabled={uploading || selectedMessages.length > 0} style={{ flex: 1, border: '1px solid rgba(255,255,255,0.06)', outline: 'none', background: '#15161B', borderRadius: 24, padding: '12px 18px', fontSize: 15, color: '#F4F3F0', transition: 'border-color 0.2s' }} />
+              <input type="search" name="group-chat-message-f" autoComplete="off-nope" autoCorrect="off" autoCapitalize="off" spellCheck="false" data-lpignore="true" data-1p-ignore data-form-type="other" value={text} onChange={(e) => setText(e.target.value.slice(0, MAX_TEXT_LENGTH))} maxLength={MAX_TEXT_LENGTH} onFocus={() => setPickerOpen(false)} placeholder={uploading ? 'Uploading media...' : 'Message'} disabled={uploading || selectedMessages.length > 0} style={{ flex: 1, border: '1px solid rgba(255,255,255,0.06)', outline: 'none', background: '#15161B', borderRadius: 24, padding: '12px 18px', fontSize: 15, color: '#F4F3F0', transition: 'border-color 0.2s' }} />
               <SendButton canSend={!!text.trim()} sending={sending || uploading} cooldownPercent={cooldownPercent} />
             </form>
           </>
@@ -1145,6 +1202,15 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
       <ProfileCard userId={profileCardUserId} open={!!profileCardUserId} onClose={() => setProfileCardUserId(null)} />
       {groupCardOpen && <GroupCard groupSlug={groupSlug} open={groupCardOpen} onClose={() => setGroupCardOpen(false)} />}
       <AuthModal open={authOpen} onClose={() => setAuthOpen(false)} initialTab="signin" onVerified={() => setAuthOpen(false)} />
+
+      {sharingMessage && (
+        <ShareStorySheet
+          mode="message"
+          open={!!sharingMessage}
+          onClose={() => setSharingMessage(null)}
+          message={sharingMessage}
+        />
+      )}
     </div>
   );
 }

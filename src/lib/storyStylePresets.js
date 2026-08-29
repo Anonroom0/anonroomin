@@ -81,10 +81,15 @@ export const ACCENT_COLORS = [
   { id: 'scarlet', name: 'Scarlet', hex: '#FF3B3B' },
   { id: 'red', name: 'Red', hex: '#EF4444' },
   { id: 'coral', name: 'Coral', hex: '#FF7A5C' },
-  { id: 'slate', name: 'Slate', hex: '#E7E7EE' },
   { id: 'snow', name: 'Snow', hex: '#FFFFFF' },
-  { id: 'blackout', name: 'Blackout', hex: '#0C0D10' },
 ];
+// v6: dropped 'Slate' (#E7E7EE) and 'Blackout' (#0C0D10) — the two
+// desaturated/near-neutral entries that made the story feature read as
+// dull no matter which lively BACKGROUND_STRUCTURES pattern was paired
+// with them (see storyImageGenerator.js's buildThemeRuntime, also
+// rebalanced in v6 to mix far less black into every accent's background
+// fill). Every remaining color is a genuinely saturated hue, so any
+// Background x Colour combo now lands vibrant by construction.
 
 // ---------------------------------------------------------------------------
 // 3. BODY SHAPES — the card's silhouette: radius/fill/border/decoration/
@@ -102,7 +107,6 @@ export const BODY_SHAPES = [
   { id: 'stacked', name: 'Stacked', radius: 36, fill: 'glass', border: 'glass', shadow: true, stacked: true },
   { id: 'ribbon', name: 'Ribbon', radius: 28, fill: 'ink-2', border: 'glass', shadow: true, ribbon: true },
   { id: 'taped', name: 'Taped', radius: 20, fill: 'glass', border: 'glass', shadow: true, rotate: -3, taped: true, fontFamily: 'serif' },
-  { id: 'block-label', name: 'Block Label', radius: 0, fill: 'ink-2', border: 'none', shadow: false, blockHeader: true },
   { id: 'minimal-text', name: 'Minimal', radius: 0, fill: 'none', border: 'none', shadow: false, textOnly: true },
   { id: 'bubble', name: 'Bubble', radius: 72, fill: 'glass', border: 'glass', shadow: true },
   { id: 'double-frame', name: 'Double Frame', radius: 28, fill: 'ink-2', border: 'double', shadow: true },
@@ -118,7 +122,6 @@ export const BODY_SHAPES = [
   { id: 'dashed-frame', name: 'Dashed Frame', radius: 24, fill: 'ink-2', border: 'dashed', shadow: false },
   { id: 'side-tab', name: 'Side Tab', radius: 32, fill: 'glass', border: 'glass', shadow: true, sideTab: true },
   { id: 'underline-badge', name: 'Underline', radius: 20, fill: 'ink-2', border: 'none', shadow: false, underline: true },
-  { id: 'split-panel', name: 'Split Panel', radius: 32, fill: 'split', border: 'none', shadow: true },
   { id: 'corner-tag', name: 'Corner Tag', radius: 28, fill: 'ink-2', border: 'glass', shadow: true, cornerTag: true },
   { id: 'paper-thick-frame', name: 'Thick Frame', radius: 20, fill: 'ink-2', border: 'paper-thick', shadow: false },
   { id: 'brutalist', name: 'Brutalist', radius: 0, fill: 'paper', border: 'ink-thick', shadow: false, darkText: true, fontFamily: 'mono' },

@@ -19,8 +19,9 @@ import supabase from '../lib/supabaseClient';
 import { useAuth } from '../lib/authContext';
 import {
   getGroupSlugFromHost,
+  getGroupSlugFromPath,
   getRootDomainUrl,
-  getGroupUrl,
+  buildGroupPath,
   getDmUsernameFromPath,
   buildDmPath,
   buildQuestionPath,
@@ -393,6 +394,15 @@ const [sharingReply, setSharingReply] = useState(null); // NEW — { question, r
   useEffect(() => {
     let cancelled = false;
     async function resolveInitialRoute() {
+      // Groups now route through the path-based anonroom.in/g/<slug> URL —
+      // a real subdomain visit never reaches this point at all anymore (see
+      // App.jsx's redirect effect), so this only needs to check the path.
+      const pathGroupSlug = getGroupSlugFromPath();
+      if (pathGroupSlug) { if (!cancelled) { setActiveChatId(pathGroupSlug); setActiveChatType('group'); setActiveChatSource('path'); } return; }
+
+      // Local/dev-only fallback: wildcard subdomains don't resolve on
+      // localhost or a bare IP, so a group can still be opened there via
+      // ?group=slug (see getGroupSlugFromHost's local-host branch).
       const hostSlug = getGroupSlugFromHost();
       if (hostSlug) { if (!cancelled) { setActiveChatId(hostSlug); setActiveChatType('group'); setActiveChatSource('subdomain'); } return; }
 
@@ -471,7 +481,14 @@ const [sharingReply, setSharingReply] = useState(null); // NEW — { question, r
     else if (type === 'question') window.history.pushState({}, '', buildQuestionPath(id));
   }
 
-  function handleOpenGroup(slug) { window.location.href = getGroupUrl(slug); }
+  // Groups are same-origin now (anonroom.in/g/<slug>), so opening one from
+  // the sidebar is a normal in-app navigation — push the path and switch
+  // the active chat directly, instead of a full-page cross-origin reload
+  // to a subdomain like this used to do.
+  function handleOpenGroup(slug) {
+    setActiveChatId(slug); setActiveChatType('group'); setActiveChatSource('path'); setSearchQuery('');
+    window.history.pushState({}, '', buildGroupPath(slug));
+  }
 
   // Now accepts an initialItemId so the viewer can jump directly to that story
   function handleOpenStory(channels, startIndex, initialItemId = null) {
@@ -547,9 +564,6 @@ const [sharingReply, setSharingReply] = useState(null); // NEW — { question, r
                   placeholder="Search..." 
                   style={{ width: '100%', border: '1px solid rgba(255,255,255,0.06)', background: '#1C1D24', padding: '10px 36px 10px 42px', borderRadius: 14, fontSize: 16, color: 'var(--paper)', outline: 'none', transition: 'background 0.2s', boxSizing: 'border-box' }} 
                 />
-                {searchQuery.length > 0 && (
-                  <button className="touch-bounce" onClick={() => setSearchQuery('')} style={{ position: 'absolute', right: 10, top: '50%', transform: 'translateY(-50%)', background: 'rgba(255,255,255,0.1)', border: 'none', color: 'var(--paper)', borderRadius: '50%', width: 22, height: 22, display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 11, fontWeight: 'bold' }}>✕</button>
-                )}
               </div>
               <button className="touch-bounce" onClick={() => session ? setEditProfileOpen(true) : setAuthOpen(true)} style={{ width: 44, height: 44, borderRadius: '50%', border: 'none', padding: 0, flexShrink: 0, background: 'transparent' }}>
                 {session ? <LiquidAvatar identity={profileIdentity} size={44} /> : <div style={{ width: '100%', height: '100%', background: 'var(--ember)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '50%' }}>{Icons.Menu}</div>}

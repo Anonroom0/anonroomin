@@ -45,6 +45,7 @@ import MediaViewer from './MediaViewer';
 // ============================================================================
 const FEED_LIMIT = 200;
 const HIGHLIGHT_MS = 2000;
+const MAX_TEXT_LENGTH = 500;
 const UPLOAD_TIMEOUT_MS = 60000;
 
 // ============================================================================
@@ -151,7 +152,8 @@ function ComposerSheet({ open, onClose, initialPhotoIntent, onSubmit, submitting
           data-1p-ignore
           data-form-type="other"
           value={text}
-          onChange={(e) => setText(e.target.value)}
+          onChange={(e) => setText(e.target.value.slice(0, MAX_TEXT_LENGTH))}
+          maxLength={MAX_TEXT_LENGTH}
           rows={5}
           placeholder="What's on your mind…"
           disabled={submitting}
@@ -169,6 +171,10 @@ function ComposerSheet({ open, onClose, initialPhotoIntent, onSubmit, submitting
             outline: 'none',
           }}
         />
+
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 6 }}>
+          <span style={{ fontSize: 12, color: 'var(--dim)' }}>{text.length}/{MAX_TEXT_LENGTH}</span>
+        </div>
 
         {photo && (
           <div style={{ position: 'relative', marginTop: 12, width: 96, height: 96 * (5 / 4) }}>

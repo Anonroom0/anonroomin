@@ -53,6 +53,12 @@ const CIRCLE_SIZE = 64; // fixed diameter, IG-style — circles never shrink to 
 const CIRCLE_GAP = 14; // fixed px gap between circles — IG spacing, not CSS `gap`
 const SEEN_KEY_PREFIX = 'anonroom_story_seen:';
 
+// TEMPORARY (per product request): hides the always-on "Questions" circle
+// from this bar. Direct-links to the public-questions story reel (see
+// Home.jsx's handleOpenStory / StoryViewer.jsx) are untouched by this flag —
+// only the circle in this row is affected. Flip back to true to restore it.
+const SHOW_QUESTIONS_STORY = false;
+
 function getInitials(name) {
   if (!name) return '#';
   const parts = name.trim().split(' ');
@@ -288,7 +294,7 @@ export default function StoriesBar({ groups, userId, onOpenStory, initialTarget,
         slug: g.slug || null,
       })),
       { type: 'public-confessions', id: 'public-confessions', name: 'Confessions', logoUrl: null, slug: null },
-      { type: 'public-questions', id: 'public-questions', name: 'Questions', logoUrl: null, slug: null },
+      ...(SHOW_QUESTIONS_STORY ? [{ type: 'public-questions', id: 'public-questions', name: 'Questions', logoUrl: null, slug: null }] : []),
     ],
     [highlightedGroups]
   );
@@ -348,13 +354,13 @@ export default function StoriesBar({ groups, userId, onOpenStory, initialTarget,
         ring: confessionsUnseen,
         render: () => <ConfessionsIcon />,
       },
-      {
+      ...(SHOW_QUESTIONS_STORY ? [{
         key: 'public-questions',
         index: highlightedGroups.length + 1,
         name: 'Questions',
         ring: questionsUnseen,
         render: () => <QuestionsIcon />,
-      },
+      }] : []),
     ],
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [highlightedGroups, groupLatestAt, confessionsUnseen, questionsUnseen, seenTick]

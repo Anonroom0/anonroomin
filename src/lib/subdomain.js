@@ -7,9 +7,10 @@
 const RESERVED_SEGMENTS = ['www', 'anonroom', 'localhost'];
 
 // Reserved as the FIRST path segment on the root domain, so they never get
-// mistaken for a username in the /<username> DM route. (Note: 'g' has been
-// removed since mobile groups now use the subdomain route).
-const RESERVED_PATH_SEGMENTS = ['api', 'assets', 'static', 'favicon.ico'];
+// mistaken for a username in the /<username> DM route. 'g' is reserved
+// because groups now route through /g/<slug> (see buildGroupPath /
+// getGroupSlugFromPath below) instead of their own subdomain.
+const RESERVED_PATH_SEGMENTS = ['api', 'assets', 'static', 'favicon.ico', 'g'];
 
 export const ROOT_PATH = '/';
 
@@ -76,10 +77,18 @@ export function shortIdPrefixFilter(column, shortId) {
   return { column: `${column}::text`, operator: 'ilike', value: `${shortId}*` };
 }
 
-// Resolves which group (if any) should render based on the current URL.
-// Production: groupname.anonroom.in -> 'groupname'; anonroom.in / www -> null.
-// Local/dev/IP hosts have no real subdomain to parse, so fall back to a
-// ?group=slug query param instead (e.g. http://localhost:5173/?group=general).
+// Resolves which group (if any) the current URL's HOST implies — either a
+// real production subdomain (groupname.anonroom.in -> 'groupname') or, on
+// local/dev hosts where wildcard subdomains don't resolve, the ?group=slug
+// query-param equivalent (e.g. http://localhost:5173/?group=general).
+//
+// IMPORTANT: a truthy result here no longer means "render this group" — a
+// real subdomain now only ever REDIRECTS to the path-based anonroom.in/g/
+// <slug> route (see getGroupSlugFromRealSubdomain + App.jsx's redirect
+// effect below). This function still backs isGroupSubdomain() (used purely
+// to suppress location/push prompts on what's about to redirect anyway) and
+// the local ?group= dev fallback, but nothing should treat its result as a
+// route to render content on.
 export function getGroupSlugFromHost() {
   const hostname = window.location.hostname;
   const parts = hostname.split('.');
@@ -115,6 +124,30 @@ export function isGroupSubdomain() {
   return Boolean(getGroupSlugFromHost());
 }
 
+// True ONLY for a real production subdomain (groupname.anonroom.in) — unlike
+// getGroupSlugFromHost(), this deliberately does NOT fall back to the local
+// ?group= dev query param, because that fallback exists so groups can still
+// be tested on localhost/IP hosts where wildcard subdomains don't resolve;
+// redirecting THAT away would break local dev entirely. This is the one
+// App.jsx actually uses to decide whether to bounce the visitor to
+// anonroom.in/g/<slug> — see the redirect effect there.
+export function getGroupSlugFromRealSubdomain() {
+  const hostname = window.location.hostname;
+  const parts = hostname.split('.');
+
+  const isLocalOrDev =
+    hostname === 'localhost' ||
+    /^\d{1,3}(\.\d{1,3}){3}$/.test(hostname) ||
+    parts.length < 3;
+
+  if (isLocalOrDev) return null;
+
+  const firstSegment = parts[0];
+  if (RESERVED_SEGMENTS.includes(firstSegment)) return null;
+
+  return firstSegment;
+}
+
 // Builds the URL for "leave this group and go back to the main app" (used
 // by GroupChat's back button when it's mounted standalone on a
 // slug.anonroom.in route with no sidebar to return to). On local/dev hosts
@@ -139,12 +172,16 @@ export function getRootDomainUrl() {
   return `${protocol}//${rootHost}${portSuffix}/`;
 }
 
-// Builds the URL for actually opening a group on its own subdomain
-// (slug.anonroom.in) — this is what a click on a group in the sidebar
-// should navigate the browser to on DESKTOP and MOBILE, exactly like typing that
-// subdomain in by hand. On local/dev hosts, where wildcard subdomains
-// don't resolve, this falls back to the ?group= query param on the
-// current host instead.
+// Builds the URL for actually opening a group — now the path-based
+// anonroom.in/g/<slug> route (see buildGroupPath below), NOT the group's
+// own subdomain. This is what a click on a group in the sidebar should
+// navigate to on DESKTOP and MOBILE, and it's also the canonical target a
+// group subdomain itself redirects to (see App.jsx's redirect effect,
+// driven by getGroupSlugFromRealSubdomain). On local/dev hosts, where
+// wildcard subdomains never resolved anyway, this still falls back to the
+// ?group= query param on the current host, since /g/<slug> and ?group=
+// both work the same way there — kept for continuity with any existing
+// bookmarked dev links.
 export function getGroupUrl(slug) {
   const { protocol, hostname, port } = window.location;
   const parts = hostname.split('.');
@@ -157,28 +194,32 @@ export function getGroupUrl(slug) {
   const portSuffix = port ? `:${port}` : '';
 
   if (isLocalOrDev) {
-    return `${protocol}//${hostname}${portSuffix}/?group=${encodeURIComponent(slug)}`;
+    return `${protocol}//${hostname}${portSuffix}${buildGroupPath(slug)}`;
   }
 
-  // If we're already on some-group.anonroom.in or www.anonroom.in, strip
-  // that leading segment; if we're on the bare 2-part root domain
-  // (anonroom.in), there's no segment to strip.
+  // If we're currently on some-group.anonroom.in (or www.anonroom.in),
+  // strip that leading segment down to the bare root domain first — a
+  // group link should always point at the root domain's /g/<slug> path,
+  // never at another group's subdomain. If we're already on the bare
+  // 2-part root domain (anonroom.in), there's no segment to strip.
   const rootHost = parts.length <= 2 ? hostname : parts.slice(1).join('.');
 
-  return `${protocol}//${encodeURIComponent(slug)}.${rootHost}${portSuffix}/`;
+  return `${protocol}//${rootHost}${portSuffix}${buildGroupPath(slug)}`;
 }
 
 // ----------------------------------------------------------------------------
 // PATH-BASED ROUTING (root domain only)
 // ----------------------------------------------------------------------------
-// Desktop and mobile groups now BOTH live on their own subdomain (see getGroupUrl above)
-// and therefore need a real cross-origin navigation. DMs instead open in place
-// on the SAME origin, so they get plain same-origin paths that can be pushed/replaced
-// with history.pushState without a reload:
+// Groups now live at the same-origin anonroom.in/g/<slug> path (see the
+// GROUP ROUTING section below) instead of their own subdomain, so opening
+// one is a normal in-app navigation — pushState/replaceState, no reload.
+// DMs work the same way, at a plain single-segment path:
 //   DM:    anonroom.in/<username>
+//   Group: anonroom.in/g/<slug>
 //
 // A single leading segment is reserved for usernames, matching how the DM
-// pane opens.
+// pane opens; RESERVED_PATH_SEGMENTS keeps 'g' out of that namespace so it
+// can never be mistaken for a username.
 
 function normalizedPathSegments() {
   return window.location.pathname
@@ -203,6 +244,27 @@ export function getDmUsernameFromPath() {
 
 export function buildDmPath(username) {
   return `/${encodeURIComponent(username)}`;
+}
+
+// ----------------------------------------------------------------------------
+// GROUP ROUTING (root domain, /g/<slug>)
+// ----------------------------------------------------------------------------
+// Groups used to live on their own subdomain (slug.anonroom.in). They now
+// route through this same-origin path instead — a real subdomain visit
+// redirects here (see App.jsx + getGroupSlugFromRealSubdomain above) rather
+// than rendering the group itself, and every in-app link to a group (sidebar
+// clicks, "Copy Link", story deep links) is now built from this path too.
+
+// Returns the slug for the root-level group route (anonroom.in/g/<slug>),
+// or null if the current path doesn't match that shape.
+export function getGroupSlugFromPath() {
+  const segments = normalizedPathSegments();
+  if (segments[0] !== 'g' || !segments[1]) return null;
+  return decodeURIComponent(segments[1]);
+}
+
+export function buildGroupPath(slug) {
+  return `/g/${encodeURIComponent(slug)}`;
 }
 
 // ----------------------------------------------------------------------------

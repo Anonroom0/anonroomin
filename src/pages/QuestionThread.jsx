@@ -50,6 +50,7 @@ import ShareStorySheet from '../components/questions/ShareStorySheet';
 // 1. CONSTANTS
 // ============================================================================
 const REPLY_LIMIT = 200; // mirrors GroupChat.jsx's MESSAGE_LIMIT
+const MAX_TEXT_LENGTH = 500;
 
 const TYPE_META = {
   personal: { label: 'Personal', gradient: 'linear-gradient(135deg, var(--ember) 0%, #ff9966 100%)' },
@@ -780,7 +781,8 @@ export default function QuestionThread({ questionId, onBack, onShareReply }) {
             data-1p-ignore
             data-form-type="other"
             value={replyText}
-            onChange={(e) => setReplyText(e.target.value)}
+            onChange={(e) => setReplyText(e.target.value.slice(0, MAX_TEXT_LENGTH))}
+            maxLength={MAX_TEXT_LENGTH}
             onFocus={() => { if (scrollRef.current) scrollRef.current.scrollTop = 0; }}
             placeholder="Write an honest, anonymous response…"
             aria-label="Reply"

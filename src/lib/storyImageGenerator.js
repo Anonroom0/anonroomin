@@ -10,8 +10,15 @@
  *         ORIGINAL question above the fold, body = the reply text, bold.
  *         This is the "share an answer you received" card — the loop this
  *         app's Ask-Me flow is built around.
+ *   kind: 'message'   — no text badge. Instead, a circular avatar + sender
+ *         name row (drawAvatarNameHeader) sits in its own row directly
+ *         above the card — outside it, not sharing its padding — so the
+ *         sender's identity can never overlap the message text below.
+ *         Used for "Share as Story" on a GroupChat message/confession —
+ *         see GroupChat.jsx. Fully re-skinnable via the same Background/
+ *         Colour/Shape/Size presets as 'question' and 'reply'.
  *
- * Both kinds share: a bottom-center Anonroom wordmark/logo, and a reserved
+ * All three kinds share: a bottom-center Anonroom wordmark/logo, and a reserved
  * empty band above it where nothing is drawn on purpose — that's where
  * Instagram's own link sticker gets dropped in by hand after sharing (see
  * LINK_ZONE below). ShareStorySheet.jsx additionally overlays a dashed guide
@@ -64,6 +71,29 @@ export const LINK_ZONE = {
   height: LINK_ZONE_HEIGHT,
 };
 
+// Vertical zone the card is allowed to occupy. Every slide layout below
+// sizes + fits its text inside this budget and then centers the resulting
+// card within it, instead of starting at a fixed Y and growing downward
+// unbounded — that's what used to let a long message push the card past
+// LINK_ZONE/the footer. WITH_CTA is for the two slide kinds that draw a
+// "Reply anonymously" pill below the card (question, reply); NO_CTA is for
+// 'message', which doesn't.
+const CARD_SAFE_TOP = 210;
+const CARD_SAFE_BOTTOM_NO_CTA = LINK_ZONE.y - 60;
+const CARD_SAFE_BOTTOM_WITH_CTA = LINK_ZONE.y - 60 - 150; // reserves room for the pill + its gap below the card
+const CARD_SAFE_HEIGHT_NO_CTA = CARD_SAFE_BOTTOM_NO_CTA - CARD_SAFE_TOP;
+const CARD_SAFE_HEIGHT_WITH_CTA = CARD_SAFE_BOTTOM_WITH_CTA - CARD_SAFE_TOP;
+
+// Centers a card of `cardHeight` inside a [CARD_SAFE_TOP, safeBottom]
+// budget it's already been fitted to (cardHeight <= safeHeight is
+// guaranteed by fitTextBlock upstream) — this is what gives short
+// messages a balanced, intentional composition instead of sitting stuck
+// near the top with a dead gap below, and gives long ones the same
+// centered feel instead of stretching toward the footer.
+function centeredCardY(cardHeight, safeHeight) {
+  return Math.round(CARD_SAFE_TOP + Math.max(0, safeHeight - cardHeight) / 2);
+}
+
 const LOGO_URL = '/logo.png'; // public/logo.png — see file banner
 let logoImagePromise = null;
 
@@ -80,6 +110,24 @@ function loadLogo() {
     });
   }
   return logoImagePromise;
+}
+
+// Loads a sender's pfp for the 'message' kind's avatar+name header.
+// crossOrigin is required so the canvas can still be exported (toBlob) once
+// an external image has been drawn onto it — without it, a remote Supabase
+// Storage avatar would "taint" the canvas and toBlob would throw. If the
+// avatar is missing or the load fails for any reason (CORS, 404, no
+// avatar_url at all), this resolves null and drawAvatarNameHeader falls
+// back to an initials circle instead of blocking the whole render.
+function loadAvatarImage(url) {
+  if (!url || typeof document === 'undefined') return Promise.resolve(null);
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.crossOrigin = 'anonymous';
+    img.onload = () => resolve(img);
+    img.onerror = () => resolve(null);
+    img.src = url;
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -137,11 +185,66 @@ function wrapText(ctx, text, maxWidth) {
   return lines;
 }
 
-function drawWrappedText(ctx, text, { x, y, maxWidth, lineHeight, align = 'left' }) {
+// Draws lines that were already computed (by fitTextBlock, below) instead
+// of re-wrapping raw text — keeps the drawn output in exact sync with
+// whatever size/wrap/truncation fitTextBlock decided on.
+function drawLines(ctx, lines, { x, y, lineHeight, align = 'left' }) {
   ctx.textAlign = align;
-  const lines = wrapText(ctx, text, maxWidth);
   lines.forEach((line, i) => ctx.fillText(line, x, y + i * lineHeight));
-  return lines.length * lineHeight;
+}
+
+// ---------------------------------------------------------------------------
+// Auto-fit typography. A body-style Scale (Cozy…Ultra, see
+// storyStylePresets.js) used to set one fixed font size that the card grew
+// to fit, with no ceiling — so a long question at a big Scale could push
+// the card taller than the space actually available above the reserved
+// link zone, spilling the last lines off the bottom of the canvas or under
+// the footer (exactly the "half question showing" bug). fitTextBlock
+// inverts that: it's handed a fixed vertical budget (maxHeight) and starts
+// at the Scale's chosen size, stepping the font size *down* — never the
+// card past its budget — until every line fits. A composer's character cap
+// (280 for a question, 500 for a confession/message) fits comfortably even
+// at the floor size, so in normal use this only ever gently softens the
+// biggest Scale on the longest messages; the tail-truncation below is a
+// last-resort safety net, not the common path.
+// ---------------------------------------------------------------------------
+function fitTextBlock(ctx, text, { fontFamily, weight, uppercase, maxWidth, maxHeight, basePx, minPx, lineHeightRatio, leadingMult = 1 }) {
+  const display = uppercase ? (text || '').toUpperCase() : (text || '');
+
+  const measure = (px) => {
+    ctx.font = `${weight} ${px}px ${fontFamily}`;
+    const wrapped = wrapText(ctx, display, maxWidth);
+    const lh = Math.max(1, Math.round(px * lineHeightRatio * leadingMult));
+    return { wrapped, lh, height: wrapped.length * lh };
+  };
+
+  let size = basePx;
+  let result = measure(size);
+  while (result.height > maxHeight && size > minPx) {
+    size -= 2;
+    result = measure(size);
+  }
+
+  let lines = result.wrapped;
+  const lineHeight = result.lh;
+
+  // Safety net for text far past any composer's own character cap: clip to
+  // however many lines the budget actually holds at the floor size and
+  // ellipsize the last one, rather than ever drawing past maxHeight.
+  const maxLines = Math.max(1, Math.floor(maxHeight / lineHeight));
+  if (lines.length > maxLines) {
+    ctx.font = `${weight} ${size}px ${fontFamily}`;
+    const kept = lines.slice(0, maxLines);
+    let last = kept[maxLines - 1];
+    while (last.length > 1 && ctx.measureText(`${last}\u2026`).width > maxWidth) {
+      last = last.slice(0, -1);
+    }
+    kept[maxLines - 1] = `${last}\u2026`;
+    lines = kept;
+  }
+
+  ctx.font = `${weight} ${size}px ${fontFamily}`;
+  return { size, css: `${weight} ${size}px ${fontFamily}`, lines, lineHeight, display };
 }
 
 // ---------------------------------------------------------------------------
@@ -405,6 +508,97 @@ function drawReplyPill(ctx, { x, y, headerPreset, bodyPreset, tokens, fontSize =
   return { width: pillWidth, height: pillHeight };
 }
 
+function getInitialsForCanvas(name) {
+  if (!name) return '?';
+  const parts = name.trim().split(/\s+/).filter(Boolean);
+  if (parts.length >= 2) return (parts[0][0] + parts[1][0]).toUpperCase();
+  return name.slice(0, 2).toUpperCase();
+}
+
+// ---------------------------------------------------------------------------
+// Avatar + name header — the 'message' kind's equivalent of drawTypeBadge:
+// a circular pfp (or an initials-fallback circle, styled off the theme's
+// header color) with the sender's name beside it, sitting at the top of the
+// card exactly like a chat message. Drawn as its own separate element (not
+// reusing drawTypeBadge's pill shape) since it's an image + name, not a
+// text label.
+// ---------------------------------------------------------------------------
+function drawAvatarNameHeader(ctx, { x, y, size = 76, avatarImage, senderName, headerPreset, bodyPreset, tokens, standalone = false }) {
+  const radius = size / 2;
+  const cx = x + radius;
+  const cy = y + radius;
+
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+  ctx.closePath();
+  ctx.clip();
+
+  if (avatarImage) {
+    // Cover-fit into the circle (like CSS object-fit: cover) so a
+    // non-square avatar never looks stretched.
+    const imgRatio = avatarImage.width / avatarImage.height;
+    let drawW = size;
+    let drawH = size;
+    let dx = x;
+    let dy = y;
+    if (imgRatio > 1) {
+      drawH = size;
+      drawW = size * imgRatio;
+      dx = x - (drawW - size) / 2;
+    } else {
+      drawW = size;
+      drawH = size / imgRatio;
+      dy = y - (drawH - size) / 2;
+    }
+    ctx.drawImage(avatarImage, dx, dy, drawW, drawH);
+  } else {
+    ctx.fillStyle = headerPreset.pillBg;
+    ctx.fillRect(x, y, size, size);
+    ctx.fillStyle = headerPreset.pillText;
+    ctx.font = `900 ${Math.round(size * 0.4)}px ${fontStack(bodyPreset || {})}`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText(getInitialsForCanvas(senderName), cx, cy + 2);
+    ctx.textBaseline = 'alphabetic';
+  }
+  ctx.restore();
+
+  // Thin ring around the avatar so it reads as a distinct circle even
+  // against whatever sits behind it (the card fill, or — when standalone —
+  // the page background).
+  ctx.beginPath();
+  ctx.arc(cx, cy, radius, 0, Math.PI * 2);
+  ctx.lineWidth = 3;
+  ctx.strokeStyle = standalone
+    ? 'rgba(255,255,255,0.35)'
+    : (bodyPreset.darkText ? 'rgba(12,13,16,0.25)' : 'rgba(255,255,255,0.25)');
+  ctx.stroke();
+
+  const nameFontPx = Math.round(size * 0.4);
+  ctx.font = `800 ${nameFontPx}px ${fontStack(bodyPreset || {})}`;
+  ctx.save();
+  if (standalone) {
+    // Sits directly on the page background (any accent/pattern the user
+    // picked), not on the card fill — so it always uses the light paper
+    // tone plus a soft shadow for legibility, instead of the card's
+    // darkText-driven contrast logic below.
+    ctx.shadowColor = 'rgba(0,0,0,0.5)';
+    ctx.shadowBlur = 10;
+    ctx.shadowOffsetY = 2;
+    ctx.fillStyle = tokens.paper;
+  } else {
+    ctx.fillStyle = bodyPreset.darkText ? tokens.ink : tokens.paper;
+  }
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(senderName || 'Anonymous', x + size + 24, cy + 1);
+  ctx.textBaseline = 'alphabetic';
+  ctx.restore();
+
+  return size;
+}
+
 // ---------------------------------------------------------------------------
 // Body card — fill/border/shape resolved from the body-style preset
 // ---------------------------------------------------------------------------
@@ -470,8 +664,14 @@ function buildThemeRuntime(backgroundId, colorId) {
   const structure = getPresetById(BACKGROUND_STRUCTURES, backgroundId);
   const color = getPresetById(ACCENT_COLORS, colorId);
   const accent = color.hex;
-  const base = mixHex(accent, '#0C0D10', 0.86); // dark, hue-tinted base fill
-  const baseDeep = mixHex(accent, '#0C0D10', 0.94); // slightly darker 2nd gradient stop
+  // v6: mixed in far less black than before (was 0.86/0.94 — nearly the
+  // whole canvas washed out to near-charcoal regardless of which accent
+  // was picked, which is exactly the "dull" look this reworks). Now the
+  // base fill stays a genuinely saturated, recognizably-that-color tone,
+  // with just enough black mixed in to keep the paper-colored card text
+  // and footer legible on top of it.
+  const base = mixHex(accent, '#0C0D10', 0.42);
+  const baseDeep = mixHex(accent, '#0C0D10', 0.62);
   const pillText = readableTextColor(accent);
 
   let background;
@@ -483,7 +683,7 @@ function buildThemeRuntime(backgroundId, colorId) {
       background = { type: 'linear', colors: [base, baseDeep] };
       break;
     case 'radial':
-      background = { type: 'radial', colors: [accent, base], overlay: 'rgba(12,13,16,0.78)' };
+      background = { type: 'radial', colors: [accent, base], overlay: 'rgba(12,13,16,0.32)' };
       break;
     case 'dots':
     case 'grid':
@@ -491,12 +691,12 @@ function buildThemeRuntime(backgroundId, colorId) {
     case 'halftone':
     case 'pinstripe':
     case 'waves':
-      background = { type: structure.type, colors: [base], dotColor: hexToRgba(accent, 0.35) };
+      background = { type: structure.type, colors: [base], dotColor: hexToRgba(accent, 0.6) };
       break;
     case 'stripes':
     case 'checker':
     case 'sunburst':
-      background = { type: structure.type, colors: [base, hexToRgba(accent, 0.22)] };
+      background = { type: structure.type, colors: [base, hexToRgba(accent, 0.45)] };
       break;
     case 'confetti':
       background = { type: 'confetti', colors: [base] }; // keeps CONFETTI_PALETTE's own multi-color scatter
@@ -765,45 +965,36 @@ function fontStack(bodyPreset) {
   return FONT_STACKS[bodyPreset.fontFamily] || FONT_STACKS.system;
 }
 
-function headlineFont(bodyPreset, basePx) {
-  const weight = bodyPreset.fontWeight || 900;
-  const size = Math.round(basePx * (bodyPreset.fontScale || 1));
-  return { css: `${weight} ${size}px ${fontStack(bodyPreset)}`, size };
-}
-
-function displayText(text, bodyPreset) {
-  return bodyPreset.uppercase ? (text || '').toUpperCase() : text;
-}
-
-// Extra clearance so a big/Ultra-scaled first line's cap-height never
-// creeps up into the badge above it. `badgeSpace` used to be a flat
-// constant (96 / 130 for blockHeader) tuned only for the Bold-scale
-// baseline font size — at bigger scales the first line's ascent grows
-// well past what that flat constant assumed, so text and badge overlapped
-// at Massive/Ultra. This grows the gap in proportion to how much taller
-// the first line's font is than that Bold baseline, using ~0.78 as a
-// reasonable ascent-to-em-size ratio for the bold sans/serif/mono stacks
-// this file uses.
-function badgeClearance(baseBadgeSpace, firstLineFontPx, baselineFontPx) {
-  return baseBadgeSpace + Math.max(0, firstLineFontPx - baselineFontPx) * 0.86 + 8;
-}
-
 // ---------------------------------------------------------------------------
 // Layout — 'question' kind
 // ---------------------------------------------------------------------------
 function drawQuestionSlide(ctx, { questionText, questionType, headerPreset, bodyPreset, tokens }) {
   const cardX = 80;
   const cardWidth = CANVAS_WIDTH - cardX * 2;
-  const cardPadding = 72;
-  const cardY = 520;
+  const cardPadding = 64;
+  const maxTextWidth = cardWidth - cardPadding * 2;
 
-  const bodyDisplay = displayText(questionText, bodyPreset);
-  const { css: headlineCss, size: headlineSize } = headlineFont(bodyPreset, 60);
-  ctx.font = headlineCss;
-  const textLines = wrapText(ctx, bodyDisplay, cardWidth - cardPadding * 2);
-  const lineHeight = Math.round(headlineSize * 1.233 * (bodyPreset.leadingMult || 1));
-  const badgeSpace = badgeClearance(bodyPreset.blockHeader ? 130 : 96, headlineSize, 60);
+  // Fixed clearance for the badge + a clear gap under it — independent of
+  // the body font size (see fitTextBlock's banner above), so the header
+  // badge and body text can never overlap regardless of how much text
+  // there is or which Scale was picked.
+  const badgeSpace = bodyPreset.blockHeader ? 156 : 114;
+  const maxTextHeight = CARD_SAFE_HEIGHT_WITH_CTA - cardPadding * 2 - badgeSpace;
+
+  const { css: headlineCss, lines: textLines, lineHeight } = fitTextBlock(ctx, questionText, {
+    fontFamily: fontStack(bodyPreset),
+    weight: bodyPreset.fontWeight || 900,
+    uppercase: bodyPreset.uppercase,
+    maxWidth: maxTextWidth,
+    maxHeight: maxTextHeight,
+    basePx: Math.round(60 * (bodyPreset.fontScale || 1)),
+    minPx: 30,
+    lineHeightRatio: 1.233,
+    leadingMult: bodyPreset.leadingMult,
+  });
+
   const cardHeight = cardPadding * 2 + badgeSpace + textLines.length * lineHeight;
+  const cardY = centeredCardY(cardHeight, CARD_SAFE_HEIGHT_WITH_CTA);
 
   const { textColor, dropShadow } = drawBodyCard(ctx, { x: cardX, y: cardY, width: cardWidth, height: cardHeight, bodyPreset, tokens, headerPreset });
 
@@ -819,10 +1010,9 @@ function drawQuestionSlide(ctx, { questionText, questionType, headerPreset, body
   }
   ctx.fillStyle = textColor;
   ctx.font = headlineCss;
-  drawWrappedText(ctx, bodyDisplay, {
+  drawLines(ctx, textLines, {
     x: cardX + cardPadding,
     y: cardY + cardPadding + badgeSpace,
-    maxWidth: cardWidth - cardPadding * 2,
     lineHeight,
     align: 'left',
   });
@@ -840,30 +1030,46 @@ function drawQuestionSlide(ctx, { questionText, questionType, headerPreset, body
 function drawReplySlide(ctx, { questionText, replyText, headerPreset, bodyPreset, tokens }) {
   const cardX = 80;
   const cardWidth = CANVAS_WIDTH - cardX * 2;
-  const cardPadding = 68;
-  const cardY = 420;
+  const cardPadding = 64;
+  const maxTextWidth = cardWidth - cardPadding * 2;
 
   // Quoted excerpt of the original question, small + dim, sits above the
   // main reply text so whoever sees the story knows what was being asked.
-  // Scales only gently with the preset (a mild fraction of the full swing)
-  // so it always stays visually secondary to the reply itself.
+  // Capped to 2 lines with an ellipsis (independent of the reply's own
+  // auto-fit) so a long original question can never eat into the space
+  // the reply itself needs.
   const excerptScale = 1 + ((bodyPreset.fontScale || 1) - 1) * 0.35;
   const excerptFontPx = Math.round(30 * excerptScale);
-  ctx.font = `700 ${excerptFontPx}px ${fontStack(bodyPreset)}`;
-  const excerptMax = 160;
-  const excerpt = questionText.length > excerptMax ? `${questionText.slice(0, excerptMax).trim()}…` : questionText;
-  const excerptLines = wrapText(ctx, `"${excerpt}"`, cardWidth - cardPadding * 2);
   const excerptLineHeight = Math.round(40 * excerptScale);
-
-  const replyDisplay = displayText(replyText, bodyPreset);
-  const { css: replyCss, size: replySize } = headlineFont(bodyPreset, 56);
-  ctx.font = replyCss;
-  const replyLines = wrapText(ctx, replyDisplay, cardWidth - cardPadding * 2);
-  const replyLineHeight = Math.round(replySize * 1.25 * (bodyPreset.leadingMult || 1));
-
-  const badgeSpace = badgeClearance(bodyPreset.blockHeader ? 130 : 96, excerptFontPx, 30);
+  const { lines: excerptLines } = fitTextBlock(ctx, `"${questionText}"`, {
+    fontFamily: fontStack(bodyPreset),
+    weight: 700,
+    uppercase: false,
+    maxWidth: maxTextWidth,
+    maxHeight: excerptLineHeight * 2,
+    basePx: excerptFontPx,
+    minPx: excerptFontPx,
+    lineHeightRatio: excerptLineHeight / excerptFontPx,
+  });
   const excerptBlock = excerptLines.length * excerptLineHeight + 34;
+
+  const badgeSpace = bodyPreset.blockHeader ? 156 : 114;
+  const maxTextHeight = CARD_SAFE_HEIGHT_WITH_CTA - cardPadding * 2 - badgeSpace - excerptBlock;
+
+  const { css: replyCss, lines: replyLines, lineHeight: replyLineHeight } = fitTextBlock(ctx, replyText, {
+    fontFamily: fontStack(bodyPreset),
+    weight: bodyPreset.fontWeight || 900,
+    uppercase: bodyPreset.uppercase,
+    maxWidth: maxTextWidth,
+    maxHeight: maxTextHeight,
+    basePx: Math.round(56 * (bodyPreset.fontScale || 1)),
+    minPx: 28,
+    lineHeightRatio: 1.25,
+    leadingMult: bodyPreset.leadingMult,
+  });
+
   const cardHeight = cardPadding * 2 + badgeSpace + excerptBlock + replyLines.length * replyLineHeight;
+  const cardY = centeredCardY(cardHeight, CARD_SAFE_HEIGHT_WITH_CTA);
 
   const { textColor, dropShadow } = drawBodyCard(ctx, { x: cardX, y: cardY, width: cardWidth, height: cardHeight, bodyPreset, tokens, headerPreset });
 
@@ -875,7 +1081,7 @@ function drawReplySlide(ctx, { questionText, replyText, headerPreset, bodyPreset
 
   ctx.fillStyle = bodyPreset.darkText ? 'rgba(12,13,16,0.6)' : tokens.dim;
   ctx.font = `700 ${excerptFontPx}px ${fontStack(bodyPreset)}`;
-  drawWrappedText(ctx, `"${excerpt}"`, { x: cardX + cardPadding, y: cursorY, maxWidth: cardWidth - cardPadding * 2, lineHeight: excerptLineHeight, align: 'left' });
+  drawLines(ctx, excerptLines, { x: cardX + cardPadding, y: cursorY, lineHeight: excerptLineHeight, align: 'left' });
   cursorY += excerptBlock;
 
   if (dropShadow) {
@@ -885,13 +1091,417 @@ function drawReplySlide(ctx, { questionText, replyText, headerPreset, bodyPreset
   }
   ctx.fillStyle = textColor;
   ctx.font = replyCss;
-  drawWrappedText(ctx, replyDisplay, { x: cardX + cardPadding, y: cursorY, maxWidth: cardWidth - cardPadding * 2, lineHeight: replyLineHeight, align: 'left' });
+  drawLines(ctx, replyLines, { x: cardX + cardPadding, y: cursorY, lineHeight: replyLineHeight, align: 'left' });
   ctx.shadowBlur = 0;
 
   const pillY = cardY + cardHeight + 56;
   const { width: pillWidth } = drawReplyPill(ctx, { x: (CANVAS_WIDTH - 480) / 2, y: pillY, headerPreset, bodyPreset, tokens, fontSize: 32 });
   ctx.clearRect(0, pillY - 4, CANVAS_WIDTH, 100);
   drawReplyPill(ctx, { x: (CANVAS_WIDTH - pillWidth) / 2, y: pillY, headerPreset, bodyPreset, tokens, fontSize: 32 });
+}
+
+// ---------------------------------------------------------------------------
+// Layout — 'message' kind (share-a-chat-message card). Same card chrome as
+// 'question'/'reply' (drawBodyCard, fully re-skinnable), but the header is
+// the avatar+name row instead of a text badge — see drawAvatarNameHeader.
+// No CTA pill at the bottom: unlike a question, a chat message isn't asking
+// for a reply, so there's nothing to invite one for.
+// ---------------------------------------------------------------------------
+function drawMessageSlide(ctx, { messageText, senderName, avatarImage, headerPreset, bodyPreset, tokens }) {
+  const cardX = 80;
+  const cardWidth = CANVAS_WIDTH - cardX * 2;
+  const cardPadding = 64;
+  const avatarSize = 72;
+  // The avatar+name row is drawn in its own row above the card now, not
+  // tucked inside cardPadding on top of the message text — it's the
+  // message's identity, not part of the body copy, so it can never crowd
+  // or run into the text underneath it no matter how tall the card grows.
+  const headerToCardGap = 32;
+  const maxTextWidth = cardWidth - cardPadding * 2;
+
+  const maxTextHeight = CARD_SAFE_HEIGHT_NO_CTA - cardPadding * 2 - avatarSize - headerToCardGap;
+
+  const { css: bodyCss, lines: bodyLines, lineHeight: bodyLineHeight } = fitTextBlock(ctx, messageText, {
+    fontFamily: fontStack(bodyPreset),
+    weight: bodyPreset.fontWeight || 900,
+    uppercase: bodyPreset.uppercase,
+    maxWidth: maxTextWidth,
+    maxHeight: maxTextHeight,
+    basePx: Math.round(52 * (bodyPreset.fontScale || 1)),
+    minPx: 26,
+    lineHeightRatio: 1.28,
+    leadingMult: bodyPreset.leadingMult,
+  });
+
+  const cardHeight = cardPadding * 2 + Math.max(1, bodyLines.length) * bodyLineHeight;
+  // Header row + gap + card are centered together as one block, so the
+  // whole composition (not just the card) stays balanced in the safe zone.
+  const blockHeight = avatarSize + headerToCardGap + cardHeight;
+  const blockY = centeredCardY(blockHeight, CARD_SAFE_HEIGHT_NO_CTA);
+
+  // Unlike drawTypeBadge (skipped for 'textOnly' shapes), the avatar+name
+  // row IS the message's identity, not a decorative label — so it's always
+  // drawn, the same way drawReplySlide always draws its quoted excerpt.
+  // `standalone: true` — it now sits on the page background, outside the
+  // card entirely, so it gets its own always-legible styling instead of
+  // the card-fill-relative contrast drawAvatarNameHeader uses by default.
+  drawAvatarNameHeader(ctx, {
+    x: cardX,
+    y: blockY,
+    size: avatarSize,
+    avatarImage,
+    senderName,
+    headerPreset,
+    bodyPreset,
+    tokens,
+    standalone: true,
+  });
+
+  const cardY = blockY + avatarSize + headerToCardGap;
+  const { textColor, dropShadow } = drawBodyCard(ctx, { x: cardX, y: cardY, width: cardWidth, height: cardHeight, bodyPreset, tokens, headerPreset });
+
+  const cursorY = cardY + cardPadding;
+
+  if (dropShadow) {
+    ctx.shadowColor = 'rgba(0,0,0,0.6)';
+    ctx.shadowBlur = 24;
+    ctx.shadowOffsetY = 6;
+  }
+  ctx.fillStyle = textColor;
+  ctx.font = bodyCss;
+  drawLines(ctx, bodyLines, { x: cardX + cardPadding, y: cursorY, lineHeight: bodyLineHeight, align: 'left' });
+  ctx.shadowBlur = 0;
+}
+
+// ---------------------------------------------------------------------------
+// Layout — 'tweet' template (professional, realistic tweet-screenshot style)
+// ---------------------------------------------------------------------------
+// A fixed, non-customizable preset (Background/Shape/Colour/Size from
+// storyStylePresets.js don't apply here — see ShareStorySheet's
+// Basic/Tweet toggle) built to read like a genuine social-post screenshot:
+// a plain neutral canvas backdrop behind a white, rounded, drop-shadowed
+// card with an avatar+name/handle header, the shared text as the body copy,
+// a timestamp line, and a muted reply/repost/like/share icon row. Works for
+// all three share kinds — 'question' and 'reply' get a synthesized handle
+// and (for 'reply') a small quoted excerpt of the original question, the
+// same way drawReplySlide's quoted-question inset works.
+const TWEET_CARD_BG = '#FFFFFF';
+const TWEET_TEXT_PRIMARY = '#0F1419';
+const TWEET_TEXT_SECONDARY = '#536471';
+const TWEET_BORDER = 'rgba(15,20,25,0.12)';
+const TWEET_ACCENT = '#1D9BF0';
+
+function drawTweetAvatar(ctx, { x, y, size, avatarImage, label }) {
+  ctx.save();
+  ctx.beginPath();
+  ctx.arc(x + size / 2, y + size / 2, size / 2, 0, Math.PI * 2);
+  ctx.closePath();
+  ctx.clip();
+  if (avatarImage) {
+    ctx.drawImage(avatarImage, x, y, size, size);
+  } else {
+    ctx.fillStyle = '#E1E8ED';
+    ctx.fillRect(x, y, size, size);
+    ctx.fillStyle = '#536471';
+    ctx.font = `700 ${Math.round(size * 0.42)}px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText((label || 'A').slice(0, 1).toUpperCase(), x + size / 2, y + size / 2 + 2);
+    ctx.textBaseline = 'alphabetic';
+  }
+  ctx.restore();
+}
+
+// Small filled-circle "verified" badge — generic, not any real platform's
+// mark — just enough to read as "a real, professional post" at a glance.
+function drawVerifiedBadge(ctx, x, y, size) {
+  ctx.save();
+  ctx.fillStyle = TWEET_ACCENT;
+  ctx.beginPath();
+  ctx.arc(x, y, size / 2, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.strokeStyle = '#FFFFFF';
+  ctx.lineWidth = size * 0.14;
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  ctx.beginPath();
+  ctx.moveTo(x - size * 0.24, y);
+  ctx.lineTo(x - size * 0.05, y + size * 0.2);
+  ctx.lineTo(x + size * 0.26, y - size * 0.22);
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawEngagementRow(ctx, { x, y, width, seed }) {
+  const rand = seededRandom(seed);
+  const icons = [
+    { glyph: 'reply', count: 1 + Math.floor(rand() * 40) },
+    { glyph: 'repost', count: 2 + Math.floor(rand() * 90) },
+    { glyph: 'like', count: 12 + Math.floor(rand() * 400) },
+    { glyph: 'share', count: null },
+  ];
+  const slotWidth = width / icons.length;
+  ctx.strokeStyle = TWEET_TEXT_SECONDARY;
+  ctx.fillStyle = TWEET_TEXT_SECONDARY;
+  ctx.lineWidth = 3.2;
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+
+  icons.forEach((icon, i) => {
+    const cx = x + slotWidth * i + 14;
+    const cy = y;
+    ctx.save();
+    ctx.beginPath();
+    if (icon.glyph === 'reply') {
+      roundedRectPath(ctx, cx, cy - 10, 26, 18, 6);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.moveTo(cx + 6, cy + 8);
+      ctx.lineTo(cx, cy + 16);
+      ctx.lineTo(cx + 12, cy + 8);
+      ctx.stroke();
+    } else if (icon.glyph === 'repost') {
+      ctx.moveTo(cx, cy - 4);
+      ctx.lineTo(cx + 20, cy - 4);
+      ctx.lineTo(cx + 20, cy + 6);
+      ctx.moveTo(cx + 22, cy + 10);
+      ctx.lineTo(cx + 2, cy + 10);
+      ctx.lineTo(cx + 2, cy);
+      ctx.stroke();
+    } else if (icon.glyph === 'like') {
+      ctx.moveTo(cx + 10, cy + 14);
+      ctx.bezierCurveTo(cx - 6, cy + 2, cx - 2, cy - 12, cx + 10, cy - 4);
+      ctx.bezierCurveTo(cx + 22, cy - 12, cx + 26, cy + 2, cx + 10, cy + 14);
+      ctx.stroke();
+    } else {
+      ctx.moveTo(cx, cy + 4);
+      ctx.lineTo(cx, cy - 8);
+      ctx.lineTo(cx + 22, cy - 8);
+      ctx.moveTo(cx + 4, cy - 4);
+      ctx.lineTo(cx + 11, cy - 11);
+      ctx.lineTo(cx + 18, cy - 4);
+      ctx.stroke();
+    }
+    ctx.restore();
+
+    if (icon.count !== null) {
+      ctx.font = '500 24px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+      ctx.textAlign = 'left';
+      ctx.fillText(String(icon.count), cx + 34, cy + 8);
+    }
+  });
+}
+
+function drawTweetSlide(ctx, { kind, questionText, questionType, replyText, messageText, senderName, avatarImage }) {
+  // Plain neutral backdrop — the tweet card is the whole point here, not
+  // any of the customizable Background presets.
+  ctx.fillStyle = '#EFF3F4';
+  ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+
+  const cardX = 64;
+  const cardWidth = CANVAS_WIDTH - cardX * 2;
+  const pad = 48;
+  const avatarSize = 84;
+
+  const displayName = kind === 'message' ? (senderName || 'Anonymous') : 'Anonymous';
+  const handle = '@anonymous';
+  const bodyText = kind === 'reply' ? replyText : kind === 'message' ? messageText : questionText;
+  const font = '-apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+
+  // --- Quoted-question inset (reply kind only) — measured first so the
+  // card's total height accounts for it. ---
+  const hasQuote = kind === 'reply' && Boolean(questionText);
+  let quoteLines = [];
+  let quoteLineHeight = 0;
+  const quotePadding = 28;
+  if (hasQuote) {
+    ctx.font = '500 30px ' + font;
+    const fitted = fitTextBlock(ctx, questionText, {
+      fontFamily: font,
+      weight: 500,
+      uppercase: false,
+      maxWidth: cardWidth - pad * 2 - quotePadding * 2,
+      maxHeight: 220,
+      basePx: 30,
+      minPx: 22,
+      lineHeightRatio: 1.3,
+    });
+    quoteLines = fitted.lines;
+    quoteLineHeight = fitted.lineHeight;
+  }
+  const quoteBlockHeight = hasQuote ? quotePadding * 2 + quoteLines.length * quoteLineHeight + 20 : 0;
+
+  // --- Body text ---
+  const maxBodyWidth = cardWidth - pad * 2;
+  const maxBodyHeight = 900;
+  const { css: bodyCss, lines: bodyLines, lineHeight: bodyLineHeight } = fitTextBlock(ctx, bodyText, {
+    fontFamily: font,
+    weight: 400,
+    uppercase: false,
+    maxWidth: maxBodyWidth,
+    maxHeight: maxBodyHeight,
+    basePx: 46,
+    minPx: 26,
+    lineHeightRatio: 1.34,
+  });
+
+  const headerHeight = avatarSize;
+  const headerToBodyGap = 30;
+  const bodyToMetaGap = 34;
+  const metaHeight = 40;
+  const metaToDividerGap = 24;
+  const dividerToEngagementGap = 26;
+  const engagementHeight = 40;
+  const badgeHeight = kind === 'question' ? 56 : 0;
+
+  const cardHeight =
+    pad * 2 +
+    badgeHeight +
+    headerHeight +
+    headerToBodyGap +
+    bodyLines.length * bodyLineHeight +
+    quoteBlockHeight +
+    bodyToMetaGap +
+    metaHeight +
+    metaToDividerGap +
+    1 +
+    dividerToEngagementGap +
+    engagementHeight;
+
+  const cardY = Math.max(220, (CANVAS_HEIGHT - cardHeight) / 2 - 60);
+
+  // --- Card shell ---
+  ctx.save();
+  ctx.shadowColor = 'rgba(0,0,0,0.18)';
+  ctx.shadowBlur = 40;
+  ctx.shadowOffsetY = 16;
+  roundedRectPath(ctx, cardX, cardY, cardWidth, cardHeight, 28);
+  ctx.fillStyle = TWEET_CARD_BG;
+  ctx.fill();
+  ctx.restore();
+  ctx.save();
+  roundedRectPath(ctx, cardX, cardY, cardWidth, cardHeight, 28);
+  ctx.strokeStyle = TWEET_BORDER;
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  ctx.restore();
+
+  let cursorY = cardY + pad;
+
+  if (kind === 'question') {
+    const label = questionType === 'personal' ? 'PERSONAL QUESTION' : 'ANONYMOUS QUESTION';
+    ctx.font = '800 22px ' + font;
+    const labelWidth = ctx.measureText(label).width + 32;
+    roundedRectPath(ctx, cardX + pad, cursorY, labelWidth, 40, 10);
+    ctx.fillStyle = 'rgba(29,155,240,0.1)';
+    ctx.fill();
+    ctx.fillStyle = TWEET_ACCENT;
+    ctx.textAlign = 'left';
+    ctx.fillText(label, cardX + pad + 16, cursorY + 27);
+    cursorY += badgeHeight;
+  }
+
+  // --- Header: avatar + name/handle ---
+  drawTweetAvatar(ctx, { x: cardX + pad, y: cursorY, size: avatarSize, avatarImage, label: displayName });
+  const nameX = cardX + pad + avatarSize + 22;
+  ctx.textAlign = 'left';
+  ctx.fillStyle = TWEET_TEXT_PRIMARY;
+  ctx.font = '800 32px ' + font;
+  const nameWidth = ctx.measureText(displayName).width;
+  ctx.fillText(displayName, nameX, cursorY + 34);
+  drawVerifiedBadge(ctx, nameX + nameWidth + 20, cursorY + 24, 26);
+  ctx.fillStyle = TWEET_TEXT_SECONDARY;
+  ctx.font = '400 28px ' + font;
+  ctx.fillText(handle, nameX, cursorY + 68);
+
+  cursorY += headerHeight + headerToBodyGap;
+
+  // --- Body text ---
+  ctx.fillStyle = TWEET_TEXT_PRIMARY;
+  ctx.font = bodyCss;
+  // +bodyLineHeight * 0.72 nudges the first baseline down from the cap
+  // (cursorY) by roughly one line's ascent, so the glyphs sit inside the
+  // card instead of clipping against its top edge.
+  drawLines(ctx, bodyLines, { x: cardX + pad, y: cursorY + Math.round(bodyLineHeight * 0.72), lineHeight: bodyLineHeight, align: 'left' });
+  cursorY += bodyLines.length * bodyLineHeight;
+
+  // --- Quoted question inset (reply only) ---
+  if (hasQuote) {
+    cursorY += 20;
+    const quoteY = cursorY;
+    roundedRectPath(ctx, cardX + pad, quoteY, cardWidth - pad * 2, quoteBlockHeight - 20, 16);
+    ctx.fillStyle = 'rgba(15,20,25,0.04)';
+    ctx.fill();
+    ctx.strokeStyle = TWEET_BORDER;
+    ctx.lineWidth = 1.5;
+    ctx.stroke();
+    ctx.fillStyle = TWEET_TEXT_SECONDARY;
+    ctx.font = '500 30px ' + font;
+    drawLines(ctx, quoteLines, { x: cardX + pad + quotePadding, y: quoteY + quotePadding + 24, lineHeight: quoteLineHeight, align: 'left' });
+    cursorY += quoteBlockHeight - 20;
+  }
+
+  // --- Timestamp / meta line ---
+  cursorY += bodyToMetaGap;
+  const now = new Date();
+  const timeStr = now.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  const dateStr = now.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' });
+  ctx.fillStyle = TWEET_TEXT_SECONDARY;
+  ctx.font = '400 26px ' + font;
+  ctx.fillText(`${timeStr} · ${dateStr} · Anonroom`, cardX + pad, cursorY + 24);
+
+  cursorY += metaHeight + metaToDividerGap;
+  ctx.strokeStyle = TWEET_BORDER;
+  ctx.lineWidth = 1.5;
+  ctx.beginPath();
+  ctx.moveTo(cardX + pad, cursorY);
+  ctx.lineTo(cardX + cardWidth - pad, cursorY);
+  ctx.stroke();
+
+  cursorY += dividerToEngagementGap + 14;
+  drawEngagementRow(ctx, { x: cardX + pad, y: cursorY, width: cardWidth - pad * 2 - 40, seed: (bodyText || '').length + cardWidth });
+}
+
+// ---------------------------------------------------------------------------
+// Attached-media thumbnail (mode="message" only) — a small, fixed-position
+// rounded thumbnail of the shared message's photo/video/GIF, always drawn
+// directly above the footer wordmark/logo (the "anonroom.in" branding),
+// sitting just above the reserved LINK_ZONE band so it never overlaps
+// either the footer or the space left for the manual IG link sticker.
+// ---------------------------------------------------------------------------
+const MEDIA_THUMB_SIZE = 168;
+
+function drawAttachedMediaThumb(ctx, mediaImage) {
+  if (!mediaImage) return;
+  const size = MEDIA_THUMB_SIZE;
+  const x = (CANVAS_WIDTH - size) / 2;
+  const y = LINK_ZONE.y - 28 - size; // fixed: always just above the link-zone/footer band
+
+  ctx.save();
+  ctx.shadowColor = 'rgba(0,0,0,0.45)';
+  ctx.shadowBlur = 20;
+  ctx.shadowOffsetY = 6;
+  roundedRectPath(ctx, x, y, size, size, 20);
+  ctx.fillStyle = 'rgba(0,0,0,0.2)';
+  ctx.fill();
+  ctx.restore();
+
+  ctx.save();
+  roundedRectPath(ctx, x, y, size, size, 20);
+  ctx.clip();
+  // cover-fit the source image into the square thumbnail
+  const scale = Math.max(size / mediaImage.width, size / mediaImage.height);
+  const drawW = mediaImage.width * scale;
+  const drawH = mediaImage.height * scale;
+  ctx.drawImage(mediaImage, x + (size - drawW) / 2, y + (size - drawH) / 2, drawW, drawH);
+  ctx.restore();
+
+  ctx.save();
+  roundedRectPath(ctx, x, y, size, size, 20);
+  ctx.strokeStyle = 'rgba(255,255,255,0.55)';
+  ctx.lineWidth = 3;
+  ctx.stroke();
+  ctx.restore();
 }
 
 // ---------------------------------------------------------------------------
@@ -902,10 +1512,20 @@ export async function generateStoryImage({
   questionText = '',
   replyText = '',
   questionType,
+  messageText = '',
+  senderName = '',
+  avatarUrl = '',
   backgroundId,
   colorId,
   shapeId,
   scaleId,
+  // Preset toggle: 'basic' (fully customizable, default) or 'tweet' (a
+  // single fixed, professional realistic-post style — see drawTweetSlide).
+  template = 'basic',
+  // mode="message" only — when set and mediaType is a visual kind (image
+  // or gif), a fixed thumbnail of it is drawn above the footer branding.
+  mediaUrl = '',
+  mediaType = '',
 }) {
   const canvas = document.createElement('canvas');
   canvas.width = CANVAS_WIDTH;
@@ -913,21 +1533,35 @@ export async function generateStoryImage({
   const ctx = canvas.getContext('2d');
 
   const tokens = getTokens();
-  const runtime = buildThemeRuntime(backgroundId, colorId);
-  const headerPreset = { pillBg: runtime.pillBg, pillText: runtime.pillText };
-  const backgroundPreset = runtime.background;
-  const bodyPreset = mergeBodyPreset(getPresetById(BODY_SHAPES, shapeId), getPresetById(BODY_SCALES, scaleId));
 
-  drawBackground(ctx, backgroundPreset);
-
-  if (kind === 'reply') {
-    drawReplySlide(ctx, { questionText, replyText, headerPreset, bodyPreset, tokens });
+  if (template === 'tweet') {
+    const avatarImage = kind === 'message' ? await loadAvatarImage(avatarUrl) : null;
+    drawTweetSlide(ctx, { kind, questionText, questionType, replyText, messageText, senderName, avatarImage });
   } else {
-    drawQuestionSlide(ctx, { questionText, questionType, headerPreset, bodyPreset, tokens });
+    const runtime = buildThemeRuntime(backgroundId, colorId);
+    const headerPreset = { pillBg: runtime.pillBg, pillText: runtime.pillText };
+    const backgroundPreset = runtime.background;
+    const bodyPreset = mergeBodyPreset(getPresetById(BODY_SHAPES, shapeId), getPresetById(BODY_SCALES, scaleId));
+
+    drawBackground(ctx, backgroundPreset);
+
+    if (kind === 'reply') {
+      drawReplySlide(ctx, { questionText, replyText, headerPreset, bodyPreset, tokens });
+    } else if (kind === 'message') {
+      const avatarImage = await loadAvatarImage(avatarUrl);
+      drawMessageSlide(ctx, { messageText, senderName, avatarImage, headerPreset, bodyPreset, tokens });
+    } else {
+      drawQuestionSlide(ctx, { questionText, questionType, headerPreset, bodyPreset, tokens });
+    }
   }
 
   // LINK_ZONE (between card bottom and footer) is intentionally left blank —
   // that's where the IG link sticker goes by hand. Nothing draws there.
+
+  if (kind === 'message' && mediaUrl && (mediaType === 'image' || mediaType === 'gif')) {
+    const mediaImage = await loadAvatarImage(mediaUrl); // generic image loader, name aside
+    drawAttachedMediaThumb(ctx, mediaImage);
+  }
 
   await drawFooterLogo(ctx, tokens);
 

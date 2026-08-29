@@ -47,7 +47,7 @@ import ConfessionsFeed from './pages/ConfessionsFeed';
 import ResetPassword from './pages/ResetPassword';
 import supabase from './lib/supabaseClient';
 import ToastContainer from './components/ToastContainer';
-import { getQuestionIdFromPath, isConfessionsFeedPath, isResetPasswordPath, isGroupSubdomain } from './lib/subdomain';
+import { getQuestionIdFromPath, isConfessionsFeedPath, isResetPasswordPath, isGroupSubdomain, getGroupSlugFromRealSubdomain, getGroupUrl } from './lib/subdomain';
 import { getCookie, setCookie, getOrCreateVisitorId } from './lib/visitorId';
 import './styles/tokens.css';
 
@@ -264,7 +264,53 @@ function resolveTopLevelView() {
   return <Home />;
 }
 
+// ----------------------------------------------------------------------------
+// GROUP SUBDOMAIN -> /g/<slug> REDIRECT
+// ----------------------------------------------------------------------------
+// Groups no longer render on their own subdomain at all. A visit to a real
+// production subdomain (groupname.anonroom.in) now ONLY ever redirects to
+// the path-based anonroom.in/g/<slug> route (see getGroupUrl in
+// subdomain.js) — it never opens the group's content itself. This check
+// runs before anything else mounts (AuthProvider, Home, etc.), so a
+// subdomain visit never flashes the app before bouncing.
+function useGroupSubdomainRedirect() {
+  const [slug] = useState(() => getGroupSlugFromRealSubdomain());
+
+  useEffect(() => {
+    if (slug) {
+      window.location.replace(getGroupUrl(slug));
+    }
+  }, [slug]);
+
+  return slug;
+}
+
+// Minimal placeholder shown for the brief moment between mount and the
+// browser actually following the redirect above — never the group's
+// content itself, since that no longer renders on the subdomain at all.
+function SubdomainRedirectScreen() {
+  return (
+    <div
+      style={{
+        position: 'fixed',
+        inset: 0,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        background: 'var(--ink, #0C0D10)',
+        color: 'var(--dim, #8B8B96)',
+        fontSize: 14,
+        fontWeight: 600,
+      }}
+    >
+      Redirecting…
+    </div>
+  );
+}
+
 export default function App() {
+  const subdomainGroupSlug = useGroupSubdomainRedirect();
+
   // ----------------------------------------------------------------------
   // JS-level pinch-zoom prevention.
   // ----------------------------------------------------------------------
@@ -321,6 +367,11 @@ export default function App() {
     return () => observer.disconnect();
   }, []);
 
+  // A real group subdomain never renders the app itself — just the brief
+  // redirect placeholder while the browser follows the replace() above.
+  if (subdomainGroupSlug) {
+    return <SubdomainRedirectScreen />;
+  }
 
   return (
     <>

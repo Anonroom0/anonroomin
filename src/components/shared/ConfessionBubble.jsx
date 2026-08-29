@@ -106,6 +106,15 @@ export default function ConfessionBubble({ confession, onReply, onPhotoClick, si
   const mediaUrl = confession.photo_url || confession.media_url;
   const mediaType = detectMediaType(mediaUrl, confession.media_type);
   const isVideo = mediaType === 'video';
+  const isImage = mediaType === 'image';
+  // Anything that isn't an image/video (voice notes, generic files) can't be
+  // rendered into the 4:5 photo frame below — it was previously falling
+  // through to the <img> branch and showing up as a broken image icon.
+  const isOtherAttachment = Boolean(mediaUrl) && !isVideo && !isImage;
+  const attachmentMeta =
+    mediaType === 'audio'
+      ? { emoji: '🎵', label: 'Voice message' }
+      : { emoji: '📄', label: 'Attachment' };
 
   function handleBodyTap() {
     if (isStory) setStoryChromeVisible((v) => !v);
@@ -164,7 +173,7 @@ export default function ConfessionBubble({ confession, onReply, onPhotoClick, si
             cursor: isStory ? 'pointer' : 'default',
           }}
         >
-          {mediaUrl && (
+          {mediaUrl && (isVideo || isImage) && (
             <div
               onClick={(e) => {
                 e.stopPropagation();
@@ -212,6 +221,30 @@ export default function ConfessionBubble({ confession, onReply, onPhotoClick, si
                 </div>
               )}
             </div>
+          )}
+
+          {/* Voice notes / generic files — not photo-frameable, so instead
+              of the 4:5 image area this is a compact row with a direct
+              "View attachment" link out to the file. */}
+          {isOtherAttachment && (
+            <a
+              href={mediaUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              onClick={(e) => e.stopPropagation()}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: 10,
+                padding: '14px 18px',
+                background: 'var(--ink-2)',
+                textDecoration: 'none',
+              }}
+            >
+              <span style={{ fontSize: 18 }}>{attachmentMeta.emoji}</span>
+              <span style={{ color: 'var(--paper)', fontSize: preset.textSize - 1.5, fontWeight: 700 }}>{attachmentMeta.label}</span>
+              <span style={{ marginLeft: 'auto', color: 'var(--ember)', fontSize: 12.5, fontWeight: 800 }}>View attachment</span>
+            </a>
           )}
 
           {confession.text && (

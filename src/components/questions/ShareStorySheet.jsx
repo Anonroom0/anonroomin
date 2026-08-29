@@ -1,11 +1,12 @@
 /** ===========================================================================
  * SHARE STORY SHEET (v6)
  * ============================================================================
- * <ShareStorySheet open onClose mode question reply /> — a GlassPanel sheet
- * that turns either a question ('mode="question"', the original behavior)
- * or a single reply someone received ('mode="reply"', new — see
- * QuestionThread.jsx's per-bubble share button) into a shareable 1080x1920
- * story image.
+ * <ShareStorySheet open onClose mode question reply message /> — a
+ * GlassPanel sheet that turns a question ('mode="question"', the original
+ * behavior), a single reply someone received ('mode="reply"' — see
+ * QuestionThread.jsx's per-bubble share button), or a chat message/
+ * confession ('mode="message"' — see GroupChat.jsx's "Share as Story"
+ * action) into a shareable 1080x1920 story image.
  *
  * v6 changes, on top of v5:
  *   - Every style pick (Background, Colour, Shape, Size) starts from a
@@ -24,7 +25,11 @@
  * Every pick still drives the same live canvas preview.
  *
  * `question` needs an `id` (for the reply link) plus its text/type fields.
- * `reply` (mode="reply" only) needs its own reply text. Column-name guesses
+ * `reply` (mode="reply" only) needs its own reply text. `message`
+ * (mode="message" only) needs an `id` (for the message link — see
+ * buildMessageUrl), its text, sender_name, avatar_url, and is_anon —
+ * GroupChat.jsx normalizes both group_messages rows and confession rows
+ * into this same flat shape before opening the sheet. Column-name guesses
  * are centralized just below — flip them if the real schema differs.
  * ========================================================================= */
 
@@ -40,7 +45,7 @@ import {
   CANVAS_HEIGHT,
 } from '../../lib/storyImageGenerator';
 import { BACKGROUND_STRUCTURES, ACCENT_COLORS, BODY_SHAPES, BODY_SCALES, getPresetById } from '../../lib/storyStylePresets';
-import { buildQuestionPath } from '../../lib/subdomain';
+import { buildQuestionPath, toShortId } from '../../lib/subdomain';
 import { showToast, friendlyDbError } from '../../lib/toast';
 import { hapticSelect, hapticImpact, hapticTap, hapticSheet } from '../../lib/haptics';
 import { playTap, playSend, playOpen, playClose } from '../../lib/soundManager';
@@ -49,6 +54,24 @@ import { playTap, playSend, playOpen, playClose } from '../../lib/soundManager';
 const QUESTION_TEXT_FIELD = 'text';
 const QUESTION_TYPE_FIELD = 'type';
 const REPLY_TEXT_FIELD = 'reply_text';
+const MESSAGE_TEXT_FIELD = 'text';
+const MESSAGE_SENDER_FIELD = 'sender_name';
+const MESSAGE_AVATAR_FIELD = 'avatar_url';
+const MESSAGE_MEDIA_URL_FIELD = 'media_url';
+const MESSAGE_MEDIA_TYPE_FIELD = 'media_type';
+
+// Same emoji/label vocabulary GroupChat.jsx's own generateReplySnippet uses,
+// so an attachment reads the same way here as it does in the chat itself.
+function attachmentMeta(mediaType) {
+  switch (mediaType) {
+    case 'image': return { emoji: '📸', label: 'Photo' };
+    case 'video': return { emoji: '🎬', label: 'Video' };
+    case 'audio': return { emoji: '🎵', label: 'Voice message' };
+    case 'gif': return { emoji: '🎞️', label: 'GIF' };
+    case 'sticker': return { emoji: '🏷️', label: 'Sticker' };
+    default: return { emoji: '📄', label: 'Attachment' };
+  }
+}
 
 const PREVIEW_ASPECT_RATIO = 1080 / 1920;
 // Derived straight from storyImageGenerator.js's own LINK_ZONE (not
@@ -63,6 +86,14 @@ const LINK_ZONE_FRACTION = {
 
 function buildReplyUrl(questionId) {
   return `https://anonroom.in${buildQuestionPath(questionId)}`;
+}
+
+// mode="message" only — a deep link back to the exact chat message, matching
+// the `#msg-<shortId>` anchor GroupChat.jsx's own "Share" reaction action
+// already copies (see GroupChat.jsx), so both point at the same place.
+function buildMessageUrl(messageId) {
+  if (typeof window === 'undefined' || !messageId) return '';
+  return `${window.location.origin}${window.location.pathname}#msg-${toShortId(messageId)}`;
 }
 
 // ---------------------------------------------------------------------------
@@ -185,7 +216,14 @@ function useWheelCarousel({ items, selectedId, onChange, itemWidth }) {
     return () => ro.disconnect();
   }, []);
 
-  function scrollToIndex(idx, behavior = 'smooth') {
+  // `commit`, when true, is a direct tap on an item rather than a settle
+  // after free scrolling — that's a selection made right now, not just a
+  // scroll-to, so it applies immediately instead of waiting for handleScroll's
+  // settle timeout to notice (which it never would: programmaticRef stays
+  // true for the whole smooth-scroll animation, and handleScroll bails out
+  // early whenever that's set — see below). Without this, tapping an item
+  // would slide it to center but never actually select it.
+  function scrollToIndex(idx, behavior = 'smooth', commit = false) {
     const el = containerRef.current;
     if (!el) return;
     programmaticRef.current = true;
@@ -195,6 +233,14 @@ function useWheelCarousel({ items, selectedId, onChange, itemWidth }) {
     settleTimeoutRef.current = window.setTimeout(() => {
       programmaticRef.current = false;
     }, 400);
+    if (commit) {
+      const item = items[idx];
+      if (item && item.id !== selectedId) {
+        hapticSelect();
+        playTap();
+        onChange(item.id);
+      }
+    }
   }
 
   useEffect(() => {
@@ -293,7 +339,7 @@ function BackgroundCarousel({ selectedId, onChange }) {
                 key={bg.id}
                 type="button"
                 aria-pressed={centered}
-                onClick={() => scrollToIndex(i)}
+                onClick={() => scrollToIndex(i, 'smooth', true)}
                 style={{
                   display: 'flex',
                   flexDirection: 'column',
@@ -438,7 +484,7 @@ function ShapeCarousel({ selectedId, onChange, scale }) {
                 key={shape.id}
                 type="button"
                 aria-pressed={centered}
-                onClick={() => scrollToIndex(i)}
+                onClick={() => scrollToIndex(i, 'smooth', true)}
                 style={{
                   display: 'flex',
                   flexDirection: 'column',
@@ -652,16 +698,16 @@ function SizeField({ scaleId, onChange }) {
   );
 }
 
-export default function ShareStorySheet({ open, onClose, mode = 'question', question, reply }) {
+export default function ShareStorySheet({ open, onClose, mode = 'question', question, reply, message }) {
   if (!open) return null;
   return (
     <GlassPanel variant="sheet" onClose={onClose}>
-      <ShareStorySheetContent mode={mode} question={question} reply={reply} />
+      <ShareStorySheetContent mode={mode} question={question} reply={reply} message={message} />
     </GlassPanel>
   );
 }
 
-function ShareStorySheetContent({ mode, question, reply }) {
+function ShareStorySheetContent({ mode, question, reply, message }) {
   const requestClose = useGlassPanelClose();
 
   // Every field starts from a random preset each time the sheet mounts
@@ -671,6 +717,12 @@ function ShareStorySheetContent({ mode, question, reply }) {
   const [colorId, setColorId] = useState(() => randomId(ACCENT_COLORS));
   const [shapeId, setShapeId] = useState(() => randomId(BODY_SHAPES));
   const [scaleId, setScaleId] = useState(() => randomId(BODY_SCALES));
+
+  // 'basic' = the fully customizable Background/Colour/Shape/Size system
+  // above; 'tweet' = a single fixed, professional realistic-post preset
+  // (see storyImageGenerator's drawTweetSlide) — no customization strips,
+  // just a toggle. Works for all three modes (question/reply/message).
+  const [template, setTemplate] = useState('basic');
 
   const [colorPickerOpen, setColorPickerOpen] = useState(false);
 
@@ -689,7 +741,19 @@ function ShareStorySheetContent({ mode, question, reply }) {
   const questionText = question?.[QUESTION_TEXT_FIELD] || '';
   const questionType = question?.[QUESTION_TYPE_FIELD];
   const replyText = reply?.[REPLY_TEXT_FIELD] || '';
-  const replyUrl = buildReplyUrl(question?.id);
+  const messageText = message?.[MESSAGE_TEXT_FIELD] || '';
+  const messageSenderName = message?.is_anon ? 'Anonymous' : (message?.[MESSAGE_SENDER_FIELD] || 'Anonymous');
+  const messageAvatarUrl = message?.is_anon ? '' : (message?.[MESSAGE_AVATAR_FIELD] || '');
+  // The rendered story card only ever shows text (see storyImageGenerator's
+  // drawMessageSlide) — it never embeds the real photo/video/file — so
+  // whenever the shared message carries an attachment, surface a direct
+  // link to it in the sheet itself, rather than leaving no way to see what
+  // you're actually about to share.
+  const messageMediaUrl = message?.[MESSAGE_MEDIA_URL_FIELD] || '';
+  const messageMediaType = message?.[MESSAGE_MEDIA_TYPE_FIELD] || '';
+  // In place of the question's reply link, mode="message" shows/copies a
+  // link straight back to that chat message.
+  const replyUrl = mode === 'message' ? buildMessageUrl(message?.id) : buildReplyUrl(question?.id);
 
   // First time anyone reaches this sheet, lead with the tutorial rather
   // than making them go find a help button — shouldShowStoryTutorial()
@@ -707,10 +771,16 @@ function ShareStorySheetContent({ mode, question, reply }) {
       questionText,
       replyText,
       questionType,
+      messageText,
+      senderName: messageSenderName,
+      avatarUrl: messageAvatarUrl,
       backgroundId,
       colorId,
       shapeId,
       scaleId,
+      template,
+      mediaUrl: messageMediaUrl,
+      mediaType: messageMediaType,
     })
       .then((blob) => {
         if (renderTokenRef.current !== token) return;
@@ -727,7 +797,7 @@ function ShareStorySheetContent({ mode, question, reply }) {
         showToast(friendlyDbError('Could not render the preview. Please try again.'));
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode, questionText, replyText, questionType, backgroundId, colorId, shapeId, scaleId]);
+  }, [mode, questionText, replyText, questionType, messageText, messageSenderName, messageAvatarUrl, backgroundId, colorId, shapeId, scaleId, template, messageMediaUrl, messageMediaType]);
 
   useEffect(() => {
     return () => {
@@ -750,7 +820,9 @@ function ShareStorySheetContent({ mode, question, reply }) {
     hapticImpact();
     playSend();
     try {
-      await shareStoryImage(previewBlob, { title: mode === 'reply' ? 'A reply I got on Anonroom' : 'Answer this anonymously' });
+      await shareStoryImage(previewBlob, {
+        title: mode === 'reply' ? 'A reply I got on Anonroom' : mode === 'message' ? 'A message from Anonroom' : 'Answer this anonymously',
+      });
     } catch {
       showToast(friendlyDbError('Could not share the image. Please try again.'));
     } finally {
@@ -783,15 +855,17 @@ function ShareStorySheetContent({ mode, question, reply }) {
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div style={{ fontSize: 20, fontWeight: 900, color: 'var(--paper)' }}>Share to Story</div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <button
-            type="button"
-            onClick={handleRandomize}
-            aria-label="Randomize style"
-            style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 13, fontWeight: 800, color: 'var(--ember)', background: 'transparent', border: 'none', padding: '6px 4px' }}
-          >
-            <ShuffleIcon />
-            Random
-          </button>
+          {template === 'basic' && (
+            <button
+              type="button"
+              onClick={handleRandomize}
+              aria-label="Randomize style"
+              style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 13, fontWeight: 800, color: 'var(--ember)', background: 'transparent', border: 'none', padding: '6px 4px' }}
+            >
+              <ShuffleIcon />
+              Random
+            </button>
+          )}
           <button
             type="button"
             onClick={() => { hapticTap(); setTutorialOpen(true); }}
@@ -800,6 +874,42 @@ function ShareStorySheetContent({ mode, question, reply }) {
             See tutorial
           </button>
         </div>
+      </div>
+
+      {/* Basic (fully customizable) vs Tweet (single fixed, professional
+          realistic-post preset) — applies to all three share modes. */}
+      <div
+        role="tablist"
+        aria-label="Story style"
+        style={{ display: 'flex', gap: 4, padding: 4, borderRadius: 16, background: 'var(--glass-white)', border: '1px solid var(--glass-border)', flexShrink: 0 }}
+      >
+        {[
+          { id: 'basic', label: 'Basic' },
+          { id: 'tweet', label: 'Tweet' },
+        ].map((opt) => {
+          const active = template === opt.id;
+          return (
+            <button
+              key={opt.id}
+              type="button"
+              role="tab"
+              aria-selected={active}
+              onClick={() => { if (!active) { hapticSelect(); playTap(); setTemplate(opt.id); } }}
+              style={{
+                flex: 1,
+                padding: '10px 0',
+                borderRadius: 12,
+                border: 'none',
+                background: active ? 'var(--ember)' : 'transparent',
+                color: active ? 'var(--ink)' : 'var(--dim)',
+                fontSize: 13.5,
+                fontWeight: 800,
+              }}
+            >
+              {opt.label}
+            </button>
+          );
+        })}
       </div>
 
       <div style={{ position: 'relative', width: '100%', maxWidth: 240, margin: '0 auto', flexShrink: 0 }}>
@@ -853,17 +963,67 @@ function ShareStorySheetContent({ mode, question, reply }) {
         </div>
       </div>
 
+      {/* Only ever appears for mode="message" — the card above shows a fixed
+          thumbnail of image/GIF attachments (see storyImageGenerator's
+          drawAttachedMediaThumb, rendered just above the footer wordmark)
+          but never video/audio/other files, so this stays the one place in
+          the sheet to actually open the original attachment before sharing. */}
+      {messageMediaUrl && (
+        <a
+          href={messageMediaUrl}
+          target="_blank"
+          rel="noopener noreferrer"
+          onClick={() => hapticTap()}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'space-between',
+            gap: 10,
+            padding: '12px 16px',
+            borderRadius: 16,
+            border: '1px solid var(--glass-border)',
+            background: 'var(--glass-white)',
+            color: 'var(--paper)',
+            textDecoration: 'none',
+            flexShrink: 0,
+          }}
+        >
+          <span style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 14, fontWeight: 700, minWidth: 0 }}>
+            {messageMediaType === 'image' || messageMediaType === 'gif' ? (
+              <img
+                src={messageMediaUrl}
+                alt=""
+                style={{ width: 34, height: 34, borderRadius: 8, objectFit: 'cover', flexShrink: 0, border: '1px solid var(--glass-border)' }}
+              />
+            ) : (
+              <span>{attachmentMeta(messageMediaType).emoji}</span>
+            )}
+            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{attachmentMeta(messageMediaType).label}</span>
+          </span>
+          <span style={{ color: 'var(--ember)', fontSize: 12.5, fontWeight: 800, flexShrink: 0, textAlign: 'right' }}>
+            View attached media at anonroom.in
+          </span>
+        </a>
+      )}
+
       {/* Selection strips sit directly below the preview — both are
           centre-locked scroll wheels now: the highlight window is fixed,
-          the strip scrolls under it. */}
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 14, flexShrink: 0 }}>
-        <BackgroundCarousel selectedId={backgroundId} onChange={setBackgroundId} />
-        <ShapeCarousel selectedId={shapeId} onChange={setShapeId} scale={scale} />
-        <div style={{ display: 'flex', gap: 10 }}>
-          <ColourField color={color} onOpen={() => { hapticTap(); setColorPickerOpen(true); }} />
-          <SizeField scaleId={scaleId} onChange={setScaleId} />
+          the strip scrolls under it. Only shown for the 'basic' template —
+          'tweet' is a single fixed preset with nothing to customize. */}
+      {template === 'basic' ? (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14, flexShrink: 0 }}>
+          <BackgroundCarousel selectedId={backgroundId} onChange={setBackgroundId} />
+          <ShapeCarousel selectedId={shapeId} onChange={setShapeId} scale={scale} />
+          <div style={{ display: 'flex', gap: 10 }}>
+            <ColourField color={color} onOpen={() => { hapticTap(); setColorPickerOpen(true); }} />
+            <SizeField scaleId={scaleId} onChange={setScaleId} />
+          </div>
         </div>
-      </div>
+      ) : (
+        <p style={{ margin: 0, fontSize: 12.5, color: 'var(--dim)', textAlign: 'center', lineHeight: 1.4, flexShrink: 0 }}>
+          A fixed, professional realistic-post style — nothing to customize here.
+        </p>
+      )}
 
       <div style={{ flexShrink: 0 }}>
         <button
