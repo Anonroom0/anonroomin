@@ -32,6 +32,7 @@ import {
 import { subscribeToPush } from '../lib/pushNotifications';
 import { playTabSwitch, playRefreshComplete } from '../lib/soundManager';
 import { hapticTap, hapticSuccess } from '../lib/haptics';
+import { useViewportHeight } from '../lib/useViewportHeight';
 
 import AuthModal from './AuthModal';
 import SearchUsers from './SearchUsers';
@@ -263,6 +264,17 @@ export default function Home() {
     return () => window.removeEventListener('resize', handleResize);
   }, []);
   const isMobile = windowWidth < MOBILE_BREAKPOINT_PX;
+
+  // Real visible height (shrinks live as the on-screen keyboard opens) —
+  // see useViewportHeight.js. Applied once here, at the RIGHT PANEL wrapper
+  // that every chat surface (DMs, group chat, question thread) renders
+  // inside of, rather than each of those pages independently deriving it —
+  // a single source of truth avoids a two-stage "jump" where the panel's
+  // static 100dvh height and a nested page's own JS-driven height could
+  // each resize a frame apart. QuestionThread/GroupChat/DirectMessages all
+  // just fill this wrapper via height:'100%'.
+  const viewportHeight = useViewportHeight();
+  const rightPanelHeight = viewportHeight ? `${viewportHeight}px` : '100dvh';
 
   const [activeChatId, setActiveChatId] = useState(null); 
   const [activeChatType, setActiveChatType] = useState(null); 
@@ -719,8 +731,9 @@ const [sharingReply, setSharingReply] = useState(null); // NEW — { question, r
           <div 
             style={{ 
               flex: 1, display: 'flex', flexDirection: 'column', position: 'relative', 
-              width: isMobile ? '100%' : undefined, height: '100dvh', borderRadius: 0, 
-              zIndex: 1, background: 'var(--ink)', boxShadow: '-4px 0 24px rgba(0,0,0,0.2)' 
+              width: isMobile ? '100%' : undefined, height: rightPanelHeight, borderRadius: 0, 
+              zIndex: 1, background: 'var(--ink)', boxShadow: '-4px 0 24px rgba(0,0,0,0.2)',
+              transition: 'height 0.16s cubic-bezier(0.2, 0.8, 0.2, 1)',
             }}
           >
             {activeChatId ? (

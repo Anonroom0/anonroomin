@@ -1,88 +1,97 @@
 /** ===========================================================================
- * STORY STYLE PRESETS (v4)
+ * STORY STYLE PRESETS (v5)
  * ============================================================================
- * Three independent preset lists ShareStorySheet.jsx mixes together live —
- * Theme, Shape, and Size. storyImageGenerator.js consumes all three by id.
+ * Four independent preset lists ShareStorySheet.jsx mixes together live —
+ * Background, Colour, Shape, and Size. storyImageGenerator.js consumes all
+ * four by id.
  *
- * v4 reworks how these are organized, based on direct feedback that v3 was
- * messy in two specific ways:
+ * v5 splits what v4 called a "Theme" apart again, based on feedback that
+ * baking a fixed accent color into each of the 30 theme pairs still meant
+ * you couldn't, say, get a Dot Grid background in green if green only
+ * shipped paired with Sunburst. BACKGROUND_STRUCTURES now describes only
+ * the *shape* of the background (solid / gradient / dots / stripes / …) —
+ * no colors baked in — and ACCENT_COLORS is a standalone palette. Any
+ * structure can pair with any color: storyImageGenerator.js's
+ * buildThemeRuntime() derives the actual background fill/gradient/pattern
+ * colors AND the header-badge color from whichever single accent color is
+ * picked, so the pairing can never clash (both halves always come from the
+ * same one color) without needing to hand-author every combination.
  *
- *   1. Header Color and Background used to be two fully independent
- *      pickers, so it was easy to land on a clashing pair (e.g. a violet
- *      badge on a lime background). They're merged here into STORY_THEMES —
- *      ~30 curated {header, background} pairs picked to look coherent
- *      together, the way a real "send me anonymous confessions" story
- *      template pairs a gradient header with a matching dark body. Picking
- *      a theme changes both at once; there's no way to end up with a
- *      mismatched pair anymore.
- *
- *   2. Body Style used to be one flat gallery of SHAPES x SCALES (160
- *      thumbnails — every shape repeated 8 times at different sizes), which
- *      was overwhelming to browse and made "just show me the shapes"
- *      impossible. Shape and Size are independent exports now (BODY_SHAPES,
- *      BODY_SCALES) — ShareStorySheet renders Shape as its own browsable
- *      gallery (currently 30 entries, designed to keep growing toward
- *      ~100+ over time) and Size as a compact dropdown, and
- *      storyImageGenerator merges whichever pair is picked at render time
- *      instead of looking up a precomputed combo id.
+ * Shape/Size stay split the way v4 introduced them — see those exports'
+ * own comments below for why.
  *
  * Every color value is a plain hex/rgba string (not a CSS var lookup)
  * because these are drawn to a canvas, which can't resolve custom
- * properties — each preset intentionally echoes the app's existing token
- * palette (tokens.css: --ink, --ink-2, --paper, --dim, --ember,
- * --glass-white, --glass-border) so every combination still reads as
- * unmistakably "Anonroom," just with a different accent/mood.
+ * properties.
  * ========================================================================= */
 
 // ---------------------------------------------------------------------------
-// 1. STORY THEMES — the type badge ("QUESTION"/"REPLY") + "Reply
-//    anonymously" pill color, paired with the full canvas background that's
-//    meant to go with it. Selecting a theme changes both together.
-//    background.type: 'solid' | 'linear' | 'radial' | 'dots' | 'stripes' |
-//    'grid' | 'checker' | 'crosshatch' | 'confetti' | 'waves' | 'sunburst' |
-//    'halftone' | 'pinstripe' — see storyImageGenerator.js's drawBackground.
+// 1. BACKGROUND STRUCTURES — the full canvas fill's *shape* only; colors
+//    are derived at render time from whichever ACCENT_COLORS entry is
+//    picked (see storyImageGenerator.js's buildThemeRuntime). Rendered as a
+//    horizontally scrollable strip in ShareStorySheet — pick one by
+//    scrolling and tapping, no modal.
 // ---------------------------------------------------------------------------
-export const STORY_THEMES = [
-  { id: 'ember-dusk', name: 'Ember Dusk', pillBg: '#FF6B35', pillText: '#0C0D10', background: { type: 'linear', colors: ['#0C0D10', '#23242E'] } },
-  { id: 'crimson-duotone', name: 'Crimson Duotone', pillBg: '#E63950', pillText: '#FFFFFF', background: { type: 'linear', colors: ['#3A0E14', '#0C0D10'] } },
-  { id: 'scarlet-ink', name: 'Scarlet Ink', pillBg: '#FF3B3B', pillText: '#FFFFFF', background: { type: 'solid', colors: ['#2A0808'] } },
-  { id: 'violet-midnight', name: 'Violet Midnight', pillBg: '#8B5CF6', pillText: '#FFFFFF', background: { type: 'linear', colors: ['#1A1033', '#0C0D10'] } },
-  { id: 'grape-aurora', name: 'Grape Aurora', pillBg: '#6D28D9', pillText: '#FFFFFF', background: { type: 'radial', colors: ['#8B5CF6', '#0C0D10'], overlay: 'rgba(12,13,16,0.75)' } },
-  { id: 'cobalt-ocean', name: 'Cobalt Ocean', pillBg: '#3B82F6', pillText: '#FFFFFF', background: { type: 'linear', colors: ['#061C2E', '#0C0D10'] } },
-  { id: 'sky-lagoon', name: 'Sky Lagoon', pillBg: '#38BDF8', pillText: '#0C0D10', background: { type: 'linear', colors: ['#14B8A6', '#0B1E3B'] } },
-  { id: 'mint-forest', name: 'Mint Forest', pillBg: '#2DD4A7', pillText: '#0C0D10', background: { type: 'solid', colors: ['#0E2A1C'] } },
-  { id: 'jade-teal', name: 'Jade Teal', pillBg: '#16A34A', pillText: '#FFFFFF', background: { type: 'solid', colors: ['#062723'] } },
-  { id: 'gold-dusk', name: 'Gold Dusk', pillBg: '#F5C64B', pillText: '#0C0D10', background: { type: 'solid', colors: ['#2B2108'] } },
-  { id: 'amber-sunset', name: 'Amber Sunset', pillBg: '#F59E0B', pillText: '#0C0D10', background: { type: 'linear', colors: ['#FF6B35', '#3A0E14'] } },
-  { id: 'rose-dust', name: 'Rose Dust', pillBg: '#FB7EC0', pillText: '#0C0D10', background: { type: 'solid', colors: ['#2E1420'] } },
-  { id: 'fuchsia-glow', name: 'Fuchsia Glow', pillBg: '#E135DA', pillText: '#FFFFFF', background: { type: 'radial', colors: ['#E135DA', '#0C0D10'], overlay: 'rgba(12,13,16,0.8)' } },
-  { id: 'lime-pop', name: 'Lime Pop', pillBg: '#C6F135', pillText: '#0C0D10', background: { type: 'solid', colors: ['#182B08'] } },
-  { id: 'teal-cobalt', name: 'Teal Cobalt', pillBg: '#14B8A6', pillText: '#0C0D10', background: { type: 'solid', colors: ['#0B1E3B'] } },
-  { id: 'indigo-deep', name: 'Indigo Deep', pillBg: '#4F46E5', pillText: '#FFFFFF', background: { type: 'linear', colors: ['#0C0D10', '#1A1550'] } },
-  { id: 'coral-blush', name: 'Coral Blush', pillBg: '#FF7A5C', pillText: '#0C0D10', background: { type: 'linear', colors: ['#2E1420', '#0C0D10'] } },
-  { id: 'slate-blackout', name: 'Slate Blackout', pillBg: '#E7E7EE', pillText: '#0C0D10', background: { type: 'solid', colors: ['#000000'] } },
-  { id: 'blackout-snow', name: 'Blackout Snow', pillBg: '#0C0D10', pillText: '#F4F3F0', background: { type: 'solid', colors: ['#F4F3F0'], light: true } },
-  { id: 'snow-ink', name: 'Snow Ink', pillBg: '#FFFFFF', pillText: '#0C0D10', background: { type: 'solid', colors: ['#0C0D10'] } },
-  { id: 'ember-dots', name: 'Ember Dots', pillBg: '#FF6B35', pillText: '#0C0D10', background: { type: 'dots', colors: ['#0C0D10'], dotColor: 'rgba(255,255,255,0.08)' } },
-  { id: 'violet-stripes', name: 'Violet Stripes', pillBg: '#8B5CF6', pillText: '#FFFFFF', background: { type: 'stripes', colors: ['#0C0D10', 'rgba(139,92,246,0.16)'] } },
-  { id: 'cobalt-grid', name: 'Cobalt Grid', pillBg: '#3B82F6', pillText: '#FFFFFF', background: { type: 'grid', colors: ['#0B1E3B'], dotColor: 'rgba(255,255,255,0.10)' } },
-  { id: 'gold-checker', name: 'Gold Checker', pillBg: '#F5C64B', pillText: '#0C0D10', background: { type: 'checker', colors: ['#2B2108', 'rgba(245,198,75,0.14)'] } },
-  { id: 'rose-crosshatch', name: 'Rose Crosshatch', pillBg: '#FB7EC0', pillText: '#0C0D10', background: { type: 'crosshatch', colors: ['#2E1420'], dotColor: 'rgba(255,255,255,0.09)' } },
-  { id: 'confetti-party', name: 'Confetti Party', pillBg: '#F5C64B', pillText: '#0C0D10', background: { type: 'confetti', colors: ['#0C0D10'] } },
-  { id: 'cobalt-waves', name: 'Cobalt Waves', pillBg: '#38BDF8', pillText: '#0C0D10', background: { type: 'waves', colors: ['#0B1E3B'], dotColor: 'rgba(255,255,255,0.14)' } },
-  { id: 'amber-sunburst', name: 'Amber Sunburst', pillBg: '#F59E0B', pillText: '#0C0D10', background: { type: 'sunburst', colors: ['#2B2108', 'rgba(245,198,75,0.18)'] } },
-  { id: 'grape-halftone', name: 'Grape Halftone', pillBg: '#8B5CF6', pillText: '#FFFFFF', background: { type: 'halftone', colors: ['#1A1033'], dotColor: 'rgba(255,255,255,0.16)' } },
-  { id: 'mint-pinstripe', name: 'Mint Pinstripe', pillBg: '#2DD4A7', pillText: '#0C0D10', background: { type: 'pinstripe', colors: ['#062723'], dotColor: 'rgba(255,255,255,0.10)' } },
+export const BACKGROUND_STRUCTURES = [
+  { id: 'solid', name: 'Solid', type: 'solid' },
+  { id: 'linear', name: 'Gradient', type: 'linear' },
+  { id: 'radial', name: 'Glow', type: 'radial' },
+  { id: 'dots', name: 'Dot Grid', type: 'dots' },
+  { id: 'stripes', name: 'Diagonal', type: 'stripes' },
+  { id: 'grid', name: 'Grid Paper', type: 'grid' },
+  { id: 'checker', name: 'Checker', type: 'checker' },
+  { id: 'crosshatch', name: 'Crosshatch', type: 'crosshatch' },
+  { id: 'confetti', name: 'Confetti', type: 'confetti' },
+  { id: 'waves', name: 'Waves', type: 'waves' },
+  { id: 'sunburst', name: 'Sunburst', type: 'sunburst' },
+  { id: 'halftone', name: 'Halftone', type: 'halftone' },
+  { id: 'pinstripe', name: 'Pinstripe', type: 'pinstripe' },
 ];
 
 // ---------------------------------------------------------------------------
-// 2. BODY SHAPES — the card's silhouette: radius/fill/border/decoration/
-//    typeface. 30 to start (per the "start with 30" ask) — genuinely
-//    different designs, not the same shape recolored, and meant to keep
-//    growing toward a much larger gallery over time; just add more entries
-//    here (reusing an existing fill/border/decoration, or introducing a new
-//    one in storyImageGenerator.js's drawBodyCard the way sideTab/
-//    underline/cornerTag/ringAccent/split/dashed were added for this batch).
+// 2. ACCENT COLORS — the one color that drives both the header badge and
+//    the background's accent tone (see buildThemeRuntime). Ordered around
+//    the hue wheel (warm -> cool -> neutrals) so a circular picker in
+//    ShareStorySheet can lay these out like an actual color wheel instead
+//    of an arbitrary grid.
+// ---------------------------------------------------------------------------
+export const ACCENT_COLORS = [
+  { id: 'ember', name: 'Ember', hex: '#FF6B35' },
+  { id: 'tangerine', name: 'Tangerine', hex: '#FF8C42' },
+  { id: 'amber', name: 'Amber', hex: '#F59E0B' },
+  { id: 'gold', name: 'Gold', hex: '#F5C64B' },
+  { id: 'yellow', name: 'Yellow', hex: '#FDE047' },
+  { id: 'lime', name: 'Lime', hex: '#C6F135' },
+  { id: 'chartreuse', name: 'Chartreuse', hex: '#A3E635' },
+  { id: 'mint', name: 'Mint', hex: '#2DD4A7' },
+  { id: 'jade', name: 'Jade', hex: '#16A34A' },
+  { id: 'teal', name: 'Teal', hex: '#14B8A6' },
+  { id: 'cyan', name: 'Cyan', hex: '#22D3EE' },
+  { id: 'sky', name: 'Sky', hex: '#38BDF8' },
+  { id: 'cobalt', name: 'Cobalt', hex: '#3B82F6' },
+  { id: 'indigo', name: 'Indigo', hex: '#4F46E5' },
+  { id: 'violet', name: 'Violet', hex: '#8B5CF6' },
+  { id: 'grape', name: 'Grape', hex: '#6D28D9' },
+  { id: 'purple', name: 'Purple', hex: '#A855F7' },
+  { id: 'fuchsia', name: 'Fuchsia', hex: '#E135DA' },
+  { id: 'magenta', name: 'Magenta', hex: '#EC4899' },
+  { id: 'rose', name: 'Rose', hex: '#FB7EC0' },
+  { id: 'pink', name: 'Pink', hex: '#F472B6' },
+  { id: 'crimson', name: 'Crimson', hex: '#E63950' },
+  { id: 'scarlet', name: 'Scarlet', hex: '#FF3B3B' },
+  { id: 'red', name: 'Red', hex: '#EF4444' },
+  { id: 'coral', name: 'Coral', hex: '#FF7A5C' },
+  { id: 'slate', name: 'Slate', hex: '#E7E7EE' },
+  { id: 'snow', name: 'Snow', hex: '#FFFFFF' },
+  { id: 'blackout', name: 'Blackout', hex: '#0C0D10' },
+];
+
+// ---------------------------------------------------------------------------
+// 3. BODY SHAPES — the card's silhouette: radius/fill/border/decoration/
+//    typeface. 30 to start — genuinely different designs, not the same
+//    shape recolored, and meant to keep growing over time; see
+//    /docs/ADDING_STORY_SHAPES.md for exactly how to add more (including
+//    the prompt to hand another AI to generate a fresh batch).
 // ---------------------------------------------------------------------------
 export const BODY_SHAPES = [
   { id: 'glass', name: 'Glass', radius: 48, fill: 'glass', border: 'glass', shadow: true },
@@ -119,7 +128,7 @@ export const BODY_SHAPES = [
 ];
 
 // ---------------------------------------------------------------------------
-// 3. BODY SCALES — same shape, different typographic energy: how bold + how
+// 4. BODY SCALES — same shape, different typographic energy: how bold + how
 //    big the headline text reads, from a quiet "Cozy" up to a poster-sized
 //    "Ultra". Rendered as a compact dropdown in ShareStorySheet, independent
 //    of which shape is picked.

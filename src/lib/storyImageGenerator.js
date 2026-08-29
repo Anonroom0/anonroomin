@@ -19,17 +19,17 @@
  * exported PNG, since a dashed placeholder box would show up as a visible
  * artifact in the final posted story.
  *
- * Every visual choice is looked up from storyStylePresets.js by id — a
- * THEME (linked header-badge-color + background, so they can never clash),
- * a SHAPE (the card's silhouette), and a SCALE (how bold/big the text
- * reads) — so the picker in ShareStorySheet just passes three ids in and
- * never touches drawing code. Shape and Scale are independent controls
- * (see storyStylePresets.js's file banner for why v4 split them apart);
- * this file merges whichever pair is picked into the same flat bodyPreset
- * object the drawing code always expected.
+ * Every visual choice is looked up/derived from storyStylePresets.js by id —
+ * a Background structure + an accent Colour (combined at render time via
+ * buildThemeRuntime, below, into the concrete header-badge color and
+ * background fill — see storyStylePresets.js's file banner for why v5
+ * split these two apart instead of shipping fixed pairs), a Shape (the
+ * card's silhouette), and a Scale (how bold/big the text reads). The
+ * picker in ShareStorySheet just passes four ids in and never touches
+ * drawing code.
  *
  * generateStoryImage({ kind, questionText, replyText, questionType,
- *                       themeId, shapeId, scaleId })
+ *                       backgroundId, colorId, shapeId, scaleId })
  *   -> Promise<Blob>   (image/png)
  * generateQuestionStoryImage(...)  -> back-compat alias, kind: 'question'
  * shareStoryImage(blob, opts)       -> Promise<void>  (OS share / download)
@@ -41,7 +41,7 @@
  *                                      without hardcoding canvas size twice
  * ========================================================================= */
 
-import { STORY_THEMES, BODY_SHAPES, BODY_SCALES, mergeBodyPreset, getPresetById } from './storyStylePresets';
+import { BACKGROUND_STRUCTURES, ACCENT_COLORS, BODY_SHAPES, BODY_SCALES, mergeBodyPreset, getPresetById } from './storyStylePresets';
 import { shareToInstagramStories } from './instagramShare';
 
 export const CANVAS_WIDTH = 1080;
@@ -419,6 +419,95 @@ function hexToRgba(hex, alpha) {
   return `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }
 
+// ---------------------------------------------------------------------------
+// Background + header color are both derived from a single ACCENT_COLORS
+// pick, so a Background structure and an accent Colour can be combined
+// freely (any x any) without ever landing on a clashing pair — both halves
+// always come from the same one hex value. See storyStylePresets.js's file
+// banner for why v5 split "Theme" back into these two independent pickers.
+// ---------------------------------------------------------------------------
+function hexToRgbTuple(hex) {
+  const h = (hex || '#000000').replace('#', '');
+  const full = h.length === 3 ? h.split('').map((c) => c + c).join('') : h;
+  const num = parseInt(full, 16);
+  return [(num >> 16) & 255, (num >> 8) & 255, num & 255];
+}
+
+function rgbTupleToHex([r, g, b]) {
+  const clamp = (v) => Math.max(0, Math.min(255, Math.round(v)));
+  return `#${[r, g, b].map((v) => clamp(v).toString(16).padStart(2, '0')).join('')}`;
+}
+
+// Blends `hex` toward `towardHex` by `amount` (0 = hex unchanged, 1 = fully towardHex).
+function mixHex(hex, towardHex, amount) {
+  const a = hexToRgbTuple(hex);
+  const b = hexToRgbTuple(towardHex);
+  return rgbTupleToHex(a.map((v, i) => v + (b[i] - v) * amount));
+}
+
+// WCAG relative luminance, used to pick readable badge text (white vs ink)
+// for whichever accent color was picked — a bright accent like Snow or
+// Yellow needs dark text; a dark one like Blackout needs light text.
+function relativeLuminance(hex) {
+  const [r, g, b] = hexToRgbTuple(hex).map((v) => {
+    const s = v / 255;
+    return s <= 0.03928 ? s / 12.92 : ((s + 0.055) / 1.055) ** 2.4;
+  });
+  return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+}
+
+function readableTextColor(hex) {
+  return relativeLuminance(hex) > 0.42 ? '#0C0D10' : '#FFFFFF';
+}
+
+/**
+ * Combines a BACKGROUND_STRUCTURES entry with an ACCENT_COLORS entry into
+ * the concrete { pillBg, pillText, background } runtime shape the rest of
+ * this file already expects — the same shape a fixed preset used to be,
+ * just computed instead of hand-authored per pair.
+ */
+function buildThemeRuntime(backgroundId, colorId) {
+  const structure = getPresetById(BACKGROUND_STRUCTURES, backgroundId);
+  const color = getPresetById(ACCENT_COLORS, colorId);
+  const accent = color.hex;
+  const base = mixHex(accent, '#0C0D10', 0.86); // dark, hue-tinted base fill
+  const baseDeep = mixHex(accent, '#0C0D10', 0.94); // slightly darker 2nd gradient stop
+  const pillText = readableTextColor(accent);
+
+  let background;
+  switch (structure.type) {
+    case 'solid':
+      background = { type: 'solid', colors: [base] };
+      break;
+    case 'linear':
+      background = { type: 'linear', colors: [base, baseDeep] };
+      break;
+    case 'radial':
+      background = { type: 'radial', colors: [accent, base], overlay: 'rgba(12,13,16,0.78)' };
+      break;
+    case 'dots':
+    case 'grid':
+    case 'crosshatch':
+    case 'halftone':
+    case 'pinstripe':
+    case 'waves':
+      background = { type: structure.type, colors: [base], dotColor: hexToRgba(accent, 0.35) };
+      break;
+    case 'stripes':
+    case 'checker':
+    case 'sunburst':
+      background = { type: structure.type, colors: [base, hexToRgba(accent, 0.22)] };
+      break;
+    case 'confetti':
+      background = { type: 'confetti', colors: [base] }; // keeps CONFETTI_PALETTE's own multi-color scatter
+      break;
+    default:
+      background = { type: 'solid', colors: [base] };
+  }
+
+  return { pillBg: accent, pillText, background };
+}
+
 // 'gradient-header' and 'radial-glow' need the card's bounding box + the
 // header preset's color, so those two are drawn directly in drawBodyCard
 // instead of resolving to a plain fillStyle string here.
@@ -686,6 +775,19 @@ function displayText(text, bodyPreset) {
   return bodyPreset.uppercase ? (text || '').toUpperCase() : text;
 }
 
+// Extra clearance so a big/Ultra-scaled first line's cap-height never
+// creeps up into the badge above it. `badgeSpace` used to be a flat
+// constant (96 / 130 for blockHeader) tuned only for the Bold-scale
+// baseline font size — at bigger scales the first line's ascent grows
+// well past what that flat constant assumed, so text and badge overlapped
+// at Massive/Ultra. This grows the gap in proportion to how much taller
+// the first line's font is than that Bold baseline, using ~0.78 as a
+// reasonable ascent-to-em-size ratio for the bold sans/serif/mono stacks
+// this file uses.
+function badgeClearance(baseBadgeSpace, firstLineFontPx, baselineFontPx) {
+  return baseBadgeSpace + Math.max(0, firstLineFontPx - baselineFontPx) * 0.86 + 8;
+}
+
 // ---------------------------------------------------------------------------
 // Layout — 'question' kind
 // ---------------------------------------------------------------------------
@@ -700,7 +802,7 @@ function drawQuestionSlide(ctx, { questionText, questionType, headerPreset, body
   ctx.font = headlineCss;
   const textLines = wrapText(ctx, bodyDisplay, cardWidth - cardPadding * 2);
   const lineHeight = Math.round(headlineSize * 1.233 * (bodyPreset.leadingMult || 1));
-  const badgeSpace = bodyPreset.blockHeader ? 130 : 96;
+  const badgeSpace = badgeClearance(bodyPreset.blockHeader ? 130 : 96, headlineSize, 60);
   const cardHeight = cardPadding * 2 + badgeSpace + textLines.length * lineHeight;
 
   const { textColor, dropShadow } = drawBodyCard(ctx, { x: cardX, y: cardY, width: cardWidth, height: cardHeight, bodyPreset, tokens, headerPreset });
@@ -746,7 +848,8 @@ function drawReplySlide(ctx, { questionText, replyText, headerPreset, bodyPreset
   // Scales only gently with the preset (a mild fraction of the full swing)
   // so it always stays visually secondary to the reply itself.
   const excerptScale = 1 + ((bodyPreset.fontScale || 1) - 1) * 0.35;
-  ctx.font = `700 ${Math.round(30 * excerptScale)}px ${fontStack(bodyPreset)}`;
+  const excerptFontPx = Math.round(30 * excerptScale);
+  ctx.font = `700 ${excerptFontPx}px ${fontStack(bodyPreset)}`;
   const excerptMax = 160;
   const excerpt = questionText.length > excerptMax ? `${questionText.slice(0, excerptMax).trim()}…` : questionText;
   const excerptLines = wrapText(ctx, `"${excerpt}"`, cardWidth - cardPadding * 2);
@@ -758,7 +861,7 @@ function drawReplySlide(ctx, { questionText, replyText, headerPreset, bodyPreset
   const replyLines = wrapText(ctx, replyDisplay, cardWidth - cardPadding * 2);
   const replyLineHeight = Math.round(replySize * 1.25 * (bodyPreset.leadingMult || 1));
 
-  const badgeSpace = bodyPreset.blockHeader ? 130 : 96;
+  const badgeSpace = badgeClearance(bodyPreset.blockHeader ? 130 : 96, excerptFontPx, 30);
   const excerptBlock = excerptLines.length * excerptLineHeight + 34;
   const cardHeight = cardPadding * 2 + badgeSpace + excerptBlock + replyLines.length * replyLineHeight;
 
@@ -771,7 +874,7 @@ function drawReplySlide(ctx, { questionText, replyText, headerPreset, bodyPreset
   let cursorY = cardY + cardPadding + badgeSpace;
 
   ctx.fillStyle = bodyPreset.darkText ? 'rgba(12,13,16,0.6)' : tokens.dim;
-  ctx.font = `700 ${Math.round(30 * excerptScale)}px ${fontStack(bodyPreset)}`;
+  ctx.font = `700 ${excerptFontPx}px ${fontStack(bodyPreset)}`;
   drawWrappedText(ctx, `"${excerpt}"`, { x: cardX + cardPadding, y: cursorY, maxWidth: cardWidth - cardPadding * 2, lineHeight: excerptLineHeight, align: 'left' });
   cursorY += excerptBlock;
 
@@ -799,7 +902,8 @@ export async function generateStoryImage({
   questionText = '',
   replyText = '',
   questionType,
-  themeId,
+  backgroundId,
+  colorId,
   shapeId,
   scaleId,
 }) {
@@ -809,9 +913,9 @@ export async function generateStoryImage({
   const ctx = canvas.getContext('2d');
 
   const tokens = getTokens();
-  const theme = getPresetById(STORY_THEMES, themeId);
-  const headerPreset = { pillBg: theme.pillBg, pillText: theme.pillText };
-  const backgroundPreset = theme.background;
+  const runtime = buildThemeRuntime(backgroundId, colorId);
+  const headerPreset = { pillBg: runtime.pillBg, pillText: runtime.pillText };
+  const backgroundPreset = runtime.background;
   const bodyPreset = mergeBodyPreset(getPresetById(BODY_SHAPES, shapeId), getPresetById(BODY_SCALES, scaleId));
 
   drawBackground(ctx, backgroundPreset);

@@ -1,5 +1,5 @@
 /** ===========================================================================
- * SHARE STORY SHEET (v4)
+ * SHARE STORY SHEET (v5)
  * ============================================================================
  * <ShareStorySheet open onClose mode question reply /> — a GlassPanel sheet
  * that turns either a question ('mode="question"', the original behavior)
@@ -7,17 +7,19 @@
  * QuestionThread.jsx's per-bubble share button) into a shareable 1080x1920
  * story image.
  *
- * v4 reworks the pickers again, based on direct feedback that v3's inline
- * swatch grids were messy:
- *   - Header Color + Background are now one linked "Theme" control (see
- *     storyStylePresets.js's STORY_THEMES) — only the current theme's
- *     swatch shows inline; tapping it opens a modal with the full grid so
- *     the main sheet only ever shows one color at a time instead of two
- *     independent grids that could clash.
- *   - Body Style is split into "Shape" (which card design — its own
- *     single-swatch-plus-modal, same pattern as Theme) and "Size" (how
- *     bold/big the text reads — a compact dropdown), instead of one flat
- *     gallery of every shape repeated at every size.
+ * v5 splits the controls again, based on direct feedback on v4:
+ *   - Background and Shape are back to being inline, horizontally
+ *     scrollable strips directly under the preview (tap — or scroll to —
+ *     a thumbnail and it applies immediately), instead of opening a modal.
+ *   - Colour is its own control now (previously baked into each v4
+ *     "Theme"), shown as a single circular swatch of the current color;
+ *     tapping it opens a color-wheel picker — every ACCENT_COLORS entry
+ *     arranged in a literal circle — instead of a grid. Any Background can
+ *     pair with any Colour; storyImageGenerator.js's buildThemeRuntime
+ *     derives both the badge color and the background's actual fill/accent
+ *     from that one picked color, so there's no way to land on a clashing
+ *     pair even though the two are picked independently.
+ *   - Size stays the compact dropdown v4 introduced.
  * Every pick still drives the same live canvas preview.
  *
  * `question` needs an `id` (for the reply link) plus its text/type fields.
@@ -36,7 +38,7 @@ import {
   CANVAS_WIDTH,
   CANVAS_HEIGHT,
 } from '../../lib/storyImageGenerator';
-import { STORY_THEMES, BODY_SHAPES, BODY_SCALES, getPresetById } from '../../lib/storyStylePresets';
+import { BACKGROUND_STRUCTURES, ACCENT_COLORS, BODY_SHAPES, BODY_SCALES, getPresetById } from '../../lib/storyStylePresets';
 import { buildQuestionPath } from '../../lib/subdomain';
 import { showToast, friendlyDbError } from '../../lib/toast';
 import { hapticSelect, hapticImpact, hapticTap, hapticSheet } from '../../lib/haptics';
@@ -69,61 +71,102 @@ const ChevronIcon = () => (
 );
 
 // ---------------------------------------------------------------------------
-// Theme swatch — a small preview combining the background + a chip for the
-// header/badge color, so one glance shows both halves of the pairing.
+// Background carousel — Background structures no longer carry their own
+// fixed colors (see storyStylePresets.js), so every thumbnail here previews
+// its pattern in one fixed neutral tone, regardless of whichever accent
+// Colour happens to be selected elsewhere. Keeps the strip legible and
+// consistent no matter what color is picked.
 // ---------------------------------------------------------------------------
-function themeBackgroundSwatchStyle(bg) {
-  if (bg.type === 'solid') return { background: bg.colors[0] };
-  if (bg.type === 'linear') return { background: `linear-gradient(135deg, ${bg.colors[0]}, ${bg.colors[1]})` };
-  if (bg.type === 'radial') return { background: `radial-gradient(circle at 35% 30%, ${bg.colors[0]}, ${bg.colors[1]})` };
-  if (bg.type === 'dots' || bg.type === 'halftone') {
-    return {
-      background: bg.colors[0],
-      backgroundImage: `radial-gradient(${bg.dotColor || 'rgba(255,255,255,0.25)'} 1.5px, transparent 1.5px)`,
-      backgroundSize: '8px 8px',
-    };
+const NEUTRAL_BASE = '#1C1D24';
+const NEUTRAL_ACCENT = 'rgba(255,107,53,0.5)';
+
+function structureSwatchStyle(bg) {
+  switch (bg.type) {
+    case 'solid':
+      return { background: NEUTRAL_BASE };
+    case 'linear':
+      return { background: `linear-gradient(135deg, ${NEUTRAL_BASE}, #0C0D10)` };
+    case 'radial':
+      return { background: `radial-gradient(circle at 35% 30%, #FF6B35, ${NEUTRAL_BASE})` };
+    case 'dots':
+    case 'halftone':
+      return { background: NEUTRAL_BASE, backgroundImage: `radial-gradient(${NEUTRAL_ACCENT} 1.5px, transparent 1.5px)`, backgroundSize: '8px 8px' };
+    case 'grid':
+    case 'pinstripe':
+      return {
+        background: NEUTRAL_BASE,
+        backgroundImage: `linear-gradient(${NEUTRAL_ACCENT} 1px, transparent 1px), linear-gradient(90deg, ${NEUTRAL_ACCENT} 1px, transparent 1px)`,
+        backgroundSize: '7px 7px',
+      };
+    case 'checker':
+      return {
+        background: NEUTRAL_BASE,
+        backgroundImage: `linear-gradient(45deg, ${NEUTRAL_ACCENT} 25%, transparent 25%, transparent 75%, ${NEUTRAL_ACCENT} 75%), linear-gradient(45deg, ${NEUTRAL_ACCENT} 25%, transparent 25%, transparent 75%, ${NEUTRAL_ACCENT} 75%)`,
+        backgroundSize: '9px 9px',
+        backgroundPosition: '0 0, 4.5px 4.5px',
+      };
+    case 'stripes':
+    case 'crosshatch':
+      return { background: NEUTRAL_BASE, backgroundImage: `repeating-linear-gradient(-22deg, ${NEUTRAL_ACCENT} 0 3px, transparent 3px 8px)` };
+    case 'confetti':
+      return {
+        background: NEUTRAL_BASE,
+        backgroundImage: 'radial-gradient(#FF6B35 1.4px, transparent 1.4px), radial-gradient(#8B5CF6 1.4px, transparent 1.4px), radial-gradient(#2DD4A7 1.4px, transparent 1.4px)',
+        backgroundSize: '9px 9px, 11px 11px, 7px 7px',
+        backgroundPosition: '0 0, 3px 5px, 6px 1px',
+      };
+    case 'waves':
+      return { background: NEUTRAL_BASE, backgroundImage: `radial-gradient(circle, ${NEUTRAL_ACCENT} 30%, transparent 31%)`, backgroundSize: '10px 6px' };
+    case 'sunburst':
+      return { background: `conic-gradient(${NEUTRAL_ACCENT} 0 10deg, transparent 10deg 20deg)`, backgroundColor: NEUTRAL_BASE };
+    default:
+      return { background: NEUTRAL_BASE };
   }
-  if (bg.type === 'grid' || bg.type === 'pinstripe') {
-    return {
-      background: bg.colors[0],
-      backgroundImage: `linear-gradient(${bg.dotColor || 'rgba(255,255,255,0.25)'} 1px, transparent 1px), linear-gradient(90deg, ${bg.dotColor || 'rgba(255,255,255,0.25)'} 1px, transparent 1px)`,
-      backgroundSize: '7px 7px',
-    };
-  }
-  if (bg.type === 'checker') {
-    return {
-      background: bg.colors[0],
-      backgroundImage: `linear-gradient(45deg, ${bg.colors[1] || 'rgba(255,255,255,0.2)'} 25%, transparent 25%, transparent 75%, ${bg.colors[1] || 'rgba(255,255,255,0.2)'} 75%), linear-gradient(45deg, ${bg.colors[1] || 'rgba(255,255,255,0.2)'} 25%, transparent 25%, transparent 75%, ${bg.colors[1] || 'rgba(255,255,255,0.2)'} 75%)`,
-      backgroundSize: '9px 9px',
-      backgroundPosition: '0 0, 4.5px 4.5px',
-    };
-  }
-  if (bg.type === 'stripes' || bg.type === 'crosshatch') {
-    return {
-      background: bg.colors[0],
-      backgroundImage: `repeating-linear-gradient(-22deg, ${bg.colors[1] || bg.dotColor || 'rgba(255,255,255,0.2)'} 0 3px, transparent 3px 8px)`,
-    };
-  }
-  if (bg.type === 'confetti') {
-    return {
-      background: bg.colors[0],
-      backgroundImage: 'radial-gradient(#FF6B35 1.4px, transparent 1.4px), radial-gradient(#8B5CF6 1.4px, transparent 1.4px), radial-gradient(#2DD4A7 1.4px, transparent 1.4px)',
-      backgroundSize: '9px 9px, 11px 11px, 7px 7px',
-      backgroundPosition: '0 0, 3px 5px, 6px 1px',
-    };
-  }
-  if (bg.type === 'waves') {
-    return { background: bg.colors[0], backgroundImage: `radial-gradient(circle, ${bg.dotColor || 'rgba(255,255,255,0.2)'} 30%, transparent 31%)`, backgroundSize: '10px 6px' };
-  }
-  if (bg.type === 'sunburst') {
-    return { background: `conic-gradient(${bg.colors[1] || 'rgba(255,255,255,0.18)'} 0 10deg, transparent 10deg 20deg)`, backgroundColor: bg.colors[0] };
-  }
-  return { background: bg.colors[0] };
+}
+
+function BackgroundCarousel({ selectedId, onChange }) {
+  const current = getPresetById(BACKGROUND_STRUCTURES, selectedId);
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
+        <span style={{ fontSize: 13, fontWeight: 800, color: 'var(--dim)' }}>Background</span>
+        <span style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--paper)' }}>{current.name}</span>
+      </div>
+      <div className="custom-scrollbar" style={{ display: 'flex', gap: 10, overflowX: 'auto', padding: '4px 2px 8px', WebkitOverflowScrolling: 'touch' }}>
+        {BACKGROUND_STRUCTURES.map((bg) => {
+          const selected = bg.id === selectedId;
+          return (
+            <button
+              key={bg.id}
+              type="button"
+              aria-pressed={selected}
+              onClick={() => { if (!selected) { hapticSelect(); playTap(); onChange(bg.id); } }}
+              style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, flexShrink: 0, border: 'none', background: 'transparent', padding: 0, cursor: 'pointer' }}
+            >
+              <div
+                style={{
+                  width: 52,
+                  height: 52,
+                  borderRadius: 14,
+                  border: selected ? '3px solid var(--ember)' : '1px solid var(--glass-border)',
+                  boxShadow: selected ? '0 0 0 2px rgba(255,107,53,0.25)' : 'none',
+                  transform: selected ? 'scale(1.06)' : 'scale(1)',
+                  transition: 'transform 120ms ease',
+                  ...structureSwatchStyle(bg),
+                }}
+              />
+              <span style={{ fontSize: 9.5, fontWeight: 700, color: selected ? 'var(--paper)' : 'var(--dim)', textAlign: 'center', lineHeight: 1.15 }}>{bg.name}</span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
 }
 
 // ---------------------------------------------------------------------------
-// Shape swatch — cheap CSS approximation of the card's radius/fill/border,
-// cheap enough to render 30 (heading toward more over time) at once in a grid.
+// Shape carousel — same cheap CSS-approximation swatch used before, still
+// scoped to a single card thumbnail rather than a full canvas render.
 // ---------------------------------------------------------------------------
 function shapeSwatchCardStyle(shape) {
   const base = { borderRadius: Math.min(20, shape.radius / 2.4) };
@@ -177,12 +220,62 @@ function ShapePreviewGlyph({ shape, scale, size = 68 }) {
   );
 }
 
+function ShapeCarousel({ selectedId, onChange, scale }) {
+  const current = getPresetById(BODY_SHAPES, selectedId);
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
+        <span style={{ fontSize: 13, fontWeight: 800, color: 'var(--dim)' }}>Shape</span>
+        <span style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--paper)' }}>{current.name}</span>
+      </div>
+      <div className="custom-scrollbar" style={{ display: 'flex', gap: 10, overflowX: 'auto', padding: '4px 2px 8px', WebkitOverflowScrolling: 'touch' }}>
+        {BODY_SHAPES.map((shape) => {
+          const selected = shape.id === selectedId;
+          return (
+            <button
+              key={shape.id}
+              type="button"
+              aria-pressed={selected}
+              onClick={() => { if (!selected) { hapticSelect(); playTap(); onChange(shape.id); } }}
+              style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, flexShrink: 0, border: 'none', background: 'transparent', padding: 0, cursor: 'pointer' }}
+            >
+              <div style={{ outline: selected ? '2.5px solid var(--ember)' : 'none', outlineOffset: 2, transform: selected ? 'scale(1.05)' : 'scale(1)', transition: 'transform 120ms ease', borderRadius: Math.min(20, shape.radius / 2.4) }}>
+                <ShapePreviewGlyph shape={shape} scale={scale} size={64} />
+              </div>
+              <span style={{ fontSize: 9.5, fontWeight: 700, color: selected ? 'var(--paper)' : 'var(--dim)', textAlign: 'center', lineHeight: 1.15 }}>{shape.name}</span>
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
 // ---------------------------------------------------------------------------
-// Picker modal — bottom sheet with a scrollable grid, used for both Theme
-// and Shape so there's only ever one color/shape visible on the main sheet
-// at a time; everything else lives behind this "tap to change" modal.
+// Colour — a single circular swatch of the current pick; tapping opens a
+// color-wheel modal with every ACCENT_COLORS entry arranged in a circle.
 // ---------------------------------------------------------------------------
-function PickerModal({ title, onClose, children }) {
+function ColourField({ color, onOpen }) {
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      style={{ display: 'flex', alignItems: 'center', gap: 12, flex: 1, padding: '10px 12px', borderRadius: 16, border: '1px solid var(--glass-border)', background: 'var(--glass-white)', cursor: 'pointer', minWidth: 0 }}
+    >
+      <div style={{ width: 36, height: 36, borderRadius: '50%', background: color.hex, border: '2px solid var(--glass-border)', flexShrink: 0, boxShadow: '0 0 0 2px var(--ink) inset' }} />
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', flex: 1, minWidth: 0 }}>
+        <span style={{ fontSize: 12.5, fontWeight: 800, color: 'var(--dim)' }}>Colour</span>
+        <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--paper)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{color.name}</span>
+      </div>
+    </button>
+  );
+}
+
+const WHEEL_SIZE = 260;
+const WHEEL_RADIUS = 104;
+const WHEEL_SWATCH = 32;
+
+function ColorWheelModal({ selectedId, onPick, onClose }) {
   useEffect(() => {
     hapticSheet();
     playOpen();
@@ -194,16 +287,19 @@ function PickerModal({ title, onClose, children }) {
     onClose();
   }
 
-  // Portaled straight to document.body — GlassPanel's sheet wrapper animates
-  // via a CSS `transform`, which creates a new containing block for any
-  // `position: fixed` descendant. Left un-portaled, this modal would end up
-  // positioned/clipped relative to that transformed sheet (and drift during
-  // its slide/drag animation) instead of sitting fixed to the real viewport.
+  const selectedColor = getPresetById(ACCENT_COLORS, selectedId);
+  const center = WHEEL_SIZE / 2;
+
+  // Portaled to document.body — GlassPanel's sheet wrapper animates via a
+  // CSS `transform`, which creates a new containing block for `position:
+  // fixed` descendants. Left un-portaled, this modal would end up
+  // positioned/clipped relative to that transformed sheet instead of the
+  // real viewport.
   return createPortal(
     <div
       role="dialog"
       aria-modal="true"
-      aria-label={title}
+      aria-label="Colour"
       onClick={(e) => { if (e.target === e.currentTarget) handleClose(); }}
       style={{
         position: 'fixed',
@@ -213,147 +309,99 @@ function PickerModal({ title, onClose, children }) {
         backdropFilter: 'blur(6px)',
         WebkitBackdropFilter: 'blur(6px)',
         display: 'flex',
-        alignItems: 'flex-end',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: 24,
       }}
     >
       <div
         style={{
           width: '100%',
-          maxHeight: '76dvh',
+          maxWidth: 340,
           background: 'var(--ink)',
-          borderTopLeftRadius: 24,
-          borderTopRightRadius: 24,
+          borderRadius: 28,
           border: '1px solid var(--glass-border)',
-          borderBottom: 'none',
           display: 'flex',
           flexDirection: 'column',
-          overflow: 'hidden',
+          alignItems: 'center',
+          padding: '20px 16px 24px',
         }}
       >
-        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 18px 10px', flexShrink: 0 }}>
-          <span style={{ fontSize: 16, fontWeight: 900, color: 'var(--paper)' }}>{title}</span>
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', marginBottom: 8 }}>
+          <span style={{ fontSize: 16, fontWeight: 900, color: 'var(--paper)' }}>Colour</span>
           <button type="button" onClick={handleClose} style={{ border: 'none', background: 'transparent', color: 'var(--ember)', fontSize: 14, fontWeight: 800, padding: '6px 4px' }}>
             Done
           </button>
         </div>
-        <div className="custom-scrollbar" style={{ overflowY: 'auto', padding: '4px 18px 28px', WebkitOverflowScrolling: 'touch' }}>
-          {children}
+
+        <div style={{ position: 'relative', width: WHEEL_SIZE, height: WHEEL_SIZE, margin: '8px 0 4px', flexShrink: 0 }}>
+          {ACCENT_COLORS.map((c, i) => {
+            const angle = (i / ACCENT_COLORS.length) * Math.PI * 2 - Math.PI / 2;
+            const x = center + WHEEL_RADIUS * Math.cos(angle) - WHEEL_SWATCH / 2;
+            const y = center + WHEEL_RADIUS * Math.sin(angle) - WHEEL_SWATCH / 2;
+            const selected = c.id === selectedId;
+            return (
+              <button
+                key={c.id}
+                type="button"
+                aria-label={c.name}
+                aria-pressed={selected}
+                onClick={() => { if (!selected) { hapticSelect(); playTap(); onPick(c.id); } }}
+                style={{
+                  position: 'absolute',
+                  left: x,
+                  top: y,
+                  width: WHEEL_SWATCH,
+                  height: WHEEL_SWATCH,
+                  borderRadius: '50%',
+                  background: c.hex,
+                  cursor: 'pointer',
+                  padding: 0,
+                  border: selected ? '3px solid var(--paper)' : '2px solid rgba(255,255,255,0.14)',
+                  boxShadow: selected ? '0 0 0 3px var(--ember)' : '0 2px 6px rgba(0,0,0,0.35)',
+                  transform: selected ? 'scale(1.14)' : 'scale(1)',
+                  transition: 'transform 120ms ease, box-shadow 120ms ease',
+                }}
+              />
+            );
+          })}
+
+          {/* Center preview of whichever color is currently selected */}
+          <div
+            aria-hidden="true"
+            style={{
+              position: 'absolute',
+              left: center - 42,
+              top: center - 42,
+              width: 84,
+              height: 84,
+              borderRadius: '50%',
+              background: 'var(--ink-2)',
+              border: '1px solid var(--glass-border)',
+              display: 'flex',
+              flexDirection: 'column',
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 6,
+              pointerEvents: 'none',
+            }}
+          >
+            <div style={{ width: 34, height: 34, borderRadius: '50%', background: selectedColor.hex, border: '2px solid var(--glass-border)' }} />
+          </div>
         </div>
+
+        <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--paper)', marginTop: 4 }}>{selectedColor.name}</span>
       </div>
     </div>,
     document.body
   );
 }
 
-function ThemeGrid({ selectedId, onPick }) {
-  return (
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(4, 1fr)', gap: 14 }}>
-      {STORY_THEMES.map((theme) => {
-        const selected = theme.id === selectedId;
-        return (
-          <button
-            key={theme.id}
-            type="button"
-            aria-pressed={selected}
-            onClick={() => { if (!selected) { hapticSelect(); playTap(); onPick(theme.id); } }}
-            style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, border: 'none', background: 'transparent', padding: 0, cursor: 'pointer' }}
-          >
-            <div
-              style={{
-                width: 56,
-                height: 56,
-                borderRadius: 16,
-                position: 'relative',
-                overflow: 'hidden',
-                border: selected ? '3px solid var(--ember)' : '1px solid var(--glass-border)',
-                boxShadow: selected ? '0 0 0 2px rgba(255,107,53,0.25)' : 'none',
-                transform: selected ? 'scale(1.05)' : 'scale(1)',
-                transition: 'transform 120ms ease',
-              }}
-            >
-              <div style={{ position: 'absolute', inset: 0, ...themeBackgroundSwatchStyle(theme.background) }} />
-              <div style={{ position: 'absolute', left: 6, top: 6, width: 20, height: 11, borderRadius: 5, background: theme.pillBg }} />
-            </div>
-            <span style={{ fontSize: 10, fontWeight: 700, color: selected ? 'var(--paper)' : 'var(--dim)', textAlign: 'center', lineHeight: 1.2 }}>{theme.name}</span>
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
-function ShapeGrid({ selectedId, onPick, scale }) {
-  return (
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 14 }}>
-      {BODY_SHAPES.map((shape) => {
-        const selected = shape.id === selectedId;
-        return (
-          <button
-            key={shape.id}
-            type="button"
-            aria-pressed={selected}
-            onClick={() => { if (!selected) { hapticSelect(); playTap(); onPick(shape.id); } }}
-            style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, border: 'none', background: 'transparent', padding: 0, cursor: 'pointer' }}
-          >
-            <div style={{ outline: selected ? '2.5px solid var(--ember)' : 'none', outlineOffset: 2, transform: selected ? 'scale(1.04)' : 'scale(1)', transition: 'transform 120ms ease', borderRadius: Math.min(20, shape.radius / 2.4) }}>
-              <ShapePreviewGlyph shape={shape} scale={scale} size={76} />
-            </div>
-            <span style={{ fontSize: 10, fontWeight: 700, color: selected ? 'var(--paper)' : 'var(--dim)', textAlign: 'center', lineHeight: 1.2 }}>{shape.name}</span>
-          </button>
-        );
-      })}
-    </div>
-  );
-}
-
-// ---------------------------------------------------------------------------
-// Compact "current value + tap to change" rows for the main sheet.
-// ---------------------------------------------------------------------------
-function ThemeField({ theme, onOpen }) {
-  return (
-    <button
-      type="button"
-      onClick={onOpen}
-      style={{ display: 'flex', alignItems: 'center', gap: 12, width: '100%', padding: '10px 12px', borderRadius: 16, border: '1px solid var(--glass-border)', background: 'var(--glass-white)', cursor: 'pointer' }}
-    >
-      <div style={{ width: 44, height: 44, borderRadius: 14, position: 'relative', overflow: 'hidden', flexShrink: 0, border: '1px solid var(--glass-border)' }}>
-        <div style={{ position: 'absolute', inset: 0, ...themeBackgroundSwatchStyle(theme.background) }} />
-        <div style={{ position: 'absolute', left: 5, top: 5, width: 15, height: 9, borderRadius: 4, background: theme.pillBg }} />
-      </div>
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', flex: 1, minWidth: 0 }}>
-        <span style={{ fontSize: 12.5, fontWeight: 800, color: 'var(--dim)' }}>Theme</span>
-        <span style={{ fontSize: 14.5, fontWeight: 700, color: 'var(--paper)' }}>{theme.name}</span>
-      </div>
-      <ChevronIcon />
-    </button>
-  );
-}
-
-function ShapeField({ shape, scale, onOpen }) {
-  return (
-    <button
-      type="button"
-      onClick={onOpen}
-      style={{ display: 'flex', alignItems: 'center', gap: 12, width: '100%', padding: '10px 12px', borderRadius: 16, border: '1px solid var(--glass-border)', background: 'var(--glass-white)', cursor: 'pointer' }}
-    >
-      <div style={{ borderRadius: 14, overflow: 'hidden', flexShrink: 0 }}>
-        <ShapePreviewGlyph shape={shape} scale={scale} size={44} />
-      </div>
-      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', flex: 1, minWidth: 0 }}>
-        <span style={{ fontSize: 12.5, fontWeight: 800, color: 'var(--dim)' }}>Shape</span>
-        <span style={{ fontSize: 14.5, fontWeight: 700, color: 'var(--paper)' }}>{shape.name}</span>
-      </div>
-      <ChevronIcon />
-    </button>
-  );
-}
-
 function SizeField({ scaleId, onChange }) {
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 12, width: '100%', padding: '10px 12px', borderRadius: 16, border: '1px solid var(--glass-border)', background: 'var(--glass-white)' }}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 12, flex: 1, padding: '10px 12px', borderRadius: 16, border: '1px solid var(--glass-border)', background: 'var(--glass-white)', minWidth: 0 }}>
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', flex: 1, minWidth: 0 }}>
         <span style={{ fontSize: 12.5, fontWeight: 800, color: 'var(--dim)' }}>Size</span>
-        <span style={{ fontSize: 12, color: 'var(--dim)' }}>How bold + big the text reads</span>
       </div>
       <select
         value={scaleId}
@@ -393,12 +441,12 @@ export default function ShareStorySheet({ open, onClose, mode = 'question', ques
 function ShareStorySheetContent({ mode, question, reply }) {
   const requestClose = useGlassPanelClose();
 
-  const [themeId, setThemeId] = useState(STORY_THEMES[0].id);
+  const [backgroundId, setBackgroundId] = useState(BACKGROUND_STRUCTURES[0].id);
+  const [colorId, setColorId] = useState(ACCENT_COLORS[0].id);
   const [shapeId, setShapeId] = useState(BODY_SHAPES[0].id);
   const [scaleId, setScaleId] = useState('bold');
 
-  const [themePickerOpen, setThemePickerOpen] = useState(false);
-  const [shapePickerOpen, setShapePickerOpen] = useState(false);
+  const [colorPickerOpen, setColorPickerOpen] = useState(false);
 
   const [previewUrl, setPreviewUrl] = useState(null);
   const [previewBlob, setPreviewBlob] = useState(null);
@@ -407,10 +455,9 @@ function ShareStorySheetContent({ mode, question, reply }) {
   const [tutorialOpen, setTutorialOpen] = useState(false);
 
   const previewUrlRef = useRef(null);
-  const renderTokenRef = useRef(0);
+  const renderTokenRef = useRef(null);
 
-  const theme = getPresetById(STORY_THEMES, themeId);
-  const shape = getPresetById(BODY_SHAPES, shapeId);
+  const color = getPresetById(ACCENT_COLORS, colorId);
   const scale = getPresetById(BODY_SCALES, scaleId);
 
   const questionText = question?.[QUESTION_TEXT_FIELD] || '';
@@ -426,7 +473,7 @@ function ShareStorySheetContent({ mode, question, reply }) {
   }, []);
 
   useEffect(() => {
-    const token = ++renderTokenRef.current;
+    const token = (renderTokenRef.current = (renderTokenRef.current || 0) + 1);
     setIsRendering(true);
 
     generateStoryImage({
@@ -434,7 +481,8 @@ function ShareStorySheetContent({ mode, question, reply }) {
       questionText,
       replyText,
       questionType,
-      themeId,
+      backgroundId,
+      colorId,
       shapeId,
       scaleId,
     })
@@ -453,7 +501,7 @@ function ShareStorySheetContent({ mode, question, reply }) {
         showToast(friendlyDbError('Could not render the preview. Please try again.'));
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode, questionText, replyText, questionType, themeId, shapeId, scaleId]);
+  }, [mode, questionText, replyText, questionType, backgroundId, colorId, shapeId, scaleId]);
 
   useEffect(() => {
     return () => {
@@ -559,10 +607,15 @@ function ShareStorySheetContent({ mode, question, reply }) {
         </div>
       </div>
 
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 10, flexShrink: 0 }}>
-        <ThemeField theme={theme} onOpen={() => { hapticTap(); setThemePickerOpen(true); }} />
-        <ShapeField shape={shape} scale={scale} onOpen={() => { hapticTap(); setShapePickerOpen(true); }} />
-        <SizeField scaleId={scaleId} onChange={setScaleId} />
+      {/* Selection strips sit directly below the preview — scroll/tap a
+          thumbnail and it applies immediately, no modal for either. */}
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 14, flexShrink: 0 }}>
+        <BackgroundCarousel selectedId={backgroundId} onChange={setBackgroundId} />
+        <ShapeCarousel selectedId={shapeId} onChange={setShapeId} scale={scale} />
+        <div style={{ display: 'flex', gap: 10 }}>
+          <ColourField color={color} onOpen={() => { hapticTap(); setColorPickerOpen(true); }} />
+          <SizeField scaleId={scaleId} onChange={setScaleId} />
+        </div>
       </div>
 
       <div style={{ flexShrink: 0 }}>
@@ -596,15 +649,8 @@ function ShareStorySheetContent({ mode, question, reply }) {
         </button>
       </div>
 
-      {themePickerOpen && (
-        <PickerModal title="Theme" onClose={() => setThemePickerOpen(false)}>
-          <ThemeGrid selectedId={themeId} onPick={(id) => setThemeId(id)} />
-        </PickerModal>
-      )}
-      {shapePickerOpen && (
-        <PickerModal title="Shape" onClose={() => setShapePickerOpen(false)}>
-          <ShapeGrid selectedId={shapeId} onPick={(id) => setShapeId(id)} scale={scale} />
-        </PickerModal>
+      {colorPickerOpen && (
+        <ColorWheelModal selectedId={colorId} onPick={(id) => setColorId(id)} onClose={() => setColorPickerOpen(false)} />
       )}
 
       <StoryTutorial open={tutorialOpen} onClose={() => setTutorialOpen(false)} />

@@ -41,7 +41,6 @@ import { ROOT_PATH, isShortId } from '../lib/subdomain';
 import { showToast, friendlyDbError } from '../lib/toast';
 import { playSend } from '../lib/soundManager';
 import { hapticSend } from '../lib/haptics';
-import { useViewportHeight } from '../lib/useViewportHeight';
 import MessageSkeleton from '../components/shared/MessageSkeleton';
 import SendButton from '../components/shared/SendButton';
 import AuthModal from './AuthModal';
@@ -375,11 +374,12 @@ export default function QuestionThread({ questionId, onBack, onShareReply }) {
   // Local state for standalone sharing
   const [sharingReplyLocal, setSharingReplyLocal] = useState(null);
 
-  // Real visible height (shrinks live as the on-screen keyboard opens) —
-  // see useViewportHeight.js. Falls back to null (→ CSS 100dvh) wherever
-  // VisualViewport isn't supported.
-  const viewportHeight = useViewportHeight();
-  const pageHeight = viewportHeight ? `${viewportHeight}px` : '100dvh';
+  // Height comes from the parent (Home.jsx's RIGHT PANEL wrapper), which
+  // is already keyboard-aware via useViewportHeight — see that file's
+  // comment and Home.jsx's rightPanelHeight for why the height source
+  // lives up there instead of being independently re-derived here. This
+  // page just fills whatever height its parent gives it.
+  const pageHeight = '100%';
 
   const scrollRef = useRef(null);
 
