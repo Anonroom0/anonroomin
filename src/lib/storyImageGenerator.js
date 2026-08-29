@@ -1237,61 +1237,6 @@ function drawVerifiedBadge(ctx, x, y, size) {
   ctx.restore();
 }
 
-// No fabricated counts — Anonroom has no real reply/repost/like numbers to
-// show here, so rather than inventing plausible-looking ones this renders
-// the plain icon row only (which is how a genuinely fresh, real post with
-// no engagement yet actually looks). Icons are centred in equal-width
-// slots spanning the exact same left/right bounds as the body text and
-// header above, so the row reads as symmetric rather than left-leaning.
-function drawEngagementRow(ctx, { x, y, width }) {
-  const glyphs = ['reply', 'repost', 'like', 'share'];
-  const slotWidth = width / glyphs.length;
-  const iconBox = 26; // bounding box each glyph is drawn within, for centring
-  ctx.strokeStyle = TWEET_TEXT_SECONDARY;
-  ctx.fillStyle = TWEET_TEXT_SECONDARY;
-  ctx.lineWidth = 3;
-  ctx.lineCap = 'round';
-  ctx.lineJoin = 'round';
-
-  glyphs.forEach((glyph, i) => {
-    const cx = x + slotWidth * (i + 0.5) - iconBox / 2;
-    const cy = y;
-    ctx.save();
-    ctx.beginPath();
-    if (glyph === 'reply') {
-      roundedRectPath(ctx, cx, cy - 10, 26, 18, 6);
-      ctx.stroke();
-      ctx.beginPath();
-      ctx.moveTo(cx + 6, cy + 8);
-      ctx.lineTo(cx, cy + 16);
-      ctx.lineTo(cx + 12, cy + 8);
-      ctx.stroke();
-    } else if (glyph === 'repost') {
-      ctx.moveTo(cx, cy - 4);
-      ctx.lineTo(cx + 20, cy - 4);
-      ctx.lineTo(cx + 20, cy + 6);
-      ctx.moveTo(cx + 22, cy + 10);
-      ctx.lineTo(cx + 2, cy + 10);
-      ctx.lineTo(cx + 2, cy);
-      ctx.stroke();
-    } else if (glyph === 'like') {
-      ctx.moveTo(cx + 10, cy + 14);
-      ctx.bezierCurveTo(cx - 6, cy + 2, cx - 2, cy - 12, cx + 10, cy - 4);
-      ctx.bezierCurveTo(cx + 22, cy - 12, cx + 26, cy + 2, cx + 10, cy + 14);
-      ctx.stroke();
-    } else {
-      ctx.moveTo(cx, cy + 4);
-      ctx.lineTo(cx, cy - 8);
-      ctx.lineTo(cx + 22, cy - 8);
-      ctx.moveTo(cx + 4, cy - 4);
-      ctx.lineTo(cx + 11, cy - 11);
-      ctx.lineTo(cx + 18, cy - 4);
-      ctx.stroke();
-    }
-    ctx.restore();
-  });
-}
-
 function drawTweetSlide(ctx, { kind, questionText, questionType, replyText, messageText, senderName, avatarImage }) {
   // Plain neutral backdrop — the tweet card is the whole point here, not
   // any of the customizable Background presets.
@@ -1350,8 +1295,10 @@ function drawTweetSlide(ctx, { kind, questionText, questionType, replyText, mess
   const bodyToMetaGap = 34;
   const metaHeight = 40;
   const metaToDividerGap = 24;
-  const dividerToEngagementGap = 26;
-  const engagementHeight = 40;
+  // Card now ends cleanly right after the divider + a little breathing room
+  // — no fake reply/repost/like/share row underneath (Anonroom has no real
+  // engagement counts to show, and a made-up row read as fake).
+  const dividerToBottomGap = 30;
   const badgeHeight = kind === 'question' ? 56 : 0;
 
   const cardHeight =
@@ -1365,22 +1312,23 @@ function drawTweetSlide(ctx, { kind, questionText, questionType, replyText, mess
     metaHeight +
     metaToDividerGap +
     1 +
-    dividerToEngagementGap +
-    engagementHeight;
+    dividerToBottomGap;
 
   const cardY = Math.max(220, (CANVAS_HEIGHT - cardHeight) / 2 - 60);
 
-  // --- Card shell ---
+  // --- Card shell — a plain, symmetric rectangle: bright white card on a
+  // soft grey backdrop, tight corner radius instead of a rounded "bubble".
+  const cardRadius = 14;
   ctx.save();
-  ctx.shadowColor = 'rgba(0,0,0,0.18)';
-  ctx.shadowBlur = 40;
-  ctx.shadowOffsetY = 16;
-  roundedRectPath(ctx, cardX, cardY, cardWidth, cardHeight, 28);
+  ctx.shadowColor = 'rgba(0,0,0,0.16)';
+  ctx.shadowBlur = 36;
+  ctx.shadowOffsetY = 14;
+  roundedRectPath(ctx, cardX, cardY, cardWidth, cardHeight, cardRadius);
   ctx.fillStyle = TWEET_CARD_BG;
   ctx.fill();
   ctx.restore();
   ctx.save();
-  roundedRectPath(ctx, cardX, cardY, cardWidth, cardHeight, 28);
+  roundedRectPath(ctx, cardX, cardY, cardWidth, cardHeight, cardRadius);
   ctx.strokeStyle = TWEET_BORDER;
   ctx.lineWidth = 2;
   ctx.stroke();
@@ -1457,53 +1405,156 @@ function drawTweetSlide(ctx, { kind, questionText, questionType, replyText, mess
   ctx.moveTo(cardX + pad, cursorY);
   ctx.lineTo(cardX + cardWidth - pad, cursorY);
   ctx.stroke();
-
-  cursorY += dividerToEngagementGap + 14;
-  // Same left/right bounds as the header and body text above (cardX+pad to
-  // cardX+cardWidth-pad) so the whole card reads symmetrically edge to edge.
-  drawEngagementRow(ctx, { x: cardX + pad, y: cursorY, width: cardWidth - pad * 2 });
+  // Card ends here — no fake reply/repost/like/share icon row below the
+  // divider (see the dividerToBottomGap comment above cardHeight).
 }
 
 // ---------------------------------------------------------------------------
-// Attached-media thumbnail (mode="message" only) — a small, fixed-position
-// rounded thumbnail of the shared message's photo/video/GIF, always drawn
-// directly above the footer wordmark/logo (the "anonroom.in" branding),
-// sitting just above the reserved LINK_ZONE band so it never overlaps
-// either the footer or the space left for the manual IG link sticker.
+// Attached-media notice (mode="message" only) — the actual photo/video/GIF
+// is never drawn into the exported image (and never shown anywhere in the
+// app UI either); instead a small fixed-position pill just says a media
+// file is attached, always drawn directly above the footer wordmark/logo
+// (the "anonroom.in" branding), sitting just above the reserved LINK_ZONE
+// band so it never overlaps either the footer or the space left for the
+// manual IG link sticker.
 // ---------------------------------------------------------------------------
-const MEDIA_THUMB_SIZE = 168;
+const MEDIA_NOTICE_HEIGHT = 64;
+const MEDIA_NOTICE_LABELS = {
+  image: { emoji: '📸', label: 'Photo attached' },
+  video: { emoji: '🎬', label: 'Video attached' },
+  audio: { emoji: '🎵', label: 'Voice message attached' },
+  gif: { emoji: '🎞️', label: 'GIF attached' },
+  sticker: { emoji: '🏷️', label: 'Sticker attached' },
+};
 
-function drawAttachedMediaThumb(ctx, mediaImage) {
-  if (!mediaImage) return;
-  const size = MEDIA_THUMB_SIZE;
-  const x = (CANVAS_WIDTH - size) / 2;
-  const y = LINK_ZONE.y - 28 - size; // fixed: always just above the link-zone/footer band
+function drawMediaAttachedNotice(ctx, mediaType, tokens) {
+  const meta = MEDIA_NOTICE_LABELS[mediaType] || { emoji: '📎', label: 'Media attached' };
+  const font = FONT_STACKS.system;
+  ctx.font = '700 26px ' + font;
+  const text = `${meta.emoji}  ${meta.label}`;
+  const textWidth = ctx.measureText(text).width;
+  const paddingX = 28;
+  const width = textWidth + paddingX * 2;
+  const height = MEDIA_NOTICE_HEIGHT;
+  const x = (CANVAS_WIDTH - width) / 2;
+  const y = LINK_ZONE.y - 24 - height; // fixed: always just above the link-zone/footer band
 
   ctx.save();
-  ctx.shadowColor = 'rgba(0,0,0,0.45)';
-  ctx.shadowBlur = 20;
-  ctx.shadowOffsetY = 6;
-  roundedRectPath(ctx, x, y, size, size, 20);
-  ctx.fillStyle = 'rgba(0,0,0,0.2)';
+  ctx.shadowColor = 'rgba(0,0,0,0.35)';
+  ctx.shadowBlur = 16;
+  ctx.shadowOffsetY = 4;
+  roundedRectPath(ctx, x, y, width, height, height / 2);
+  ctx.fillStyle = 'rgba(0,0,0,0.45)';
   ctx.fill();
   ctx.restore();
 
   ctx.save();
-  roundedRectPath(ctx, x, y, size, size, 20);
-  ctx.clip();
-  // cover-fit the source image into the square thumbnail
-  const scale = Math.max(size / mediaImage.width, size / mediaImage.height);
-  const drawW = mediaImage.width * scale;
-  const drawH = mediaImage.height * scale;
-  ctx.drawImage(mediaImage, x + (size - drawW) / 2, y + (size - drawH) / 2, drawW, drawH);
+  roundedRectPath(ctx, x, y, width, height, height / 2);
+  ctx.strokeStyle = 'rgba(255,255,255,0.35)';
+  ctx.lineWidth = 1.5;
+  ctx.stroke();
   ctx.restore();
 
   ctx.save();
-  roundedRectPath(ctx, x, y, size, size, 20);
-  ctx.strokeStyle = 'rgba(255,255,255,0.55)';
-  ctx.lineWidth = 3;
-  ctx.stroke();
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'middle';
+  ctx.fillStyle = '#FFFFFF';
+  ctx.font = '700 26px ' + font;
+  ctx.fillText(text, x + paddingX, y + height / 2 + 1);
   ctx.restore();
+}
+
+// ---------------------------------------------------------------------------
+// Layout — confession-card-only (no header badge/label, no footer, no CTA
+// pill) — used to render a group confession's chosen Background/Colour/
+// Shape/Size combo *inside a chat bubble* (see ConfessionBubble.jsx) rather
+// than as a shareable story. Reuses the exact same body-card drawing
+// (drawBodyCard) and text-fitting (fitTextBlock) the story slides use, just
+// without the parts that only make sense for a full 1080x1920 story export.
+// ---------------------------------------------------------------------------
+function drawConfessionCardBody(ctx, { text, bodyPreset, headerPreset, tokens }) {
+  const cardX = 80;
+  const cardWidth = CANVAS_WIDTH - cardX * 2;
+  const cardPadding = 64;
+  const maxTextWidth = cardWidth - cardPadding * 2;
+  const maxTextHeight = 900;
+
+  const { css, lines, lineHeight } = fitTextBlock(ctx, text, {
+    fontFamily: fontStack(bodyPreset),
+    weight: bodyPreset.fontWeight || 900,
+    uppercase: bodyPreset.uppercase,
+    maxWidth: maxTextWidth,
+    maxHeight: maxTextHeight,
+    basePx: Math.round(56 * (bodyPreset.fontScale || 1)),
+    minPx: 28,
+    lineHeightRatio: 1.25,
+    leadingMult: bodyPreset.leadingMult,
+  });
+
+  const cardHeight = cardPadding * 2 + lines.length * lineHeight;
+  const cardY = centeredCardY(cardHeight, CARD_SAFE_HEIGHT_NO_CTA);
+
+  const { textColor, dropShadow } = drawBodyCard(ctx, { x: cardX, y: cardY, width: cardWidth, height: cardHeight, bodyPreset, tokens, headerPreset });
+
+  if (dropShadow) {
+    ctx.shadowColor = 'rgba(0,0,0,0.6)';
+    ctx.shadowBlur = 24;
+    ctx.shadowOffsetY = 6;
+  }
+  ctx.fillStyle = textColor;
+  ctx.font = css;
+  drawLines(ctx, lines, { x: cardX + cardPadding, y: cardY + cardPadding, lineHeight, align: 'left' });
+  ctx.shadowBlur = 0;
+
+  return { cardX, cardY, cardWidth, cardHeight };
+}
+
+/**
+ * Renders just the chosen Shape (body card) sitting on its Background —
+ * no "Confession"/type label, no sender header, no footer wordmark, no
+ * reserved link zone. Used by ConfessionBubble.jsx to show a group
+ * confession's customization inline, inside the chat bubble itself, instead
+ * of as a shareable story image. Returns a cropped PNG blob containing only
+ * the card (plus a small margin for shadows/rotation/decorations) so the
+ * bubble can size itself to the card's own aspect ratio.
+ */
+export async function generateConfessionCardImage({
+  text = '',
+  backgroundId,
+  colorId,
+  shapeId,
+  scaleId,
+}) {
+  const canvas = document.createElement('canvas');
+  canvas.width = CANVAS_WIDTH;
+  canvas.height = CANVAS_HEIGHT;
+  const ctx = canvas.getContext('2d');
+
+  const tokens = getTokens();
+  const runtime = buildThemeRuntime(backgroundId, colorId);
+  const headerPreset = { pillBg: runtime.pillBg, pillText: runtime.pillText };
+  const bodyPreset = mergeBodyPreset(getPresetById(BODY_SHAPES, shapeId), getPresetById(BODY_SCALES, scaleId));
+
+  drawBackground(ctx, runtime.background);
+  const { cardX, cardY, cardWidth, cardHeight } = drawConfessionCardBody(ctx, { text, bodyPreset, headerPreset, tokens });
+
+  const margin = 120;
+  const sx = Math.max(0, cardX - margin);
+  const sy = Math.max(0, cardY - margin);
+  const sw = Math.min(CANVAS_WIDTH - sx, cardWidth + margin * 2);
+  const sh = Math.min(CANVAS_HEIGHT - sy, cardHeight + margin * 2);
+
+  const cropCanvas = document.createElement('canvas');
+  cropCanvas.width = sw;
+  cropCanvas.height = sh;
+  cropCanvas.getContext('2d').drawImage(canvas, sx, sy, sw, sh, 0, 0, sw, sh);
+
+  return new Promise((resolve, reject) => {
+    cropCanvas.toBlob((blob) => {
+      if (blob) resolve(blob);
+      else reject(new Error('Canvas toBlob returned null.'));
+    }, 'image/png');
+  });
 }
 
 // ---------------------------------------------------------------------------
@@ -1524,8 +1575,9 @@ export async function generateStoryImage({
   // Preset toggle: 'basic' (fully customizable, default) or 'tweet' (a
   // single fixed, professional realistic-post style — see drawTweetSlide).
   template = 'basic',
-  // mode="message" only — when set and mediaType is a visual kind (image
-  // or gif), a fixed thumbnail of it is drawn above the footer branding.
+  // mode="message" only — when set, a small "media attached" notice pill
+  // is drawn above the footer branding. The actual media is never rendered
+  // into the image (or shown anywhere in the app) — just the notice.
   mediaUrl = '',
   mediaType = '',
 }) {
@@ -1560,9 +1612,8 @@ export async function generateStoryImage({
   // LINK_ZONE (between card bottom and footer) is intentionally left blank —
   // that's where the IG link sticker goes by hand. Nothing draws there.
 
-  if (kind === 'message' && mediaUrl && (mediaType === 'image' || mediaType === 'gif')) {
-    const mediaImage = await loadAvatarImage(mediaUrl); // generic image loader, name aside
-    drawAttachedMediaThumb(ctx, mediaImage);
+  if (kind === 'message' && mediaUrl && mediaType) {
+    drawMediaAttachedNotice(ctx, mediaType, tokens);
   }
 
   // Tweet template sits on a light backdrop, so the footer wordmark needs

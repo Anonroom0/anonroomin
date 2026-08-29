@@ -966,47 +966,14 @@ function ShareStorySheetContent({ mode, question, reply, message }) {
         </div>
       </div>
 
-      {/* Only ever appears for mode="message" — the card above shows a fixed
-          thumbnail of image/GIF attachments (see storyImageGenerator's
-          drawAttachedMediaThumb, rendered just above the footer wordmark)
-          but never video/audio/other files, so this stays the one place in
-          the sheet to actually open the original attachment before sharing. */}
+      {/* Only ever appears for mode="message" — no button to open or preview
+          the attachment here (and no thumbnail of it either): the rendered
+          story image itself carries a small "media attached" notice pill
+          (see storyImageGenerator's drawMediaAttachedNotice) instead. */}
       {messageMediaUrl && (
-        <a
-          href={messageMediaUrl}
-          target="_blank"
-          rel="noopener noreferrer"
-          onClick={() => hapticTap()}
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: 10,
-            padding: '12px 16px',
-            borderRadius: 16,
-            border: '1px solid var(--glass-border)',
-            background: 'var(--glass-white)',
-            color: 'var(--paper)',
-            textDecoration: 'none',
-            flexShrink: 0,
-          }}
-        >
-          <span style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 14, fontWeight: 700, minWidth: 0 }}>
-            {messageMediaType === 'image' || messageMediaType === 'gif' ? (
-              <img
-                src={messageMediaUrl}
-                alt=""
-                style={{ width: 34, height: 34, borderRadius: 8, objectFit: 'cover', flexShrink: 0, border: '1px solid var(--glass-border)' }}
-              />
-            ) : (
-              <span>{attachmentMeta(messageMediaType).emoji}</span>
-            )}
-            <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{attachmentMeta(messageMediaType).label}</span>
-          </span>
-          <span style={{ color: 'var(--ember)', fontSize: 12.5, fontWeight: 800, flexShrink: 0, textAlign: 'right' }}>
-            View attached media at anonroom.in
-          </span>
-        </a>
+        <p style={{ margin: 0, flexShrink: 0, fontSize: 12.5, color: 'var(--dim)', textAlign: 'center' }}>
+          {attachmentMeta(messageMediaType).emoji} {attachmentMeta(messageMediaType).label} attached — noted in the story image
+        </p>
       )}
 
       {/* Selection strips sit directly below the preview — both are

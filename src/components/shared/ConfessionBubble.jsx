@@ -44,8 +44,9 @@
  * ============================================================================
  */
 
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import MediaViewer from '../../pages/MediaViewer';
+import { generateConfessionCardImage } from '../../lib/storyImageGenerator';
 
 const SIZE_PRESETS = {
   inline: {
@@ -103,6 +104,49 @@ export default function ConfessionBubble({ confession, onReply, onPhotoClick, si
 
   const showChrome = !isStory || storyChromeVisible;
 
+  // Customized confessions (group "New Confession" sheet's Customize button
+  // — see GroupChat.jsx's ConfessionModal) carry a {backgroundId, colorId,
+  // shapeId, scaleId} style choice instead of rendering as the plain
+  // header+glass-body card below. When present, the chosen Shape+Background
+  // is rendered inline via generateConfessionCardImage — no "Confession"
+  // label, just the body shape sitting on its background, exactly like the
+  // shape would look inside the customization story flow.
+  const storyStyle = confession.story_style || null;
+  const [styledCardUrl, setStyledCardUrl] = useState(null);
+  const [styledCardLoading, setStyledCardLoading] = useState(Boolean(storyStyle));
+  const styledCardUrlRef = useRef(null);
+
+  useEffect(() => {
+    if (!storyStyle || !confession.text) {
+      if (styledCardUrlRef.current) { URL.revokeObjectURL(styledCardUrlRef.current); styledCardUrlRef.current = null; }
+      setStyledCardUrl(null);
+      setStyledCardLoading(false);
+      return undefined;
+    }
+    let cancelled = false;
+    setStyledCardLoading(true);
+    generateConfessionCardImage({
+      text: confession.text,
+      backgroundId: storyStyle.backgroundId,
+      colorId: storyStyle.colorId,
+      shapeId: storyStyle.shapeId,
+      scaleId: storyStyle.scaleId,
+    })
+      .then((blob) => {
+        if (cancelled) return;
+        const url = URL.createObjectURL(blob);
+        if (styledCardUrlRef.current) URL.revokeObjectURL(styledCardUrlRef.current);
+        styledCardUrlRef.current = url;
+        setStyledCardUrl(url);
+        setStyledCardLoading(false);
+      })
+      .catch(() => { if (!cancelled) setStyledCardLoading(false); });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [storyStyle?.backgroundId, storyStyle?.colorId, storyStyle?.shapeId, storyStyle?.scaleId, confession.text]);
+
+  useEffect(() => () => { if (styledCardUrlRef.current) URL.revokeObjectURL(styledCardUrlRef.current); }, []);
+
   const mediaUrl = confession.photo_url || confession.media_url;
   const mediaType = detectMediaType(mediaUrl, confession.media_type);
   const isVideo = mediaType === 'video';
@@ -118,6 +162,55 @@ export default function ConfessionBubble({ confession, onReply, onPhotoClick, si
 
   function handleBodyTap() {
     if (isStory) setStoryChromeVisible((v) => !v);
+  }
+
+  // --- Customized rendering: no header strip/label at all, just the
+  // rendered Shape+Background body (text is baked into the image), with
+  // the same reply affordance underneath as the standard card. ---
+  if (storyStyle && confession.text) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: '70%', margin: isStory ? 0 : '16px 0' }}>
+        <div style={{ width: '100%', maxWidth: preset.maxWidth }}>
+          <div
+            onClick={handleBodyTap}
+            style={{
+              background: 'var(--ink-2)',
+              borderRadius: 20,
+              overflow: 'hidden',
+              cursor: isStory ? 'pointer' : 'default',
+              minHeight: 120,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            {styledCardUrl ? (
+              <img src={styledCardUrl} alt="Confession" style={{ width: '100%', display: 'block' }} />
+            ) : (
+              <div style={{ padding: '40px 0', color: 'var(--dim)', fontSize: preset.headerTextSize }}>
+                {styledCardLoading ? 'Rendering…' : ''}
+              </div>
+            )}
+          </div>
+
+          {showChrome && onReply && (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-start', gap: 10, padding: '10px 4px 0' }}>
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); onReply(confession); }}
+                style={{ border: 'none', background: 'transparent', color: 'var(--dim)', fontSize: 13, fontWeight: 600, cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center', gap: 6 }}
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="9 17 4 12 9 7" />
+                  <path d="M20 18v-2a4 4 0 0 0-4-4H4" />
+                </svg>
+                Reply
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    );
   }
 
   return (

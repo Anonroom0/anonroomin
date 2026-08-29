@@ -32,6 +32,8 @@ import SendButton from '../components/shared/SendButton';
 import { AudioBubble, VideoBubble } from '../components/shared/MediaBubble';
 import InstagramCard from '../components/shared/InstagramCard';
 import ShareStorySheet from '../components/questions/ShareStorySheet';
+import { generateConfessionCardImage } from '../lib/storyImageGenerator';
+import { BACKGROUND_STRUCTURES, ACCENT_COLORS, BODY_SHAPES, BODY_SCALES } from '../lib/storyStylePresets';
 
 const MESSAGE_LIMIT = 20;
 const REPLY_SNIPPET_LENGTH = 80;
@@ -55,7 +57,8 @@ const Vectors = {
   CheckCircle: <svg width="20" height="20" viewBox="0 0 24 24" fill="#2FD8C4" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" stroke="none" /><polyline points="8 12 11 15 16 9" /></svg>,
   Instagram: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="2" width="20" height="20" rx="5" ry="5" /><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z" /><line x1="17.5" y1="6.5" x2="17.51" y2="6.5" /></svg>,
   ReplyAction: <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 17 4 12 9 7" /><path d="M20 18v-2a4 4 0 0 0-4-4H4" /></svg>,
-  Photo: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2" /><circle cx="8.5" cy="8.5" r="1.5" /><polyline points="21 15 16 10 5 21" /></svg>
+  Photo: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2" /><circle cx="8.5" cy="8.5" r="1.5" /><polyline points="21 15 16 10 5 21" /></svg>,
+  Palette: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2a10 10 0 1 0 0 20c1.1 0 2-.9 2-2 0-.5-.2-1-.5-1.4-.3-.4-.5-.9-.5-1.4 0-1.1.9-2 2-2h2.3c1.9 0 3.4-1.6 3.2-3.5C20 6.6 16.4 2 12 2z" /><circle cx="7.5" cy="11.5" r="1" fill="currentColor" stroke="none" /><circle cx="10" cy="7" r="1" fill="currentColor" stroke="none" /><circle cx="15" cy="7.5" r="1" fill="currentColor" stroke="none" /></svg>
 };
 
 function isSenderAdmin(message) { return message.sender_name === ADMIN_DISPLAY_NAME || message.is_admin === true; }
@@ -111,15 +114,75 @@ async function scrapeInstagram(username) {
   } catch { return null; }
 }
 
+function randomPresetId(list) {
+  return list[Math.floor(Math.random() * list.length)].id;
+}
+
+function randomStoryStyle() {
+  return {
+    backgroundId: randomPresetId(BACKGROUND_STRUCTURES),
+    colorId: randomPresetId(ACCENT_COLORS),
+    shapeId: randomPresetId(BODY_SHAPES),
+    scaleId: randomPresetId(BODY_SCALES),
+  };
+}
+
 function ConfessionModal({ open, onClose, onSubmit }) {
   const [text, setText] = useState(''); 
   const [anon, setAnon] = useState(true); 
   const [media, setMedia] = useState(null); 
   const mediaInputRef = useRef(null);
 
+  // Customize — pick a Background/Colour/Shape/Size combo (same preset
+  // lists ShareStorySheet/CreateConfessionModal use) to store as small JSON
+  // on the message row rather than rendering + uploading a PNG up front —
+  // see storyStylePresets.js and the 0003 migration. `storyStyle` null
+  // means "not customized"; the confession renders as a plain bubble.
+  const [customizeOpen, setCustomizeOpen] = useState(false);
+  const [storyStyle, setStoryStyle] = useState(null);
+  const [previewUrl, setPreviewUrl] = useState(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const previewUrlRef = useRef(null);
+  const previewTokenRef = useRef(0);
+
   useEffect(() => {
     return () => { if (media) URL.revokeObjectURL(media.previewUrl); };
   }, [media]);
+
+  // Live preview of the customized card — renders through the exact same
+  // generateConfessionCardImage() pipeline the chat bubble itself will use
+  // (see ConfessionBubble.jsx), so what's shown here is what the group will
+  // actually see.
+  useEffect(() => {
+    if (!customizeOpen || !storyStyle) {
+      if (previewUrlRef.current) { URL.revokeObjectURL(previewUrlRef.current); previewUrlRef.current = null; }
+      setPreviewUrl(null);
+      return undefined;
+    }
+    const token = ++previewTokenRef.current;
+    setPreviewLoading(true);
+    generateConfessionCardImage({
+      text: text.trim() || 'Your confession will appear here…',
+      backgroundId: storyStyle.backgroundId,
+      colorId: storyStyle.colorId,
+      shapeId: storyStyle.shapeId,
+      scaleId: storyStyle.scaleId,
+    })
+      .then((blob) => {
+        if (previewTokenRef.current !== token) return;
+        const url = URL.createObjectURL(blob);
+        if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
+        previewUrlRef.current = url;
+        setPreviewUrl(url);
+        setPreviewLoading(false);
+      })
+      .catch(() => { if (previewTokenRef.current === token) setPreviewLoading(false); });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [customizeOpen, storyStyle, text]);
+
+  useEffect(() => {
+    return () => { if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current); };
+  }, []);
 
   if (!open) return null;
 
@@ -128,6 +191,22 @@ function ConfessionModal({ open, onClose, onSubmit }) {
     e.target.value = '';
     if (file) {
       setMedia({ file, isVideo: file.type.startsWith('video/'), previewUrl: URL.createObjectURL(file) });
+    }
+  }
+
+  function handleToggleCustomize() {
+    if (customizeOpen) { setCustomizeOpen(false); return; }
+    setCustomizeOpen(true);
+    if (!storyStyle) setStoryStyle(randomStoryStyle());
+  }
+
+  function handleShuffleStyle() { setStoryStyle(randomStoryStyle()); }
+  function handleRemoveCustomization() { setStoryStyle(null); setCustomizeOpen(false); }
+
+  function handleSubmit() {
+    if (text.trim() || media) {
+      onSubmit(text.trim(), anon, media?.file, storyStyle);
+      setText(''); setMedia(null); setStoryStyle(null); setCustomizeOpen(false);
     }
   }
 
@@ -177,16 +256,80 @@ function ConfessionModal({ open, onClose, onSubmit }) {
               {Vectors.Photo} {media ? 'Media Added' : 'Add Media'}
             </button>
             <input type="file" accept="image/*,video/*" ref={mediaInputRef} style={{ display: 'none' }} onChange={handleFileChange} />
+
+            {/* Customize — pick a story style for this confession's bubble
+                without rendering/uploading an image; see the panel below. */}
+            <button
+              type="button"
+              onClick={handleToggleCustomize}
+              disabled={text.trim().length === 0}
+              style={{
+                background: storyStyle ? 'rgba(255,107,53,0.14)' : 'transparent',
+                border: 'none', borderRadius: 999, padding: '5px 10px',
+                color: text.trim().length === 0 ? 'rgba(255,255,255,0.15)' : storyStyle ? '#FF6B35' : '#8B8B96',
+                cursor: text.trim().length === 0 ? 'default' : 'pointer',
+                display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 700,
+              }}
+            >
+              {Vectors.Palette} {storyStyle ? 'Customized' : 'Customize'}
+            </button>
+
             <div style={{ fontSize: 12, color: '#8B8B96' }}>{text.length}/{MAX_TEXT_LENGTH}</div>
           </div>
         </div>
+
+        {customizeOpen && storyStyle && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14, padding: 16, borderRadius: 20, border: '1px solid rgba(255,255,255,0.06)', background: '#15161B' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <span style={{ fontSize: 14, fontWeight: 800, color: '#F4F3F0' }}>Bubble style</span>
+              <div style={{ display: 'flex', gap: 14 }}>
+                <button type="button" onClick={handleShuffleStyle} style={{ border: 'none', background: 'transparent', color: '#FF6B35', fontSize: 13, fontWeight: 800, padding: 0 }}>Shuffle</button>
+                <button type="button" onClick={handleRemoveCustomization} style={{ border: 'none', background: 'transparent', color: '#8B8B96', fontSize: 13, fontWeight: 700, padding: 0 }}>Remove</button>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: 14, alignItems: 'flex-start' }}>
+              <div style={{ width: 96, aspectRatio: '3 / 4', borderRadius: 14, overflow: 'hidden', background: '#1C1D24', border: '1px solid rgba(255,255,255,0.06)', flexShrink: 0, position: 'relative' }}>
+                {previewUrl && (
+                  <img src={previewUrl} alt="Bubble preview" style={{ width: '100%', height: '100%', objectFit: 'cover', opacity: previewLoading ? 0.5 : 1, transition: 'opacity 150ms ease' }} />
+                )}
+              </div>
+
+              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 10, minWidth: 0 }}>
+                {[
+                  { label: 'Background', list: BACKGROUND_STRUCTURES, key: 'backgroundId' },
+                  { label: 'Colour', list: ACCENT_COLORS, key: 'colorId' },
+                  { label: 'Shape', list: BODY_SHAPES, key: 'shapeId' },
+                  { label: 'Size', list: BODY_SCALES, key: 'scaleId' },
+                ].map(({ label, list, key }) => (
+                  <label key={key} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+                    <span style={{ fontSize: 12.5, fontWeight: 700, color: '#8B8B96' }}>{label}</span>
+                    <select
+                      value={storyStyle[key]}
+                      onChange={(e) => setStoryStyle((prev) => ({ ...prev, [key]: e.target.value }))}
+                      style={{ flex: 1, maxWidth: 150, background: '#1C1D24', color: '#F4F3F0', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 10, padding: '6px 10px', fontSize: 13, fontWeight: 700 }}
+                    >
+                      {list.map((p) => (
+                        <option key={p.id} value={p.id} style={{ background: '#1C1D24', color: '#F4F3F0' }}>{p.name}</option>
+                      ))}
+                    </select>
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            <p style={{ margin: 0, fontSize: 12, color: '#8B8B96', lineHeight: 1.4 }}>
+              Only this style choice is saved — the group sees this rendered right inside the chat bubble, no label, just the shape and background.
+            </p>
+          </div>
+        )}
 
         <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '12px 16px', borderRadius: 20, border: '1px solid rgba(255,255,255,0.06)', background: '#15161B', cursor: 'pointer' }}>
           <span style={{ fontSize: 15, fontWeight: 700, color: '#F4F3F0' }}>Post anonymously</span>
           <input type="checkbox" checked={anon} onChange={(e) => setAnon(e.target.checked)} />
         </label>
 
-        <button onClick={() => { if (text.trim() || media) { onSubmit(text.trim(), anon, media?.file); setText(''); setMedia(null); } }} style={{ width: '100%', padding: 16, borderRadius: 20, border: 'none', background: '#FF6B35', color: '#fff', fontWeight: 700, cursor: 'pointer', fontSize: 16 }}>Post Confession</button>
+        <button onClick={handleSubmit} style={{ width: '100%', padding: 16, borderRadius: 20, border: 'none', background: '#FF6B35', color: '#fff', fontWeight: 700, cursor: 'pointer', fontSize: 16 }}>Post Confession</button>
       </div>
     </GlassPanel>
   );
@@ -704,7 +847,7 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
     else { setReplyingTo(null); cooldownRef.current?.start(); }
   }
 
-  async function handleConfessionSubmit(confessionText, anon, mediaFile) {
+  async function handleConfessionSubmit(confessionText, anon, mediaFile, storyStyle) {
     setConfessionModalOpen(false);
     let mediaUrl = null; let mediaType = null;
     
@@ -721,7 +864,11 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
     }
     
     const senderName = anon ? 'Anonymous' : (profile?.is_admin ? ADMIN_DISPLAY_NAME : (profile?.username || 'Anonymous'));
-    const { error } = await supabase.from('group_messages').insert({ group_id: group.id, user_id: session.user.id, sender_name: senderName, text: confessionText, is_anon: anon, is_confession: true, media_url: mediaUrl, media_type: mediaType });
+    // Only the preset ids are stored — the shape+background is rendered on
+    // demand, inline in the bubble, by ConfessionBubble.jsx (see
+    // generateConfessionCardImage in storyImageGenerator.js). Only applies
+    // when there's text (nothing to render a shape around otherwise).
+    const { error } = await supabase.from('group_messages').insert({ group_id: group.id, user_id: session.user.id, sender_name: senderName, text: confessionText, is_anon: anon, is_confession: true, media_url: mediaUrl, media_type: mediaType, story_style: storyStyle && confessionText ? storyStyle : null });
     if (error) showToast(friendlyDbError(), 'error');
   }
 
@@ -927,7 +1074,7 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
                   {isConfession ? (
                      <div id={`msg-${message.id}`} className={isHighlighted ? 'highlight-flash' : ''} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: '100%', margin: '16px 0' }}>
                        <div style={{ width: '100%', maxWidth: 440, background: isSelected ? 'rgba(255,107,53, 0.15)' : 'transparent', borderRadius: 16 }}>
-                         <ConfessionBubble confession={{ id: message.confession_id || message.id, text: message.text, photo_url: message.media_url, media_type: message.media_type, is_anon: message.is_anon, created_at: message.created_at }} onReply={() => { if (selectedMessages.length === 0) startReply(message); }} onPhotoClick={(c) => setViewerMedia({ url: c.photo_url || c.media_url, type: c.media_type || 'image' })} userId={ownUserId} size="inline" />
+                         <ConfessionBubble confession={{ id: message.confession_id || message.id, text: message.text, photo_url: message.media_url, media_type: message.media_type, is_anon: message.is_anon, created_at: message.created_at, story_style: message.story_style }} onReply={() => { if (selectedMessages.length === 0) startReply(message); }} onPhotoClick={(c) => setViewerMedia({ url: c.photo_url || c.media_url, type: c.media_type || 'image' })} userId={ownUserId} size="inline" />
                          
                          <div style={{ marginTop: 8, display: 'flex', justifyContent: 'center', width: '100%' }}>
                            <ReactionBar 
