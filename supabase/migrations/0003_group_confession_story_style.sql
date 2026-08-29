@@ -31,7 +31,14 @@ begin
   ) values (
     new.group_id,
     new.id,
-    case when new.is_anon then null else new.sender_id end,
+    -- Bug fix: group_messages' "who sent this" column is user_id, not
+    -- sender_id (that's dm_messages' column — see notify_on_relevant_insert
+    -- in 0001, which already branches on this per-table). The original
+    -- 0001 version of this function referenced new.sender_id, which doesn't
+    -- exist on group_messages and made every group-confession insert fail
+    -- with "record 'new' has no field 'sender_id'" as soon as this trigger
+    -- actually ran.
+    case when new.is_anon then null else new.user_id end,
     new.is_anon,
     new.text,
     new.media_url,
