@@ -1,0 +1,359 @@
+/**
+ * ============================================================================
+ * ANONROOM - MOTION SPEC (EVERY KEYFRAME + TRIGGER CLASS)
+ * ============================================================================
+ * Imported exactly once, from src/main.jsx. This file is the single owner
+ * of every @keyframes rule and animation-driving class in the app —
+ * components never define inline @keyframes or reach for a JS animation
+ * library; they only toggle classNames or mount/unmount elements, and the
+ * physics live here. Pairs with src/styles/tokens.css, which owns color /
+ * glass-material / radii.
+ *
+ * All classes are parameterless in the sense that no build step or mixin
+ * argument is needed — a few (.fab-radial-item, .toggle-knob-droplet) read
+ * a per-instance CSS custom property (e.g. --i, --knob-travel) that the
+ * component sets inline, matching the pattern the spec itself calls out
+ * for .fab-radial-item's --i stagger.
+ *
+ * WHERE EACH CLASS IS EXPECTED TO BE USED (so later prompts don't have to
+ * guess a name):
+ *   .chat-row                    → Home.jsx sidebar rows (group/DM list items)
+ *   .digit-roll                  → Home.jsx unread-count badges, any live counter
+ *   .avatar-status-pulse         → LiquidAvatar / ProfileCard.jsx presence ring
+ *   .send-btn-tap                → GroupChat.jsx / DirectMessages.jsx composer send button
+ *   .send-btn-success-morph      → GroupChat.jsx / DirectMessages.jsx send button icon swap (send → sent)
+ *   .bubble-enter                → GroupChat.jsx / DirectMessages.jsx incoming message bubbles
+ *   .bubble-enter-outgoing       → GroupChat.jsx / DirectMessages.jsx outgoing (own) message bubbles
+ *   .typing-dot                  → GroupChat.jsx / DirectMessages.jsx "typing…" indicator (3 dot spans)
+ *   .tab-icon-switch             → Home.jsx bottom/side tab bar icon on selection change
+ *   .tab-indicator-dot           → Home.jsx tab bar active-tab dot
+ *   .fab-tap                     → ConfessionsFeed.jsx FAB button press
+ *   .fab-radial-item             → ConfessionsFeed.jsx FAB radial menu items
+ *   .pull-refresh-droplet        → Home.jsx pull-to-refresh spinner/droplet
+ *   .sheet-enter / .sheet-exit   → AuthModal.jsx, EditProfile.jsx, ProfileCard.jsx and any bottom sheet/modal
+ *   .backdrop-fade                → same modals — the dimming overlay behind a sheet
+ *   .toggle-knob-droplet         → future NotificationSettings component's toggle switches
+ * ============================================================================
+ */
+
+/* ----------------------------------------------------------------------------
+ * .chat-row — press states
+ * Press-down and release use different transition speeds/easings, so this
+ * is transition-driven off :active rather than a keyframe: the transition
+ * actually applied on a state change is the one declared on the state being
+ * entered, which gives press (100ms ease-out) and release (220ms spring)
+ * their distinct timings for free with zero JS.
+ * --------------------------------------------------------------------------*/
+.chat-row {
+  transform: scale(1);
+  background-color: rgba(255, 255, 255, 0);
+  transition: transform 220ms cubic-bezier(0.34, 1.56, 0.64, 1),
+              background-color 220ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+.chat-row:active {
+  transform: scale(0.98);
+  background-color: rgba(255, 255, 255, 0.10);
+  transition: transform 100ms ease-out, background-color 100ms ease-out;
+}
+
+/* ----------------------------------------------------------------------------
+ * .digit-roll — old digit slides up+out while a new one slides in from below
+ * Structure: <span class="digit-roll"><span>oldDigit</span><span key=...>
+ * newDigit</span></span> — JS appends the new digit as the last child (e.g.
+ * on a React key change). Any non-last child plays the out animation, the
+ * last child plays the in animation; the component removes stale children
+ * once their animation ends.
+ * --------------------------------------------------------------------------*/
+.digit-roll {
+  position: relative;
+  display: inline-block;
+  overflow: hidden;
+  height: 1em;
+  line-height: 1;
+  vertical-align: bottom;
+}
+
+.digit-roll > * {
+  display: block;
+}
+
+.digit-roll > *:not(:last-child) {
+  position: absolute;
+  inset: 0;
+  animation: digit-roll-out 120ms ease-out forwards;
+}
+
+.digit-roll > *:last-child {
+  animation: digit-roll-in 120ms ease-out forwards;
+}
+
+@keyframes digit-roll-out {
+  from { transform: translateY(0); opacity: 1; }
+  to { transform: translateY(-100%); opacity: 0; }
+}
+
+@keyframes digit-roll-in {
+  from { transform: translateY(100%); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+/* ----------------------------------------------------------------------------
+ * .avatar-status-pulse — single-execution scale + ring pulse
+ * Default iteration-count is 1, so this never loops on its own; the caller
+ * adds the class on the triggering event and removes it once
+ * `animationend` fires (or on next render) so it can be re-added later.
+ * Needs a positioned ancestor for the ::after ring — this class supplies
+ * position: relative itself so callers don't have to remember to.
+ * --------------------------------------------------------------------------*/
+.avatar-status-pulse {
+  position: relative;
+  animation: avatar-status-pulse-scale 400ms ease-out;
+}
+
+.avatar-status-pulse::after {
+  content: '';
+  position: absolute;
+  inset: -3px;
+  border-radius: var(--radius-round, 50%);
+  border: 2px solid var(--signal);
+  pointer-events: none;
+  animation: avatar-status-pulse-ring 400ms ease-out;
+}
+
+@keyframes avatar-status-pulse-scale {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.08); }
+  100% { transform: scale(1); }
+}
+
+@keyframes avatar-status-pulse-ring {
+  0% { opacity: 1; }
+  50% { opacity: 0.4; }
+  100% { opacity: 1; }
+}
+
+/* ----------------------------------------------------------------------------
+ * .send-btn-tap — compress then spring overshoot, 260ms total
+ * Per-keyframe animation-timing-function gives the compress phase its own
+ * ease-in feel before the spring curve takes over for the overshoot/settle.
+ * --------------------------------------------------------------------------*/
+@keyframes send-btn-tap {
+  0% { transform: scale(1); animation-timing-function: ease-in; }
+  35% { transform: scale(0.9); animation-timing-function: cubic-bezier(0.34, 1.56, 0.64, 1); } /* ~90ms of 260ms */
+  70% { transform: scale(1.05); }
+  100% { transform: scale(1); }
+}
+
+.send-btn-tap {
+  animation: send-btn-tap 260ms;
+}
+
+/* ----------------------------------------------------------------------------
+ * .send-btn-success-morph — icon crossfade helper
+ * Applied to the incoming (success) icon as it mounts in place of the
+ * outgoing send icon; JS swaps which icon is rendered, this just fades the
+ * new one in over 150ms.
+ * --------------------------------------------------------------------------*/
+@keyframes send-btn-success-morph {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.send-btn-success-morph {
+  animation: send-btn-success-morph 150ms ease-out;
+}
+
+/* ----------------------------------------------------------------------------
+ * .bubble-enter / .bubble-enter-outgoing — message bubble entrances
+ * Outgoing adds a scale grow whose transform-origin is the right edge, to
+ * read as originating from the composer/send button on the right.
+ * --------------------------------------------------------------------------*/
+@keyframes bubble-enter {
+  from { transform: translateY(8px); opacity: 0; }
+  to { transform: translateY(0); opacity: 1; }
+}
+
+.bubble-enter {
+  animation: bubble-enter 200ms ease-out;
+}
+
+@keyframes bubble-enter-outgoing {
+  from { transform: translateY(8px) scale(0.95); opacity: 0; }
+  to { transform: translateY(0) scale(1); opacity: 1; }
+}
+
+.bubble-enter-outgoing {
+  transform-origin: right center;
+  animation: bubble-enter-outgoing 200ms ease-out;
+}
+
+/* ----------------------------------------------------------------------------
+ * .typing-dot — the one intentionally looping animation
+ * Apply to each of the three dot spans; nth-child order gives the stagger.
+ * --------------------------------------------------------------------------*/
+@keyframes typing-dot {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.4); }
+}
+
+.typing-dot {
+  animation: typing-dot 900ms ease-in-out infinite;
+}
+
+.typing-dot:nth-child(1) { animation-delay: 0ms; }
+.typing-dot:nth-child(2) { animation-delay: 150ms; }
+.typing-dot:nth-child(3) { animation-delay: 300ms; }
+
+/* ----------------------------------------------------------------------------
+ * .tab-icon-switch / .tab-indicator-dot
+ * --------------------------------------------------------------------------*/
+@keyframes tab-icon-switch {
+  0% { transform: scale(1); }
+  50% { transform: scale(1.15); }
+  100% { transform: scale(1); }
+}
+
+.tab-icon-switch {
+  animation: tab-icon-switch 200ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+
+@keyframes tab-indicator-dot {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.tab-indicator-dot {
+  animation: tab-indicator-dot 120ms ease-out;
+}
+
+/* ----------------------------------------------------------------------------
+ * .fab-tap — compress then spring overshoot, 240ms total
+ * --------------------------------------------------------------------------*/
+@keyframes fab-tap {
+  0% { transform: scale(1); animation-timing-function: ease-in; }
+  42% { transform: scale(0.88); animation-timing-function: cubic-bezier(0.34, 1.56, 0.64, 1); } /* ~100ms of 240ms */
+  75% { transform: scale(1.08); }
+  100% { transform: scale(1); }
+}
+
+.fab-tap {
+  animation: fab-tap 240ms;
+}
+
+/* ----------------------------------------------------------------------------
+ * .fab-radial-item — staggered radial menu items
+ * The component sets --i (0, 1, 2…) per item for the delay stagger, plus
+ * --tx / --ty (the item's target x/y offset at its resting radial position,
+ * e.g. `--tx: 40px; --ty: -60px;`) since that geometry is inherently
+ * per-item/per-layout and isn't given a fixed value in the spec — this
+ * class only owns the timing/easing of the translate-out + fade-in, not
+ * the destination itself.
+ * --------------------------------------------------------------------------*/
+@keyframes fab-radial-item {
+  from { transform: translate(0, 0); opacity: 0; }
+  to { transform: translate(var(--tx, 0px), var(--ty, 0px)); opacity: 1; }
+}
+
+.fab-radial-item {
+  animation: fab-radial-item 180ms ease-out both;
+  animation-delay: calc(var(--i, 0) * 40ms);
+}
+
+/* ----------------------------------------------------------------------------
+ * .pull-refresh-droplet — two-phase: oscillate (looped 2x, 600ms total),
+ * then collapse (200ms ease-in). The oscillation keyframe is 300ms with
+ * iteration-count 2 to hit the required 600ms/"twice" spec exactly. The
+ * collapse is a separate modifier class the component adds once the
+ * refresh resolves, replacing the oscillation.
+ * --------------------------------------------------------------------------*/
+@keyframes pull-refresh-droplet-oscillate {
+  0% { transform: scaleY(1); }
+  25% { transform: scaleY(0.9); }
+  75% { transform: scaleY(1.1); }
+  100% { transform: scaleY(1); }
+}
+
+.pull-refresh-droplet {
+  transform-origin: top center;
+  animation: pull-refresh-droplet-oscillate 300ms ease-in-out 2;
+}
+
+@keyframes pull-refresh-droplet-collapse {
+  from { transform: scaleY(1); opacity: 1; }
+  to { transform: scaleY(0); opacity: 0; }
+}
+
+.pull-refresh-droplet-collapse {
+  transform-origin: top center;
+  animation: pull-refresh-droplet-collapse 200ms ease-in forwards;
+}
+
+/* ----------------------------------------------------------------------------
+ * .sheet-enter / .sheet-exit / .backdrop-fade — bottom sheets & their scrim
+ * .backdrop-fade's resting state is invisible; the component adds
+ * .is-visible to fade the scrim in and removes it to fade back out. A
+ * modifier was necessary to express "opacity 0↔0.5" as one reusable class
+ * (the spec names only .backdrop-fade, so .is-visible is the minimal
+ * addition needed to make it bidirectional via plain classNames toggling).
+ * --------------------------------------------------------------------------*/
+@keyframes sheet-enter {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+
+@keyframes sheet-exit {
+  from { transform: translateY(0); }
+  to { transform: translateY(100%); }
+}
+
+.sheet-enter {
+  animation: sheet-enter 280ms cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+.sheet-exit {
+  animation: sheet-exit 280ms cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+.backdrop-fade {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 280ms ease;
+}
+
+.backdrop-fade.is-visible {
+  opacity: 0.5;
+  pointer-events: auto;
+}
+
+/* ----------------------------------------------------------------------------
+ * .toggle-knob-droplet — spring slide with a mid-slide squash
+ * The component sets --knob-travel (the on-state x offset, e.g. the track
+ * width minus the knob width/padding) since that distance is inherently
+ * instance-specific. Add .is-off to play the same motion in reverse when
+ * switching back off, rather than duplicating the keyframe.
+ * --------------------------------------------------------------------------*/
+@keyframes toggle-knob-droplet {
+  0% { transform: translateX(0) scaleX(1); }
+  40% { transform: translateX(calc(var(--knob-travel, 20px) * 0.6)) scaleX(0.85); }
+  100% { transform: translateX(var(--knob-travel, 20px)) scaleX(1); }
+}
+
+.toggle-knob-droplet {
+  animation: toggle-knob-droplet 220ms cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+
+.toggle-knob-droplet.is-off {
+  animation-direction: reverse;
+}
+
+/* ----------------------------------------------------------------------------
+ * .hide-scrollbar — used by StoriesBar.jsx so the horizontally-scrolling
+ * story tray behaves like Instagram's: scrollable, but no visible scrollbar.
+ * -------------------------------------------------------------------------- */
+.hide-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.hide-scrollbar {
+  -ms-overflow-style: none; /* IE/Edge */
+}
