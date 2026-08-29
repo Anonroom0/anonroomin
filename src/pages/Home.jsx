@@ -273,7 +273,15 @@ export default function Home() {
   // static 100dvh height and a nested page's own JS-driven height could
   // each resize a frame apart. QuestionThread/GroupChat/DirectMessages all
   // just fill this wrapper via height:'100%'.
-  const viewportHeight = useViewportHeight();
+  //
+  // `offsetTop` is the other half of the fix: on browsers that pan the
+  // visual viewport down (instead of just shrinking it) when the keyboard
+  // opens, the `.app-viewport` root below — which is `position: fixed`,
+  // anchored to the layout viewport — visually slides up out of the
+  // visible area by that same amount, leaving a gap of dead space above
+  // the keyboard. Compensating with a translateY on that root keeps it
+  // pinned to whatever's actually visible. See useViewportHeight.js.
+  const { height: viewportHeight, offsetTop: viewportOffsetTop } = useViewportHeight();
   const rightPanelHeight = viewportHeight ? `${viewportHeight}px` : '100dvh';
 
   const [activeChatId, setActiveChatId] = useState(null); 
@@ -511,6 +519,7 @@ const [sharingReply, setSharingReply] = useState(null); // NEW — { question, r
         style={{ 
           display: 'flex', width: '100vw', height: '100dvh', maxHeight: '100dvh',
           overflow: 'hidden', position: 'fixed', inset: 0,
+          transform: viewportOffsetTop ? `translateY(${viewportOffsetTop}px)` : undefined,
           userSelect: 'none', WebkitUserSelect: 'none', msUserSelect: 'none'
         }}
       >

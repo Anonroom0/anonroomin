@@ -79,6 +79,19 @@
   which is what caused the "blank page, content stuck to the top" bug.
   Locking height + overflow here also stops the whole-page rubber-band
   scroll that was leaking out from inner scroll containers.
+
+  body is also pinned with position:fixed + inset:0 (not just
+  overflow:hidden) because those are two different problems. overflow:
+  hidden stops the BODY BOX from scrolling its own overflowing content —
+  it does nothing about iOS Safari's separate, browser-chrome-level
+  "scroll the focused input into view" behavior, which can still nudge
+  the whole page's on-screen position when a text input inside it is
+  focused, keyboard or not, regardless of what overflow says. A
+  position:fixed body has no scroll position for that behavior to move in
+  the first place, which is what actually stops it — this is what was
+  behind an on-screen keyboard still leaving a sliver of the page
+  scrollable past a bottom input bar (e.g. QuestionThread.jsx's reply
+  composer) even though every ancestor already had overflow:hidden.
 */
 html {
   height: 100%;
@@ -90,6 +103,8 @@ html {
 }
 
 body {
+  position: fixed;
+  inset: 0;
   margin: 0;
   padding: 0;
   height: 100%;

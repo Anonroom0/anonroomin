@@ -1,5 +1,5 @@
 /** ===========================================================================
- * SHARE STORY SHEET (v5)
+ * SHARE STORY SHEET (v6)
  * ============================================================================
  * <ShareStorySheet open onClose mode question reply /> — a GlassPanel sheet
  * that turns either a question ('mode="question"', the original behavior)
@@ -7,19 +7,20 @@
  * QuestionThread.jsx's per-bubble share button) into a shareable 1080x1920
  * story image.
  *
- * v5 splits the controls again, based on direct feedback on v4:
- *   - Background and Shape are back to being inline, horizontally
- *     scrollable strips directly under the preview (tap — or scroll to —
- *     a thumbnail and it applies immediately), instead of opening a modal.
- *   - Colour is its own control now (previously baked into each v4
- *     "Theme"), shown as a single circular swatch of the current color;
- *     tapping it opens a color-wheel picker — every ACCENT_COLORS entry
- *     arranged in a literal circle — instead of a grid. Any Background can
- *     pair with any Colour; storyImageGenerator.js's buildThemeRuntime
- *     derives both the badge color and the background's actual fill/accent
- *     from that one picked color, so there's no way to land on a clashing
- *     pair even though the two are picked independently.
- *   - Size stays the compact dropdown v4 introduced.
+ * v6 changes, on top of v5:
+ *   - Every style pick (Background, Colour, Shape, Size) starts from a
+ *     random preset each time the sheet opens, instead of always landing
+ *     on the first item in each list.
+ *   - A "Random" button in the header reshuffles all four at any time.
+ *   - Background and Shape are no longer tap-to-select strips with a
+ *     moving highlight border. They're centre-locked scroll wheels: a
+ *     fixed highlight window sits in the middle of the strip and never
+ *     moves, and scrolling brings a different item to rest under it,
+ *     picker-wheel style. Tapping an item still scrolls it to centre as
+ *     a shortcut, but the selection itself is driven by scroll position
+ *     (see useWheelCarousel below), not by clicks.
+ *   - Colour (colour wheel modal) and Size (dropdown) are unchanged from
+ *     v5.
  * Every pick still drives the same live canvas preview.
  *
  * `question` needs an `id` (for the reply link) plus its text/type fields.
@@ -64,9 +65,34 @@ function buildReplyUrl(questionId) {
   return `https://anonroom.in${buildQuestionPath(questionId)}`;
 }
 
+// ---------------------------------------------------------------------------
+// Random helpers — used both for the initial pick when the sheet opens and
+// for the Random button. Excludes the current id where possible so hitting
+// Random always visibly changes something.
+// ---------------------------------------------------------------------------
+function randomId(list, excludeId) {
+  if (!list || list.length === 0) return undefined;
+  if (list.length === 1) return list[0].id;
+  let pick;
+  do {
+    pick = list[Math.floor(Math.random() * list.length)].id;
+  } while (pick === excludeId);
+  return pick;
+}
+
 const ChevronIcon = () => (
   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="var(--dim)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
     <polyline points="9 18 15 12 9 6" />
+  </svg>
+);
+
+const ShuffleIcon = () => (
+  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round">
+    <polyline points="16 3 21 3 21 8" />
+    <line x1="4" y1="20" x2="21" y2="3" />
+    <polyline points="21 16 21 21 16 21" />
+    <line x1="15" y1="15" x2="21" y2="21" />
+    <line x1="4" y1="4" x2="9" y2="9" />
   </svg>
 );
 
@@ -124,49 +150,188 @@ function structureSwatchStyle(bg) {
   }
 }
 
+// ---------------------------------------------------------------------------
+// useWheelCarousel — shared engine behind Background & Shape.
+//
+// The highlight "window" is a fixed overlay centred over the strip; it
+// never moves. What moves is the strip itself: scroll-snap brings whichever
+// item is nearest to centre to rest exactly under the window. Selection
+// commits (calls onChange) only once scrolling settles, after a short
+// debounce, so flicking through doesn't fire onChange on every frame.
+//
+// `liveIndex` updates continuously (via rAF) purely for visual feedback
+// (scale/opacity) while the user is still scrolling, so the wheel feels
+// alive before the selection actually commits.
+//
+// When `selectedId` changes from outside (mount with a random pick, or the
+// Random button), the strip animates so that item slides under the fixed
+// window — again, the window itself stays put.
+// ---------------------------------------------------------------------------
+function useWheelCarousel({ items, selectedId, onChange, itemWidth }) {
+  const containerRef = useRef(null);
+  const [containerWidth, setContainerWidth] = useState(0);
+  const [liveIndex, setLiveIndex] = useState(() => Math.max(0, items.findIndex((it) => it.id === selectedId)));
+  const settleTimeoutRef = useRef(null);
+  const rafRef = useRef(null);
+  const programmaticRef = useRef(false);
+
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return undefined;
+    const measure = () => setContainerWidth(el.clientWidth);
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, []);
+
+  function scrollToIndex(idx, behavior = 'smooth') {
+    const el = containerRef.current;
+    if (!el) return;
+    programmaticRef.current = true;
+    el.scrollTo({ left: idx * itemWidth, behavior });
+    setLiveIndex(idx);
+    window.clearTimeout(settleTimeoutRef.current);
+    settleTimeoutRef.current = window.setTimeout(() => {
+      programmaticRef.current = false;
+    }, 400);
+  }
+
+  useEffect(() => {
+    if (containerWidth === 0) return;
+    const el = containerRef.current;
+    if (!el) return;
+    const idx = Math.max(0, items.findIndex((it) => it.id === selectedId));
+    const target = idx * itemWidth;
+    if (Math.abs(el.scrollLeft - target) > 1) {
+      scrollToIndex(idx, el.scrollLeft === 0 ? 'auto' : 'smooth');
+    } else {
+      setLiveIndex(idx);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [selectedId, containerWidth]);
+
+  function handleScroll() {
+    const el = containerRef.current;
+    if (!el) return;
+
+    if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    rafRef.current = requestAnimationFrame(() => {
+      const idx = Math.max(0, Math.min(items.length - 1, Math.round(el.scrollLeft / itemWidth)));
+      setLiveIndex(idx);
+    });
+
+    if (programmaticRef.current) return;
+    window.clearTimeout(settleTimeoutRef.current);
+    settleTimeoutRef.current = window.setTimeout(() => {
+      const idx = Math.max(0, Math.min(items.length - 1, Math.round(el.scrollLeft / itemWidth)));
+      const item = items[idx];
+      el.scrollTo({ left: idx * itemWidth, behavior: 'smooth' });
+      if (item && item.id !== selectedId) {
+        hapticSelect();
+        playTap();
+        onChange(item.id);
+      }
+    }, 130);
+  }
+
+  const sidePadding = containerWidth > 0 ? Math.max(0, (containerWidth - itemWidth) / 2) : 0;
+
+  return { containerRef, sidePadding, handleScroll, scrollToIndex, liveIndex };
+}
+
 function BackgroundCarousel({ selectedId, onChange }) {
+  const ITEM_WIDTH = 74;
+  const { containerRef, sidePadding, handleScroll, scrollToIndex, liveIndex } = useWheelCarousel({
+    items: BACKGROUND_STRUCTURES,
+    selectedId,
+    onChange,
+    itemWidth: ITEM_WIDTH,
+  });
   const current = getPresetById(BACKGROUND_STRUCTURES, selectedId);
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
       <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
         <span style={{ fontSize: 13, fontWeight: 800, color: 'var(--dim)' }}>Background</span>
         <span style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--paper)' }}>{current.name}</span>
       </div>
-      <div className="custom-scrollbar" style={{ display: 'flex', gap: 10, overflowX: 'auto', padding: '4px 2px 8px', WebkitOverflowScrolling: 'touch' }}>
-        {BACKGROUND_STRUCTURES.map((bg) => {
-          const selected = bg.id === selectedId;
-          return (
-            <button
-              key={bg.id}
-              type="button"
-              aria-pressed={selected}
-              onClick={() => { if (!selected) { hapticSelect(); playTap(); onChange(bg.id); } }}
-              style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, flexShrink: 0, border: 'none', background: 'transparent', padding: 0, cursor: 'pointer' }}
-            >
-              <div
+      <div style={{ position: 'relative' }}>
+        {/* Fixed centre window — never moves. The strip scrolls under it. */}
+        <div
+          aria-hidden="true"
+          style={{
+            position: 'absolute',
+            left: '50%',
+            top: 4,
+            transform: 'translateX(-50%)',
+            width: 58,
+            height: 58,
+            borderRadius: 16,
+            border: '3px solid var(--ember)',
+            boxShadow: '0 0 0 2px rgba(255,107,53,0.25)',
+            pointerEvents: 'none',
+            zIndex: 2,
+          }}
+        />
+        <div
+          ref={containerRef}
+          onScroll={handleScroll}
+          className="custom-scrollbar"
+          style={{
+            display: 'flex',
+            overflowX: 'auto',
+            scrollSnapType: 'x mandatory',
+            padding: `4px ${sidePadding}px 8px`,
+            WebkitOverflowScrolling: 'touch',
+          }}
+        >
+          {BACKGROUND_STRUCTURES.map((bg, i) => {
+            const centered = i === liveIndex;
+            return (
+              <button
+                key={bg.id}
+                type="button"
+                aria-pressed={centered}
+                onClick={() => scrollToIndex(i)}
                 style={{
-                  width: 52,
-                  height: 52,
-                  borderRadius: 14,
-                  border: selected ? '3px solid var(--ember)' : '1px solid var(--glass-border)',
-                  boxShadow: selected ? '0 0 0 2px rgba(255,107,53,0.25)' : 'none',
-                  transform: selected ? 'scale(1.06)' : 'scale(1)',
-                  transition: 'transform 120ms ease',
-                  ...structureSwatchStyle(bg),
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  gap: 6,
+                  flexShrink: 0,
+                  width: ITEM_WIDTH,
+                  border: 'none',
+                  background: 'transparent',
+                  padding: 0,
+                  cursor: 'pointer',
+                  scrollSnapAlign: 'center',
                 }}
-              />
-              <span style={{ fontSize: 9.5, fontWeight: 700, color: selected ? 'var(--paper)' : 'var(--dim)', textAlign: 'center', lineHeight: 1.15 }}>{bg.name}</span>
-            </button>
-          );
-        })}
+              >
+                <div
+                  style={{
+                    width: 52,
+                    height: 52,
+                    borderRadius: 14,
+                    opacity: centered ? 1 : 0.4,
+                    transform: centered ? 'scale(1)' : 'scale(0.84)',
+                    transition: 'transform 150ms ease, opacity 150ms ease',
+                    ...structureSwatchStyle(bg),
+                  }}
+                />
+                <span style={{ fontSize: 9.5, fontWeight: 700, color: centered ? 'var(--paper)' : 'var(--dim)', textAlign: 'center', lineHeight: 1.15 }}>{bg.name}</span>
+              </button>
+            );
+          })}
+        </div>
       </div>
     </div>
   );
 }
 
 // ---------------------------------------------------------------------------
-// Shape carousel — same cheap CSS-approximation swatch used before, still
-// scoped to a single card thumbnail rather than a full canvas render.
+// Shape carousel — same cheap CSS-approximation swatch used before, now on
+// the same centre-locked wheel as Background.
 // ---------------------------------------------------------------------------
 function shapeSwatchCardStyle(shape) {
   const base = { borderRadius: Math.min(20, shape.radius / 2.4) };
@@ -221,31 +386,88 @@ function ShapePreviewGlyph({ shape, scale, size = 68 }) {
 }
 
 function ShapeCarousel({ selectedId, onChange, scale }) {
+  const ITEM_WIDTH = 84;
+  const { containerRef, sidePadding, handleScroll, scrollToIndex, liveIndex } = useWheelCarousel({
+    items: BODY_SHAPES,
+    selectedId,
+    onChange,
+    itemWidth: ITEM_WIDTH,
+  });
   const current = getPresetById(BODY_SHAPES, selectedId);
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
       <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between' }}>
         <span style={{ fontSize: 13, fontWeight: 800, color: 'var(--dim)' }}>Shape</span>
         <span style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--paper)' }}>{current.name}</span>
       </div>
-      <div className="custom-scrollbar" style={{ display: 'flex', gap: 10, overflowX: 'auto', padding: '4px 2px 8px', WebkitOverflowScrolling: 'touch' }}>
-        {BODY_SHAPES.map((shape) => {
-          const selected = shape.id === selectedId;
-          return (
-            <button
-              key={shape.id}
-              type="button"
-              aria-pressed={selected}
-              onClick={() => { if (!selected) { hapticSelect(); playTap(); onChange(shape.id); } }}
-              style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, flexShrink: 0, border: 'none', background: 'transparent', padding: 0, cursor: 'pointer' }}
-            >
-              <div style={{ outline: selected ? '2.5px solid var(--ember)' : 'none', outlineOffset: 2, transform: selected ? 'scale(1.05)' : 'scale(1)', transition: 'transform 120ms ease', borderRadius: Math.min(20, shape.radius / 2.4) }}>
-                <ShapePreviewGlyph shape={shape} scale={scale} size={64} />
-              </div>
-              <span style={{ fontSize: 9.5, fontWeight: 700, color: selected ? 'var(--paper)' : 'var(--dim)', textAlign: 'center', lineHeight: 1.15 }}>{shape.name}</span>
-            </button>
-          );
-        })}
+      <div style={{ position: 'relative' }}>
+        {/* Fixed centre window — never moves. The strip scrolls under it. */}
+        <div
+          aria-hidden="true"
+          style={{
+            position: 'absolute',
+            left: '50%',
+            top: 4,
+            transform: 'translateX(-50%)',
+            width: 70,
+            height: 70,
+            borderRadius: 18,
+            border: '2.5px solid var(--ember)',
+            boxShadow: '0 0 8px rgba(255,107,53,0.4)',
+            pointerEvents: 'none',
+            zIndex: 2,
+          }}
+        />
+        <div
+          ref={containerRef}
+          onScroll={handleScroll}
+          className="custom-scrollbar"
+          style={{
+            display: 'flex',
+            overflowX: 'auto',
+            scrollSnapType: 'x mandatory',
+            padding: `4px ${sidePadding}px 8px`,
+            WebkitOverflowScrolling: 'touch',
+          }}
+        >
+          {BODY_SHAPES.map((shape, i) => {
+            const centered = i === liveIndex;
+            return (
+              <button
+                key={shape.id}
+                type="button"
+                aria-pressed={centered}
+                onClick={() => scrollToIndex(i)}
+                style={{
+                  display: 'flex',
+                  flexDirection: 'column',
+                  alignItems: 'center',
+                  gap: 6,
+                  flexShrink: 0,
+                  width: ITEM_WIDTH,
+                  border: 'none',
+                  background: 'transparent',
+                  padding: 0,
+                  cursor: 'pointer',
+                  scrollSnapAlign: 'center',
+                }}
+              >
+                <div
+                  style={{
+                    opacity: centered ? 1 : 0.4,
+                    transform: centered ? 'scale(1)' : 'scale(0.84)',
+                    transition: 'transform 150ms ease, opacity 150ms ease',
+                    borderRadius: Math.min(20, shape.radius / 2.4),
+                  }}
+                >
+                  <ShapePreviewGlyph shape={shape} scale={scale} size={64} />
+                </div>
+                <span style={{ fontSize: 9.5, fontWeight: 700, color: centered ? 'var(--paper)' : 'var(--dim)', textAlign: 'center', lineHeight: 1.15 }}>{shape.name}</span>
+              </button>
+            );
+          })}
+        </div>
       </div>
     </div>
   );
@@ -254,6 +476,7 @@ function ShapeCarousel({ selectedId, onChange, scale }) {
 // ---------------------------------------------------------------------------
 // Colour — a single circular swatch of the current pick; tapping opens a
 // color-wheel modal with every ACCENT_COLORS entry arranged in a circle.
+// Unchanged from v5.
 // ---------------------------------------------------------------------------
 function ColourField({ color, onOpen }) {
   return (
@@ -441,10 +664,13 @@ export default function ShareStorySheet({ open, onClose, mode = 'question', ques
 function ShareStorySheetContent({ mode, question, reply }) {
   const requestClose = useGlassPanelClose();
 
-  const [backgroundId, setBackgroundId] = useState(BACKGROUND_STRUCTURES[0].id);
-  const [colorId, setColorId] = useState(ACCENT_COLORS[0].id);
-  const [shapeId, setShapeId] = useState(BODY_SHAPES[0].id);
-  const [scaleId, setScaleId] = useState('bold');
+  // Every field starts from a random preset each time the sheet mounts
+  // (i.e. every time it's opened), rather than always defaulting to the
+  // first entry in each list.
+  const [backgroundId, setBackgroundId] = useState(() => randomId(BACKGROUND_STRUCTURES));
+  const [colorId, setColorId] = useState(() => randomId(ACCENT_COLORS));
+  const [shapeId, setShapeId] = useState(() => randomId(BODY_SHAPES));
+  const [scaleId, setScaleId] = useState(() => randomId(BODY_SCALES));
 
   const [colorPickerOpen, setColorPickerOpen] = useState(false);
 
@@ -509,6 +735,15 @@ function ShareStorySheetContent({ mode, question, reply }) {
     };
   }, []);
 
+  function handleRandomize() {
+    hapticImpact();
+    playTap();
+    setBackgroundId((prev) => randomId(BACKGROUND_STRUCTURES, prev));
+    setColorId((prev) => randomId(ACCENT_COLORS, prev));
+    setShapeId((prev) => randomId(BODY_SHAPES, prev));
+    setScaleId((prev) => randomId(BODY_SCALES, prev));
+  }
+
   async function handleShare() {
     if (!previewBlob || isSharing) return;
     setIsSharing(true);
@@ -547,13 +782,24 @@ function ShareStorySheetContent({ mode, question, reply }) {
     }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div style={{ fontSize: 20, fontWeight: 900, color: 'var(--paper)' }}>Share to Story</div>
-        <button
-          type="button"
-          onClick={() => { hapticTap(); setTutorialOpen(true); }}
-          style={{ fontSize: 13, fontWeight: 800, color: 'var(--ember)', background: 'transparent', border: 'none', padding: '6px 4px' }}
-        >
-          See tutorial
-        </button>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <button
+            type="button"
+            onClick={handleRandomize}
+            aria-label="Randomize style"
+            style={{ display: 'flex', alignItems: 'center', gap: 5, fontSize: 13, fontWeight: 800, color: 'var(--ember)', background: 'transparent', border: 'none', padding: '6px 4px' }}
+          >
+            <ShuffleIcon />
+            Random
+          </button>
+          <button
+            type="button"
+            onClick={() => { hapticTap(); setTutorialOpen(true); }}
+            style={{ fontSize: 13, fontWeight: 800, color: 'var(--ember)', background: 'transparent', border: 'none', padding: '6px 4px' }}
+          >
+            See tutorial
+          </button>
+        </div>
       </div>
 
       <div style={{ position: 'relative', width: '100%', maxWidth: 240, margin: '0 auto', flexShrink: 0 }}>
@@ -607,8 +853,9 @@ function ShareStorySheetContent({ mode, question, reply }) {
         </div>
       </div>
 
-      {/* Selection strips sit directly below the preview — scroll/tap a
-          thumbnail and it applies immediately, no modal for either. */}
+      {/* Selection strips sit directly below the preview — both are
+          centre-locked scroll wheels now: the highlight window is fixed,
+          the strip scrolls under it. */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 14, flexShrink: 0 }}>
         <BackgroundCarousel selectedId={backgroundId} onChange={setBackgroundId} />
         <ShapeCarousel selectedId={shapeId} onChange={setShapeId} scale={scale} />

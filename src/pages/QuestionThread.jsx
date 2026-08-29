@@ -383,6 +383,34 @@ export default function QuestionThread({ questionId, onBack, onShareReply }) {
 
   const scrollRef = useRef(null);
 
+  // The reply list is DOM-newest-first (replies fetched with
+  // ascending:false, new ones prepended — see the realtime INSERT handler
+  // below) rendered with flex-direction: column-reverse, so scrollTop 0
+  // means "pinned to the latest reply at the bottom" — the standard
+  // reversed-flex chat trick, needing no scroll-to-bottom JS on ordinary
+  // message arrival.
+  //
+  // That pin can go stale the moment the on-screen keyboard opens/closes,
+  // though: the visual viewport resizes (via useViewportHeight, up in
+  // Home.jsx's RIGHT PANEL) a frame or more after the keyboard animation
+  // starts, so scrollRef briefly keeps whatever scrollTop it had against
+  // the OLD, taller layout. Once the container repaints at its new,
+  // shorter height, that stale offset can leave a gap of blank space
+  // below the composer that's technically still "in scroll range" even
+  // though there's nothing there — which reads as "the page scrolls below
+  // the input bar." Re-pinning to scrollTop 0 right as the keyboard opens
+  // (and again on close) keeps the list glued to its latest-message
+  // position through the resize instead of leaving that stale gap.
+  useEffect(() => {
+    const vv = window.visualViewport;
+    if (!vv) return undefined;
+    function handleViewportResize() {
+      if (scrollRef.current) scrollRef.current.scrollTop = 0;
+    }
+    vv.addEventListener('resize', handleViewportResize);
+    return () => vv.removeEventListener('resize', handleViewportResize);
+  }, []);
+
   const isAuthor = !!(ownUserId && question?.author_id && ownUserId === question.author_id);
   const isPrivate = !!question?.is_private;
 
@@ -637,6 +665,7 @@ export default function QuestionThread({ questionId, onBack, onShareReply }) {
           minHeight: 0,
           overflowY: 'auto',
           overflowX: 'hidden',
+          overscrollBehavior: 'contain',
           display: 'flex',
           flexDirection: 'column-reverse',
           paddingTop: 8,
@@ -752,6 +781,7 @@ export default function QuestionThread({ questionId, onBack, onShareReply }) {
             data-form-type="other"
             value={replyText}
             onChange={(e) => setReplyText(e.target.value)}
+            onFocus={() => { if (scrollRef.current) scrollRef.current.scrollTop = 0; }}
             placeholder="Write an honest, anonymous response…"
             aria-label="Reply"
             disabled={sending}
