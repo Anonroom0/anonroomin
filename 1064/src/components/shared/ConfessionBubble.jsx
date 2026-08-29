@@ -193,55 +193,22 @@ export default function ConfessionBubble({ confession, onReply, onPhotoClick, si
             )}
           </div>
 
-          {showChrome && (onReply || mediaUrl) && (
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-start', gap: 18, padding: '10px 4px 0' }}>
-              {onReply && (
-                <button
-                  type="button"
-                  onClick={(e) => { e.stopPropagation(); onReply(confession); }}
-                  style={{ border: 'none', background: 'transparent', color: 'var(--dim)', fontSize: 13, fontWeight: 600, cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center', gap: 6 }}
-                >
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                    <polyline points="9 17 4 12 9 7" />
-                    <path d="M20 18v-2a4 4 0 0 0-4-4H4" />
-                  </svg>
-                  Reply
-                </button>
-              )}
-              {/* The generated styled card above only ever bakes in the
-                  confession's text — an attached photo/video is never part
-                  of that image (and was previously not reachable at all
-                  when a confession had both a custom style and media) — so
-                  this is the only way to actually see it. */}
-              {mediaUrl && (
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    if (onPhotoClick) {
-                      onPhotoClick({ ...confession, photo_url: mediaUrl, media_url: mediaUrl, media_type: mediaType });
-                    } else {
-                      setLocalMediaOpen(true);
-                    }
-                  }}
-                  style={{ border: 'none', background: 'transparent', color: 'var(--ember)', fontSize: 13, fontWeight: 700, cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center', gap: 6 }}
-                >
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
-                  </svg>
-                  View attachment
-                </button>
-              )}
+          {showChrome && onReply && (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-start', gap: 10, padding: '10px 4px 0' }}>
+              <button
+                type="button"
+                onClick={(e) => { e.stopPropagation(); onReply(confession); }}
+                style={{ border: 'none', background: 'transparent', color: 'var(--dim)', fontSize: 13, fontWeight: 600, cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center', gap: 6 }}
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <polyline points="9 17 4 12 9 7" />
+                  <path d="M20 18v-2a4 4 0 0 0-4-4H4" />
+                </svg>
+                Reply
+              </button>
             </div>
           )}
         </div>
-
-        <MediaViewer
-          mediaUrl={mediaUrl}
-          mediaType={isVideo ? 'video' : 'image'}
-          open={localMediaOpen}
-          onClose={() => setLocalMediaOpen(false)}
-        />
       </div>
     );
   }

@@ -187,7 +187,6 @@ function CustomizedConfessionCard({ confession }) {
       kind: 'reply',
       questionText: '',
       replyText: confession.text || '',
-      badgeLabel: 'CONFESSION',
       backgroundId: confession.story_style?.backgroundId,
       colorId: confession.story_style?.colorId,
       shapeId: confession.story_style?.shapeId,

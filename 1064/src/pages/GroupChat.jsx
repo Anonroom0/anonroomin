@@ -1326,21 +1326,7 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
                 <span style={{ fontSize: 13, fontWeight: 700, color: '#F4F3F0' }}>Replying to {replyingTo?.sender_name}</span>
                 <span style={{ fontSize: 13, color: '#8B8B96', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{generateReplySnippet(replyingTo)}</span>
               </div>
-              {/* Opposite side from the reply icon/border — only shown when
-                  the message being replied to actually has an attachment,
-                  so the sender can preview it without hunting for it
-                  further up the chat. */}
-              {replyingTo?.media_url && (
-                <button
-                  type="button"
-                  onClick={() => setViewerMedia({ url: replyingTo.media_url, type: replyingTo.media_type })}
-                  style={{ border: 'none', background: 'rgba(255,255,255,0.06)', display: 'flex', alignItems: 'center', gap: 6, padding: '6px 12px', borderRadius: 999, color: '#F4F3F0', fontSize: 12.5, fontWeight: 700, cursor: 'pointer', flexShrink: 0 }}
-                >
-                  <span style={{ display: 'flex', width: 14, height: 14 }}>{Vectors.Attach}</span>
-                  View attachment
-                </button>
-              )}
-              <button onClick={() => setReplyingTo(null)} style={{ border: 'none', background: 'rgba(255,255,255,0.06)', width: 28, height: 28, borderRadius: '50%', color: '#F4F3F0', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{Vectors.Close}</button>
+              <button onClick={() => setReplyingTo(null)} style={{ border: 'none', background: 'rgba(255,255,255,0.06)', width: 28, height: 28, borderRadius: '50%', color: '#F4F3F0', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{Vectors.Close}</button>
             </div>
 
             <form onSubmit={handleSend} autoComplete="off-nope" data-form-type="other" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px', background: '#1C1D24', borderTop: replyingTo ? 'none' : '1px solid rgba(255,255,255,0.06)', position: 'relative', zIndex: 20 }}>

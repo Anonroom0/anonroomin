@@ -169,40 +169,10 @@ function roundedRectPath(ctx, x, y, width, height, radius) {
 }
 
 function wrapText(ctx, text, maxWidth) {
-  // Newlines are treated as ordinary whitespace here (same as a space) —
-  // \s+ already swallows them, so a literal newline the user typed never
-  // forces its own line break; where lines actually break is decided
-  // purely by available width, same as every other word.
   const words = (text || '').split(/\s+/).filter(Boolean);
   const lines = [];
   let current = '';
   for (const word of words) {
-    // A single "word" with no whitespace in it at all (a long wallet
-    // address, URL, or hash) can still be wider than maxWidth on its own —
-    // wrapping only ever happened *between* words before, so a token like
-    // this just overflowed straight past the card's edge instead of
-    // wrapping. Break it into maxWidth-sized chunks by character instead,
-    // the same way a text editor would, so it always stays inside the
-    // card no matter how long it is.
-    if (ctx.measureText(word).width > maxWidth) {
-      if (current) {
-        lines.push(current);
-        current = '';
-      }
-      let chunk = '';
-      for (const ch of word) {
-        const candidateChunk = chunk + ch;
-        if (ctx.measureText(candidateChunk).width > maxWidth && chunk) {
-          lines.push(chunk);
-          chunk = ch;
-        } else {
-          chunk = candidateChunk;
-        }
-      }
-      current = chunk;
-      continue;
-    }
-
     const candidate = current ? `${current} ${word}` : word;
     if (ctx.measureText(candidate).width > maxWidth && current) {
       lines.push(current);
@@ -1062,7 +1032,7 @@ function drawQuestionSlide(ctx, { questionText, questionType, headerPreset, body
 // ---------------------------------------------------------------------------
 // Layout — 'reply' kind (share-an-answer-you-received card)
 // ---------------------------------------------------------------------------
-function drawReplySlide(ctx, { questionText, replyText, headerPreset, bodyPreset, tokens, badgeLabel = 'REPLY' }) {
+function drawReplySlide(ctx, { questionText, replyText, headerPreset, bodyPreset, tokens }) {
   const cardX = 80;
   const cardWidth = CANVAS_WIDTH - cardX * 2;
   const cardPadding = 64;
@@ -1109,7 +1079,7 @@ function drawReplySlide(ctx, { questionText, replyText, headerPreset, bodyPreset
   const { textColor, dropShadow } = drawBodyCard(ctx, { x: cardX, y: cardY, width: cardWidth, height: cardHeight, bodyPreset, tokens, headerPreset });
 
   if (!bodyPreset.textOnly) {
-    drawTypeBadge(ctx, { x: cardX + cardPadding, y: cardY + cardPadding - 10, label: badgeLabel, headerPreset, bodyPreset, tokens });
+    drawTypeBadge(ctx, { x: cardX + cardPadding, y: cardY + cardPadding - 10, label: 'REPLY', headerPreset, bodyPreset, tokens });
   }
 
   let cursorY = cardY + cardPadding + badgeSpace;
@@ -1613,11 +1583,6 @@ export async function generateStoryImage({
   // 'question'/'reply' get from their own type badges (see drawMessageSlide
   // / drawTweetSlide).
   isConfession = false,
-  // 'reply' kind only — overrides the default "REPLY" header badge text.
-  // CustomizedConfessionCard (see StoryViewer.jsx) reuses the 'reply' layout
-  // for a confession's own customized story style and passes 'CONFESSION'
-  // here instead, since that card is a confession, not an actual reply.
-  badgeLabel,
   backgroundId,
   colorId,
   shapeId,
@@ -1650,7 +1615,7 @@ export async function generateStoryImage({
     drawBackground(ctx, backgroundPreset);
 
     if (kind === 'reply') {
-      drawReplySlide(ctx, { questionText, replyText, headerPreset, bodyPreset, tokens, ...(badgeLabel ? { badgeLabel } : {}) });
+      drawReplySlide(ctx, { questionText, replyText, headerPreset, bodyPreset, tokens });
     } else if (kind === 'message') {
       const avatarImage = await loadAvatarImage(avatarUrl);
       drawMessageSlide(ctx, { messageText, senderName, avatarImage, headerPreset, bodyPreset, tokens, isConfession });
