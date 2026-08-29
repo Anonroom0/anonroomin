@@ -19,12 +19,17 @@
  * exported PNG, since a dashed placeholder box would show up as a visible
  * artifact in the final posted story.
  *
- * Every visual choice (header color / background / body style) is looked up
- * from storyStylePresets.js by id, so the picker in ShareStorySheet just
- * passes three ids in and never touches drawing code.
+ * Every visual choice is looked up from storyStylePresets.js by id — a
+ * THEME (linked header-badge-color + background, so they can never clash),
+ * a SHAPE (the card's silhouette), and a SCALE (how bold/big the text
+ * reads) — so the picker in ShareStorySheet just passes three ids in and
+ * never touches drawing code. Shape and Scale are independent controls
+ * (see storyStylePresets.js's file banner for why v4 split them apart);
+ * this file merges whichever pair is picked into the same flat bodyPreset
+ * object the drawing code always expected.
  *
  * generateStoryImage({ kind, questionText, replyText, questionType,
- *                       headerColorId, backgroundId, bodyStyleId })
+ *                       themeId, shapeId, scaleId })
  *   -> Promise<Blob>   (image/png)
  * generateQuestionStoryImage(...)  -> back-compat alias, kind: 'question'
  * shareStoryImage(blob, opts)       -> Promise<void>  (OS share / download)
@@ -36,7 +41,7 @@
  *                                      without hardcoding canvas size twice
  * ========================================================================= */
 
-import { HEADER_COLOR_PRESETS, BACKGROUND_PRESETS, BODY_STYLE_PRESETS, getPresetById } from './storyStylePresets';
+import { STORY_THEMES, BODY_SHAPES, BODY_SCALES, mergeBodyPreset, getPresetById } from './storyStylePresets';
 import { shareToInstagramStories } from './instagramShare';
 
 export const CANVAS_WIDTH = 1080;
@@ -330,20 +335,43 @@ function drawBackground(ctx, backgroundPreset) {
 
 // ---------------------------------------------------------------------------
 // Header badge + "Reply anonymously" pill (shared shape, driven by the
-// header-color preset)
+// theme's header color) — also picks up a few cues from the chosen body
+// SHAPE (font family, corner sharpness, dashed outline) so the badge/pill
+// reads as part of the same design family as the card instead of always
+// being the one fixed rounded-pill regardless of what shape was picked.
 // ---------------------------------------------------------------------------
-function drawTypeBadge(ctx, { x, y, label, headerPreset }) {
-  ctx.font = '900 26px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif';
+function badgeRadius(height, bodyPreset) {
+  // Sharp/blocky shapes (radius 0-12) get a matching near-square badge;
+  // everything else keeps the fully-rounded pill look.
+  if (bodyPreset && bodyPreset.radius <= 12) return Math.min(8, height / 2);
+  return height / 2;
+}
+
+function strokeDashedIfNeeded(ctx, bodyPreset, tokens) {
+  if (!bodyPreset || bodyPreset.border !== 'dashed') return;
+  ctx.save();
+  ctx.setLineDash([8, 6]);
+  ctx.lineWidth = 2;
+  ctx.strokeStyle = tokens.ember;
+  ctx.stroke();
+  ctx.restore();
+}
+
+function drawTypeBadge(ctx, { x, y, label, headerPreset, bodyPreset, tokens }) {
+  ctx.font = `900 26px ${fontStack(bodyPreset || {})}`;
   const paddingX = 22;
   const paddingY = 14;
   const spaced = label.split('').join('\u200a\u200a');
   const textWidth = ctx.measureText(spaced).width;
   const w = textWidth + paddingX * 2;
   const h = 26 + paddingY * 2;
+  const radius = badgeRadius(h, bodyPreset);
 
-  roundedRectPath(ctx, x, y, w, h, h / 2);
+  roundedRectPath(ctx, x, y, w, h, radius);
   ctx.fillStyle = headerPreset.pillBg;
   ctx.fill();
+  roundedRectPath(ctx, x, y, w, h, radius);
+  strokeDashedIfNeeded(ctx, bodyPreset, tokens);
 
   ctx.fillStyle = headerPreset.pillText;
   ctx.textAlign = 'left';
@@ -353,18 +381,21 @@ function drawTypeBadge(ctx, { x, y, label, headerPreset }) {
   return { width: w, height: h };
 }
 
-function drawReplyPill(ctx, { x, y, headerPreset, fontSize = 30 }) {
-  ctx.font = `900 ${fontSize}px -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif`;
+function drawReplyPill(ctx, { x, y, headerPreset, bodyPreset, tokens, fontSize = 30 }) {
+  ctx.font = `900 ${fontSize}px ${fontStack(bodyPreset || {})}`;
   const label = 'Reply anonymously \u2192';
   const paddingX = 40;
   const paddingY = 22;
   const textWidth = ctx.measureText(label).width;
   const pillWidth = textWidth + paddingX * 2;
   const pillHeight = fontSize + paddingY * 2;
+  const radius = badgeRadius(pillHeight, bodyPreset);
 
-  roundedRectPath(ctx, x, y, pillWidth, pillHeight, pillHeight / 2);
+  roundedRectPath(ctx, x, y, pillWidth, pillHeight, radius);
   ctx.fillStyle = headerPreset.pillBg;
   ctx.fill();
+  roundedRectPath(ctx, x, y, pillWidth, pillHeight, radius);
+  strokeDashedIfNeeded(ctx, bodyPreset, tokens);
 
   ctx.fillStyle = headerPreset.pillText;
   ctx.textAlign = 'center';
@@ -403,6 +434,9 @@ function applyBorder(ctx, borderKind, tokens) {
   if (borderKind === 'glass') { ctx.lineWidth = 2; ctx.strokeStyle = 'rgba(255,255,255,0.10)'; return true; }
   if (borderKind === 'ember-thin') { ctx.lineWidth = 2; ctx.strokeStyle = tokens.ember; return true; }
   if (borderKind === 'ember-thick') { ctx.lineWidth = 6; ctx.strokeStyle = tokens.ember; return true; }
+  if (borderKind === 'dashed') { ctx.lineWidth = 3; ctx.strokeStyle = tokens.ember; ctx.setLineDash([16, 12]); return true; }
+  if (borderKind === 'ink-thick') { ctx.lineWidth = 6; ctx.strokeStyle = tokens.ink; return true; }
+  if (borderKind === 'paper-thick') { ctx.lineWidth = 6; ctx.strokeStyle = tokens.paper; return true; }
   if (borderKind === 'glow') {
     ctx.lineWidth = 3;
     ctx.strokeStyle = tokens.ember;
@@ -420,6 +454,12 @@ function applyBorder(ctx, borderKind, tokens) {
 function drawBodyCard(ctx, { x, y, width, height, bodyPreset, tokens, headerPreset }) {
   ctx.save();
 
+  // Clamp to the card's own bounds so an intentionally huge radius (e.g.
+  // 'capsule', 200) renders as a true pill instead of producing a broken
+  // rounded-rect path once the requested radius exceeds half the card's
+  // width/height.
+  const safeRadius = Math.max(0, Math.min(bodyPreset.radius, height / 2, width / 2));
+
   if (bodyPreset.rotate) {
     ctx.translate(x + width / 2, y + height / 2);
     ctx.rotate((bodyPreset.rotate * Math.PI) / 180);
@@ -428,14 +468,14 @@ function drawBodyCard(ctx, { x, y, width, height, bodyPreset, tokens, headerPres
 
   if (bodyPreset.textOnly) {
     // No card at all — text sits straight on the background with a heavy
-    // drop shadow so it stays legible over any of the 10 backgrounds.
+    // drop shadow so it stays legible over any of the themes' backgrounds.
     ctx.restore();
     return { textColor: tokens.paper, dropShadow: true };
   }
 
   if (bodyPreset.stacked) {
     // A second, slightly offset card behind the main one for a layered look.
-    roundedRectPath(ctx, x + 14, y + 18, width, height, bodyPreset.radius);
+    roundedRectPath(ctx, x + 14, y + 18, width, height, safeRadius);
     ctx.fillStyle = 'rgba(0,0,0,0.35)';
     ctx.fill();
   }
@@ -447,7 +487,7 @@ function drawBodyCard(ctx, { x, y, width, height, bodyPreset, tokens, headerPres
   }
 
   const fill = resolveFill(bodyPreset.fill, tokens);
-  roundedRectPath(ctx, x, y, width, height, bodyPreset.radius);
+  roundedRectPath(ctx, x, y, width, height, safeRadius);
   if (bodyPreset.fill === 'gradient-header') {
     const g = ctx.createLinearGradient(x, y, x, y + height);
     g.addColorStop(0, hexToRgba(headerPreset.pillBg, 0.38));
@@ -460,6 +500,17 @@ function drawBodyCard(ctx, { x, y, width, height, bodyPreset, tokens, headerPres
     g.addColorStop(1, tokens.ink2);
     ctx.fillStyle = g;
     ctx.fill();
+  } else if (bodyPreset.fill === 'split') {
+    // Hard two-tone split — a header-tinted band across the top ~36%, ink-2
+    // for the rest. Clipped to the already-active rounded-rect path so the
+    // seam never pokes past the card's own corners.
+    ctx.save();
+    ctx.clip();
+    ctx.fillStyle = tokens.ink2;
+    ctx.fillRect(x, y, width, height);
+    ctx.fillStyle = hexToRgba(headerPreset.pillBg, 0.55);
+    ctx.fillRect(x, y, width, height * 0.36);
+    ctx.restore();
   } else if (fill) {
     ctx.fillStyle = fill;
     ctx.fill();
@@ -471,7 +522,7 @@ function drawBodyCard(ctx, { x, y, width, height, bodyPreset, tokens, headerPres
     // Small scattered dots clipped to the card, sitting behind the text —
     // a "confetti stamp" decoration rather than a full-bleed pattern.
     ctx.save();
-    roundedRectPath(ctx, x, y, width, height, bodyPreset.radius);
+    roundedRectPath(ctx, x, y, width, height, safeRadius);
     ctx.clip();
     const rand = seededRandom(77);
     const palette = [headerPreset.pillBg, 'rgba(255,255,255,0.3)', 'rgba(255,255,255,0.14)'];
@@ -492,12 +543,12 @@ function drawBodyCard(ctx, { x, y, width, height, bodyPreset, tokens, headerPres
   if (bodyPreset.border === 'double') {
     // Two concentric strokes — a thin outer glass line + a tighter ember
     // inner line — instead of the single-stroke treatment applyBorder does.
-    roundedRectPath(ctx, x, y, width, height, bodyPreset.radius);
+    roundedRectPath(ctx, x, y, width, height, safeRadius);
     ctx.lineWidth = 2;
     ctx.strokeStyle = 'rgba(255,255,255,0.16)';
     ctx.stroke();
     const inset = 10;
-    roundedRectPath(ctx, x + inset, y + inset, width - inset * 2, height - inset * 2, Math.max(0, bodyPreset.radius - inset));
+    roundedRectPath(ctx, x + inset, y + inset, width - inset * 2, height - inset * 2, Math.max(0, safeRadius - inset));
     ctx.lineWidth = 3;
     ctx.strokeStyle = tokens.ember;
     ctx.stroke();
@@ -506,20 +557,56 @@ function drawBodyCard(ctx, { x, y, width, height, bodyPreset, tokens, headerPres
   if (bodyPreset.blockHeader) {
     // A solid header-color block fused to the card's top edge — bold,
     // poster-like division between badge and body.
-    roundedRectPath(ctx, x, y, width, 100, { tl: bodyPreset.radius, tr: bodyPreset.radius, br: 0, bl: 0 });
+    roundedRectPath(ctx, x, y, width, 100, { tl: safeRadius, tr: safeRadius, br: 0, bl: 0 });
     ctx.fillStyle = headerPreset.pillBg;
     ctx.fill();
   }
 
   if (bodyPreset.ribbon) {
-    roundedRectPath(ctx, x, y, 14, height, { tl: bodyPreset.radius, tr: 0, br: 0, bl: bodyPreset.radius });
+    roundedRectPath(ctx, x, y, 14, height, { tl: safeRadius, tr: 0, br: 0, bl: safeRadius });
     ctx.fillStyle = headerPreset.pillBg;
     ctx.fill();
   }
 
+  if (bodyPreset.sideTab) {
+    // A small colored tab protruding from the left edge, like a bookmark —
+    // distinct from 'ribbon' (a full-height stripe) by being short and
+    // sitting proud of the card rather than flush with it.
+    roundedRectPath(ctx, x - 16, y + 34, 30, 54, { tl: 8, tr: 0, br: 0, bl: 8 });
+    ctx.fillStyle = headerPreset.pillBg;
+    ctx.fill();
+  }
+
+  if (bodyPreset.cornerTag) {
+    // A small triangular flag in the top-right corner, clipped to the
+    // card's own rounded path so it never pokes past the corner radius.
+    ctx.save();
+    roundedRectPath(ctx, x, y, width, height, safeRadius);
+    ctx.clip();
+    ctx.fillStyle = headerPreset.pillBg;
+    ctx.beginPath();
+    ctx.moveTo(x + width - 70, y);
+    ctx.lineTo(x + width, y);
+    ctx.lineTo(x + width, y + 70);
+    ctx.closePath();
+    ctx.fill();
+    ctx.restore();
+  }
+
+  if (bodyPreset.ringAccent) {
+    // A single inset ring in the header color — distinct from 'double'
+    // (two full concentric frames in fixed white+ember) by being one ring,
+    // in the theme's own accent color, and only lightly inset.
+    const inset = 14;
+    roundedRectPath(ctx, x + inset, y + inset, width - inset * 2, height - inset * 2, Math.max(0, safeRadius - inset));
+    ctx.lineWidth = 2.5;
+    ctx.strokeStyle = headerPreset.pillBg;
+    ctx.stroke();
+  }
+
   const hadBorder = applyBorder(ctx, bodyPreset.border, tokens);
   if (hadBorder) {
-    roundedRectPath(ctx, x, y, width, height, bodyPreset.radius);
+    roundedRectPath(ctx, x, y, width, height, safeRadius);
     ctx.stroke();
   }
   ctx.shadowBlur = 0;
@@ -538,6 +625,15 @@ function drawBodyCard(ctx, { x, y, width, height, bodyPreset, tokens, headerPres
     ctx.rotate((8 * Math.PI) / 180);
     ctx.fillRect(-30, -14, 60, 28);
     ctx.restore();
+  }
+
+  if (bodyPreset.underline) {
+    // A short colored bar sitting just under where the badge lands —
+    // a simple accent rather than tracking the exact wrapped-text bottom,
+    // which keeps this independent of how many lines the body text wraps to.
+    roundedRectPath(ctx, x + 72, y + 78, 64, 6, 3);
+    ctx.fillStyle = headerPreset.pillBg;
+    ctx.fill();
   }
 
   ctx.restore();
@@ -611,7 +707,7 @@ function drawQuestionSlide(ctx, { questionText, questionType, headerPreset, body
 
   const label = questionType === 'personal' ? 'PERSONAL QUESTION' : 'QUESTION';
   if (!bodyPreset.textOnly) {
-    drawTypeBadge(ctx, { x: cardX + cardPadding, y: cardY + cardPadding - 10, label, headerPreset });
+    drawTypeBadge(ctx, { x: cardX + cardPadding, y: cardY + cardPadding - 10, label, headerPreset, bodyPreset, tokens });
   }
 
   if (dropShadow) {
@@ -631,9 +727,9 @@ function drawQuestionSlide(ctx, { questionText, questionType, headerPreset, body
   ctx.shadowBlur = 0;
 
   const pillY = cardY + cardHeight + 56;
-  const { width: pillWidth } = drawReplyPill(ctx, { x: (CANVAS_WIDTH - 480) / 2, y: pillY, headerPreset, fontSize: 32 });
+  const { width: pillWidth } = drawReplyPill(ctx, { x: (CANVAS_WIDTH - 480) / 2, y: pillY, headerPreset, bodyPreset, tokens, fontSize: 32 });
   ctx.clearRect(0, pillY - 4, CANVAS_WIDTH, 100);
-  drawReplyPill(ctx, { x: (CANVAS_WIDTH - pillWidth) / 2, y: pillY, headerPreset, fontSize: 32 });
+  drawReplyPill(ctx, { x: (CANVAS_WIDTH - pillWidth) / 2, y: pillY, headerPreset, bodyPreset, tokens, fontSize: 32 });
 }
 
 // ---------------------------------------------------------------------------
@@ -669,7 +765,7 @@ function drawReplySlide(ctx, { questionText, replyText, headerPreset, bodyPreset
   const { textColor, dropShadow } = drawBodyCard(ctx, { x: cardX, y: cardY, width: cardWidth, height: cardHeight, bodyPreset, tokens, headerPreset });
 
   if (!bodyPreset.textOnly) {
-    drawTypeBadge(ctx, { x: cardX + cardPadding, y: cardY + cardPadding - 10, label: 'REPLY', headerPreset });
+    drawTypeBadge(ctx, { x: cardX + cardPadding, y: cardY + cardPadding - 10, label: 'REPLY', headerPreset, bodyPreset, tokens });
   }
 
   let cursorY = cardY + cardPadding + badgeSpace;
@@ -690,9 +786,9 @@ function drawReplySlide(ctx, { questionText, replyText, headerPreset, bodyPreset
   ctx.shadowBlur = 0;
 
   const pillY = cardY + cardHeight + 56;
-  const { width: pillWidth } = drawReplyPill(ctx, { x: (CANVAS_WIDTH - 480) / 2, y: pillY, headerPreset, fontSize: 32 });
+  const { width: pillWidth } = drawReplyPill(ctx, { x: (CANVAS_WIDTH - 480) / 2, y: pillY, headerPreset, bodyPreset, tokens, fontSize: 32 });
   ctx.clearRect(0, pillY - 4, CANVAS_WIDTH, 100);
-  drawReplyPill(ctx, { x: (CANVAS_WIDTH - pillWidth) / 2, y: pillY, headerPreset, fontSize: 32 });
+  drawReplyPill(ctx, { x: (CANVAS_WIDTH - pillWidth) / 2, y: pillY, headerPreset, bodyPreset, tokens, fontSize: 32 });
 }
 
 // ---------------------------------------------------------------------------
@@ -703,9 +799,9 @@ export async function generateStoryImage({
   questionText = '',
   replyText = '',
   questionType,
-  headerColorId,
-  backgroundId,
-  bodyStyleId,
+  themeId,
+  shapeId,
+  scaleId,
 }) {
   const canvas = document.createElement('canvas');
   canvas.width = CANVAS_WIDTH;
@@ -713,9 +809,10 @@ export async function generateStoryImage({
   const ctx = canvas.getContext('2d');
 
   const tokens = getTokens();
-  const headerPreset = getPresetById(HEADER_COLOR_PRESETS, headerColorId);
-  const backgroundPreset = getPresetById(BACKGROUND_PRESETS, backgroundId);
-  const bodyPreset = getPresetById(BODY_STYLE_PRESETS, bodyStyleId);
+  const theme = getPresetById(STORY_THEMES, themeId);
+  const headerPreset = { pillBg: theme.pillBg, pillText: theme.pillText };
+  const backgroundPreset = theme.background;
+  const bodyPreset = mergeBodyPreset(getPresetById(BODY_SHAPES, shapeId), getPresetById(BODY_SCALES, scaleId));
 
   drawBackground(ctx, backgroundPreset);
 
