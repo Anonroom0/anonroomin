@@ -524,6 +524,16 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
   const [profileCardUserId, setProfileCardUserId] = useState(null);
   const [authOpen, setAuthOpen] = useState(false);
   const [pickerOpen, setPickerOpen] = useState(false);
+  // Google's Android-level Autofill service scans editable fields as soon as
+  // they're in the DOM, which is what puts the "key" icon / credential
+  // chooser above the keyboard on this box even though it only ever holds a
+  // plain message. Starting the field readOnly hides it from that scan;
+  // flipping readOnly off on focus (before the keyboard opens, same tick)
+  // makes it type normally with no assistance bar attached. Re-locking on
+  // blur means the next scan (if the OS ever re-scans) still finds it
+  // readOnly. This is on top of, not instead of, the existing
+  // type="search"/autoComplete="off-nope"/data-lpignore anti-autofill hack.
+  const [composerLocked, setComposerLocked] = useState(true);
   const [menuOpen, setMenuOpen] = useState(false);
 
   const [hasUnreadMention, setHasUnreadMention] = useState(false);
@@ -1237,7 +1247,7 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
               (calling the same handleSend used by the form's onSubmit/the
               send button) so Enter always works even on keyboards that
               ignore enterKeyHint. */}
-          <input type="search" enterKeyHint="send" name="dm-message-f" autoComplete="off-nope" autoCorrect="off" autoCapitalize="off" spellCheck="false" data-lpignore="true" data-1p-ignore data-form-type="other" value={text} onChange={(e) => setText(e.target.value.slice(0, MAX_TEXT_LENGTH))} maxLength={MAX_TEXT_LENGTH} onFocus={() => setPickerOpen(false)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); if (!uploading && selectedMessages.length === 0) handleSend(e); } }} placeholder={uploading ? 'Uploading media...' : 'Message'} disabled={uploading || selectedMessages.length > 0} style={{ flex: 1, border: '1px solid rgba(255,255,255,0.06)', outline: 'none', background: '#15161B', borderRadius: 24, padding: '12px 18px', fontSize: 15, color: '#F4F3F0', transition: 'border-color 0.2s' }} />
+          <input type="search" enterKeyHint="send" name="dm-message-f" autoComplete="off-nope" autoCorrect="off" autoCapitalize="off" spellCheck="false" data-lpignore="true" data-1p-ignore data-form-type="other" readOnly={composerLocked} value={text} onChange={(e) => setText(e.target.value.slice(0, MAX_TEXT_LENGTH))} maxLength={MAX_TEXT_LENGTH} onFocus={() => { setComposerLocked(false); setPickerOpen(false); }} onBlur={() => setComposerLocked(true)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); if (!uploading && selectedMessages.length === 0) handleSend(e); } }} placeholder={uploading ? 'Uploading media...' : 'Message'} disabled={uploading || selectedMessages.length > 0} style={{ flex: 1, border: '1px solid rgba(255,255,255,0.06)', outline: 'none', background: '#15161B', borderRadius: 24, padding: '12px 18px', fontSize: 15, color: '#F4F3F0', transition: 'border-color 0.2s' }} />
           <SendButton canSend={!!text.trim()} sending={sending || uploading} cooldownPercent={cooldownPercent} />
         </form>
         </>
