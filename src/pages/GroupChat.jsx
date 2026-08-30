@@ -385,12 +385,12 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
   const { session, profile } = useAuth();
   const ownUserId = session?.user?.id;
   const isAdmin = profile?.is_admin === true;
+
+  const [group, setGroup] = useState(null);
   // Channel mode: group.is_channel === true means only admins can send.
   // null/false (the default, and every group that predates this column)
   // behaves exactly as before — nothing changes for regular groups.
   const isChannelLocked = group?.is_channel === true && !isAdmin;
-
-  const [group, setGroup] = useState(null);
   const [groupStatus, setGroupStatus] = useState('loading');
 
   const [messages, setMessages] = useState([]);
