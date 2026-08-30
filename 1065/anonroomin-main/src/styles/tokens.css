@@ -1,0 +1,301 @@
+/**
+ * ============================================================================
+ * ANONROOM - CORE DARK GLASSMORPHISM DESIGN TOKENS
+ * ============================================================================
+ * This file serves as the absolute foundation for the app's visual system,
+ * alongside src/styles/animations.css (which owns every @keyframes and
+ * reusable animation utility class). Together these two files are the only
+ * place color/glass-material/radii and motion get defined — components
+ * style themselves with plain inline style objects referencing var(--token)
+ * plus classNames into these two files.
+ *
+ * Dark-only design now: :root is the single source of truth, no
+ * prefers-color-scheme branching.
+ *
+ * Features:
+ * - Single dark palette: Ink / Ink-2 / Paper / Dim / Ember / Signal
+ * - Liquid-glass panels + sheets with a tiled grain overlay
+ * - Telegram iOS custom scrollbars
+ * - Base typography resets (SF Pro Display / Apple System)
+ * ============================================================================
+ */
+
+/*
+  =============================================================================
+  1. DARK TOKEN PALETTE (SINGLE SOURCE OF TRUTH)
+  =============================================================================
+*/
+:root {
+  /* Surfaces */
+  --ink: #0C0D10;      /* base bg */
+  --ink-2: #15161B;    /* elevated surface */
+
+  /* Text */
+  --paper: #F4F3F0;    /* primary text */
+  --dim: #8B8B96;      /* secondary text */
+
+  /* Accents — the ONE primary-action color per screen (ember), and
+     live/online/delivered states only (signal). Never gradient together —
+     flat, separate fills only. */
+  --ember: #FF6B35;
+  --signal: #2FD8C4;
+
+  /* Glass material */
+  --glass-white: rgba(255, 255, 255, 0.07);
+  --glass-border: rgba(255, 255, 255, 0.10);
+
+  /* Additional tokens referenced by DirectMessages.jsx / GroupChat.jsx —
+     missing from the original palette, which caused those components to
+     render fully transparent (undefined var() resolves to nothing). */
+  --glass-strong: rgba(255, 255, 255, 0.14);  /* denser glass fill for headers/composers */
+  --glass: rgba(255, 255, 255, 0.05);          /* input field fill */
+  --bg: var(--ink);                            /* alias so --bg matches the page base color */
+  --blue: #0A84FF;                             /* iOS-blue accent used throughout DMs */
+
+  /* Radii */
+  --radius-card: 20px;   /* cards/rows */
+  --radius-sheet: 28px;  /* sheets/modals */
+  --radius-round: 50%;   /* avatars/FAB */
+
+  /* Semantic status accents — kept separate from --ember/--signal (which are
+     reserved for primary actions and live/delivered states) so success,
+     danger, and the admin-badge gold read consistently everywhere they
+     appear instead of each screen picking its own ad-hoc hex value. */
+  --success: #34C759;   /* confirmations, verified checks */
+  --danger: #FF6B6B;    /* destructive actions, error banners */
+  --admin-1: #FFD700;   /* admin badge gradient start */
+  --admin-2: #FFA500;   /* admin badge gradient end */
+}
+
+/*
+  =============================================================================
+  2. GLOBAL TYPOGRAPHY & BODY RESETS
+  =============================================================================
+*/
+/*
+  html/body/#root must form an unbroken 100%-height chain. Without this,
+  any page rendered without Home.jsx's own 100vh flex wrapper (e.g. the
+  bare group subdomain route in App.jsx) collapses to its content height,
+  which is what caused the "blank page, content stuck to the top" bug.
+  Locking height + overflow here also stops the whole-page rubber-band
+  scroll that was leaking out from inner scroll containers.
+
+  body is also pinned with position:fixed + inset:0 (not just
+  overflow:hidden) because those are two different problems. overflow:
+  hidden stops the BODY BOX from scrolling its own overflowing content —
+  it does nothing about iOS Safari's separate, browser-chrome-level
+  "scroll the focused input into view" behavior, which can still nudge
+  the whole page's on-screen position when a text input inside it is
+  focused, keyboard or not, regardless of what overflow says. A
+  position:fixed body has no scroll position for that behavior to move in
+  the first place, which is what actually stops it — this is what was
+  behind an on-screen keyboard still leaving a sliver of the page
+  scrollable past a bottom input bar (e.g. QuestionThread.jsx's reply
+  composer) even though every ancestor already had overflow:hidden.
+*/
+html {
+  height: 100%;
+  overflow: hidden;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  position: fixed;
+  inset: 0;
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  width: 100%;
+  /* Enforce native Apple typography, falling back to standard sans-serifs */
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  background-color: var(--ink);
+  color: var(--paper);
+
+  /* Prevent bounce-scrolling on iOS to maintain the native app feel */
+  overflow: hidden;
+  overscroll-behavior: none;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+#root {
+  height: 100%;
+  width: 100%;
+}
+
+/*
+  =============================================================================
+  3. LIQUID GLASS SURFACES (PANEL + SHEET)
+  =============================================================================
+  .glass-panel is for cards/rows (radius-card). .glass-sheet is identical
+  but for sheets/modals (radius-sheet). Both get a subtle tiled grain
+  overlay via ::after — an inlined fractal-noise SVG data-URI, no external
+  image file — blended at 2% opacity to keep the flat glass fill from
+  looking too sterile.
+
+  position: relative + overflow: hidden are needed here (not spec'd
+  explicitly) so the ::after's `inset: 0` has a positioned ancestor to
+  anchor to and so the grain gets clipped to the panel's own border-radius
+  instead of bleeding past its corners.
+*/
+.glass-panel,
+.glass-sheet {
+  position: relative;
+  overflow: hidden;
+  background: var(--glass-white);
+  border: 1px solid var(--glass-border);
+  backdrop-filter: blur(20px) saturate(115%);
+  -webkit-backdrop-filter: blur(20px) saturate(115%);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+}
+
+.glass-panel {
+  border-radius: var(--radius-card);
+}
+
+.glass-sheet {
+  border-radius: var(--radius-sheet);
+}
+
+.glass-panel::after,
+.glass-sheet::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  mix-blend-mode: overlay;
+  opacity: 0.02;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  background-repeat: repeat;
+}
+
+/*
+  =============================================================================
+  4. TELEGRAM iOS CUSTOM SCROLLBARS
+  =============================================================================
+  Standard browser scrollbars ruin the native app illusion.
+  This overrides them to look like sleek, disappearing iOS scroll indicators.
+*/
+
+.custom-scrollbar {
+  /* For Firefox */
+  scrollbar-width: thin;
+  scrollbar-color: rgba(139, 139, 150, 0.3) transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 5px;
+  height: 5px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: rgba(139, 139, 150, 0.3); /* --dim at low opacity */
+  border-radius: 10px;
+}
+
+.custom-scrollbar:hover::-webkit-scrollbar-thumb {
+  background: rgba(139, 139, 150, 0.5);
+}
+
+/*
+  =============================================================================
+  5. GLOBAL ANIMATION PRIMITIVES
+  =============================================================================
+  Color-neutral, still applicable as-is.
+*/
+
+@keyframes pop-in {
+  from {
+    opacity: 0;
+    transform: scale(0.96) translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.pop-in {
+  animation: pop-in 300ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+/* Remove default focus outlines to maintain the flat, glass-first aesthetic */
+input:focus, textarea:focus, button:focus {
+  outline: none;
+}
+
+/*
+  =============================================================================
+  6. MOBILE MASTER/DETAIL PAGE TRANSITION
+  =============================================================================
+  Used by Home.jsx to slide the chat pane in as its own dedicated page on
+  mobile instead of the old cramped side-by-side squeeze. Motion is already
+  color-neutral, kept as-is.
+*/
+@keyframes slideInFromRight {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+
+.mobile-chat-page {
+  animation: slideInFromRight 0.28s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+/*
+  =============================================================================
+  7. VIEWPORT-SAFE FULL-HEIGHT SHELL
+  =============================================================================
+  Plain `100vh` is unreliable on mobile browsers — it's measured against the
+  *largest* possible viewport (address bar collapsed), so a shell sized with
+  100vh routinely renders taller than the space actually visible once the
+  browser's own bottom toolbar is on screen, pushing bottom-pinned elements
+  (like the message composer) out of view. `100dvh` (dynamic viewport
+  height) tracks the real visible area and is what App.jsx / Home.jsx use
+  for their outermost wrapper now. The plain vh rule is kept underneath as
+  a fallback for older WebViews that don't support dvh yet.
+*/
+.app-viewport {
+  height: 100vh;
+}
+
+@supports (height: 100dvh) {
+  .app-viewport {
+    height: 100dvh;
+  }
+}
+
+/*
+  Composer safety padding: on iPhones with a home indicator, content pinned
+  to the very bottom edge can sit under/behind it. This adds just enough
+  padding to clear it without affecting devices that don't have one.
+*/
+.safe-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/*
+  Global autofill icon suppression (Chrome/Edge/Safari WebKit browsers).
+  This hides the key/password-manager, credit-card, and address/location
+  autofill icons that Chrome renders INSIDE inputs, regardless of whether
+  each individual input has autocomplete="off" set — that attribute is
+  only a hint, not a guarantee. This CSS is a hard, app-wide block.
+  Does not disable autofill functionality itself, just the inline icon UI.
+*/
+input::-webkit-contacts-auto-fill-button,
+input::-webkit-credentials-auto-fill-button,
+input::-webkit-caps-lock-indicator,
+input::-webkit-strong-password-auto-fill-button,
+input::-webkit-clear-button {
+  visibility: hidden;
+  display: none !important;
+  pointer-events: none;
+  position: absolute;
+  right: 0;
+}
