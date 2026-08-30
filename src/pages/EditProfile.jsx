@@ -5,6 +5,7 @@ import { useAuth } from '../lib/authContext';
 import NotificationSettingsPanel from '../components/notifications/NotificationSettingsPanel';
 import { hapticTap, hapticSuccess, hapticError } from '../lib/haptics';
 import { playTap, playRefreshComplete, playError } from '../lib/soundManager';
+import { getAdministratorUrl } from '../lib/subdomain';
 
 const AVATAR_BUCKET = 'media';
 const ANIMATION_DURATION = 320;
@@ -21,8 +22,119 @@ const Vectors = {
   Check: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>,
   Bell: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" /><path d="M13.73 21a2 2 0 0 1-3.46 0" /></svg>,
   Spinner: <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="refresh-spin"><line x1="12" y1="2" x2="12" y2="6" /><line x1="12" y1="18" x2="12" y2="22" /><line x1="4.93" y1="4.93" x2="7.76" y2="7.76" /><line x1="16.24" y1="16.24" x2="19.07" y2="19.07" /><line x1="2" y1="12" x2="6" y2="12" /><line x1="18" y1="12" x2="22" y2="12" /><line x1="4.93" y1="19.07" x2="7.76" y2="16.24" /><line x1="16.24" y1="7.76" x2="19.07" y2="4.93" /></svg>,
-  ChevronRight: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6" /></svg>
+  ChevronRight: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6" /></svg>,
+  Shield: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /></svg>,
+  Plus: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>,
+  ExternalLink: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6" /><polyline points="15 3 21 3 21 9" /><line x1="10" y1="14" x2="21" y2="3" /></svg>,
+  Hash: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="4" y1="9" x2="20" y2="9" /><line x1="4" y1="15" x2="20" y2="15" /><line x1="10" y1="3" x2="8" y2="21" /><line x1="16" y1="3" x2="14" y2="21" /></svg>
 };
+
+// Small on/off switch used for the "Make this a channel" toggle in
+// CreateGroupModal — matches this file's flat, borderless icon-button
+// styling rather than pulling in GlassToggle (which is styled for the
+// glassmorphism surfaces elsewhere, not this solid #1C1D24 sheet).
+function LiquidSwitch({ checked, onChange }) {
+  return (
+    <button
+      type="button"
+      onClick={() => onChange(!checked)}
+      style={{
+        width: 46, height: 28, borderRadius: 999, border: 'none', flexShrink: 0,
+        background: checked ? '#FF6B35' : 'rgba(255,255,255,0.12)',
+        position: 'relative', cursor: 'pointer', transition: 'background 0.2s',
+      }}
+    >
+      <span style={{
+        position: 'absolute', top: 3, left: checked ? 21 : 3, width: 22, height: 22, borderRadius: '50%',
+        background: '#fff', transition: 'left 0.2s', boxShadow: '0 1px 3px rgba(0,0,0,0.4)',
+      }} />
+    </button>
+  );
+}
+
+// Admin-only "Create Group" flow. Inserts directly into public.groups —
+// enforced admin-only server-side by the groups_insert_admin_only RLS
+// policy (see supabase/migrations/0004_channels_and_admin_panel.sql), so
+// this modal being hidden from non-admins in the UI is a nicety, not the
+// actual access control, same pattern as handleSendTestPush above.
+function CreateGroupModal({ open, onClose, onCreated }) {
+  const [name, setName] = useState('');
+  const [slug, setSlug] = useState('');
+  const [description, setDescription] = useState('');
+  const [isChannel, setIsChannel] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+
+  useEffect(() => {
+    if (open) { setName(''); setSlug(''); setDescription(''); setIsChannel(false); setError(''); }
+  }, [open]);
+
+  // Auto-derives a URL-safe slug from the name unless the admin has
+  // already started typing their own — mirrors the common "slugify as you
+  // type" pattern without fighting a manual edit once one's in progress.
+  const [slugTouched, setSlugTouched] = useState(false);
+  function handleNameChange(v) {
+    setName(v);
+    if (!slugTouched) setSlug(v.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, ''));
+  }
+
+  async function handleCreate() {
+    const trimmedName = name.trim();
+    const trimmedSlug = slug.trim().toLowerCase();
+    if (!trimmedName || !trimmedSlug) { setError('Name and slug are required.'); return; }
+    setSaving(true); setError('');
+    try {
+      const { data, error: insertError } = await supabase
+        .from('groups')
+        .insert({ name: trimmedName, slug: trimmedSlug, description: description.trim() || null, is_channel: isChannel })
+        .select()
+        .single();
+      if (insertError) throw insertError;
+      hapticSuccess(); playRefreshComplete();
+      onCreated?.(data);
+      onClose();
+    } catch (err) {
+      playError(); hapticError();
+      setError(err?.message?.includes('duplicate') ? 'That slug is already taken.' : (err?.message || 'Failed to create group.'));
+    } finally { setSaving(false); }
+  }
+
+  if (!open) return null;
+
+  return (
+    <div style={{ position: 'absolute', inset: 0, zIndex: 15, background: '#1C1D24', display: 'flex', flexDirection: 'column' }}>
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 20px', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+        <button onClick={onClose} disabled={saving} style={{ display: 'flex', alignItems: 'center', gap: 6, border: 'none', background: 'transparent', color: '#FF6B35', fontSize: 16, fontWeight: 500, cursor: 'pointer', padding: '4px 8px', borderRadius: 8, marginLeft: -8 }}>
+          {Vectors.Back} <span>Close</span>
+        </button>
+        <h1 style={{ margin: 0, fontSize: 17, fontWeight: 700, color: '#F4F3F0', position: 'absolute', left: '50%', transform: 'translateX(-50%)' }}>New Group</h1>
+        <div style={{ width: 60 }} />
+      </div>
+
+      <div className="custom-scrollbar" style={{ flex: 1, overflowY: 'auto', padding: '24px 20px 40px' }}>
+        <div style={{ maxWidth: 440, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 16 }}>
+          <LiquidInput icon={Vectors.User} label="Group name" value={name} onChange={(e) => handleNameChange(e.target.value)} />
+          <LiquidInput icon={Vectors.Hash} label="Slug (used in the group's URL)" value={slug} onChange={(e) => { setSlugTouched(true); setSlug(e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '')); }} />
+          <LiquidInput icon={Vectors.User} label="Description (optional)" isTextArea={true} value={description} onChange={(e) => setDescription(e.target.value)} />
+
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, background: '#15161B', borderRadius: 16, border: '1px solid rgba(255,255,255,0.06)', padding: '14px 16px', marginTop: 4 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+              <span style={{ fontSize: 15, fontWeight: 600, color: '#F4F3F0' }}>Make this a channel</span>
+              <span style={{ fontSize: 12.5, color: '#8B8B96', lineHeight: 1.4 }}>Only admins can post. Everyone else can read but not send messages.</span>
+            </div>
+            <LiquidSwitch checked={isChannel} onChange={setIsChannel} />
+          </div>
+
+          {error && <div style={{ color: '#FF6B35', fontSize: 14, fontWeight: 500, textAlign: 'center', background: 'rgba(255,107,53,0.1)', padding: '10px', borderRadius: 12 }}>{error}</div>}
+
+          <button onClick={handleCreate} disabled={saving || !name.trim() || !slug.trim()} style={{ marginTop: 8, padding: '16px 0', borderRadius: 18, border: 'none', background: (name.trim() && slug.trim()) ? '#FF6B35' : 'rgba(255,255,255,0.06)', color: (name.trim() && slug.trim()) ? '#fff' : '#8B8B96', fontWeight: 700, fontSize: 16, cursor: (saving || !name.trim() || !slug.trim()) ? 'default' : 'pointer' }}>
+            {saving ? 'Creating…' : 'Create Group'}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
 
 function getInitials(name) {
   if (!name) return '?';
@@ -64,6 +176,7 @@ export default function EditProfile({ open, onClose }) {
   const [birthday, setBirthday] = useState('');
   const [avatarUrl, setAvatarUrl] = useState(null);
   const [notificationPanelOpen, setNotificationPanelOpen] = useState(false);
+  const [createGroupOpen, setCreateGroupOpen] = useState(false);
   const [testPushTitle, setTestPushTitle] = useState('Test notification');
   const [testPushBody, setTestPushBody] = useState('Hello from AnonRoom');
   const [sendingTestPush, setSendingTestPush] = useState(false);
@@ -267,6 +380,35 @@ export default function EditProfile({ open, onClose }) {
                 <div style={{ color: '#8B8B96' }}>{Vectors.ChevronRight}</div>
               </button>
             </div>
+
+            {profile?.is_admin && (
+              <div>
+                <h3 style={{ margin: '0 0 8px 12px', fontSize: 13, fontWeight: 600, color: '#8B8B96', textTransform: 'uppercase', letterSpacing: 0.5 }}>Admin</h3>
+                <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+                  <button onClick={() => { hapticTap(); playTap(); setCreateGroupOpen(true); }} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 16px', background: '#15161B', borderRadius: 16, border: '1px solid rgba(255,255,255,0.06)', width: '100%', cursor: 'pointer', textAlign: 'left' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                      <div style={{ color: '#FF6B35' }}>{Vectors.Plus}</div>
+                      <div style={{ display: 'flex', flexDirection: 'column' }}>
+                        <span style={{ fontSize: 16, fontWeight: 500, color: '#F4F3F0' }}>Create New Group</span>
+                        <span style={{ fontSize: 13, color: '#8B8B96' }}>Add a group, optionally as an admin-only channel</span>
+                      </div>
+                    </div>
+                    <div style={{ color: '#8B8B96' }}>{Vectors.ChevronRight}</div>
+                  </button>
+
+                  <button onClick={() => { hapticTap(); playTap(); window.open(getAdministratorUrl(), '_blank', 'noopener,noreferrer'); }} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 16px', background: '#15161B', borderRadius: 16, border: '1px solid rgba(255,255,255,0.06)', width: '100%', cursor: 'pointer', textAlign: 'left' }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                      <div style={{ color: '#FF6B35' }}>{Vectors.Shield}</div>
+                      <div style={{ display: 'flex', flexDirection: 'column' }}>
+                        <span style={{ fontSize: 16, fontWeight: 500, color: '#F4F3F0' }}>Open Admin Panel</span>
+                        <span style={{ fontSize: 13, color: '#8B8B96' }}>Users, groups, storage cleanup — administrator.anonroom.in</span>
+                      </div>
+                    </div>
+                    <div style={{ color: '#8B8B96' }}>{Vectors.ExternalLink}</div>
+                  </button>
+                </div>
+              </div>
+            )}
 
             {profile?.is_admin && (
               <div>

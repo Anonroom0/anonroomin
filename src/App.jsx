@@ -47,7 +47,8 @@ import ConfessionsFeed from './pages/ConfessionsFeed';
 import ResetPassword from './pages/ResetPassword';
 import supabase from './lib/supabaseClient';
 import ToastContainer from './components/ToastContainer';
-import { getQuestionIdFromPath, isConfessionsFeedPath, isResetPasswordPath, isGroupSubdomain, getGroupSlugFromRealSubdomain, getGroupUrl } from './lib/subdomain';
+import { getQuestionIdFromPath, isConfessionsFeedPath, isResetPasswordPath, isGroupSubdomain, getGroupSlugFromRealSubdomain, getGroupUrl, isAdministratorSubdomain } from './lib/subdomain';
+import AdminPanel from './pages/AdminPanel';
 import { getCookie, setCookie, getOrCreateVisitorId } from './lib/visitorId';
 import './styles/tokens.css';
 
@@ -371,6 +372,21 @@ export default function App() {
   // redirect placeholder while the browser follows the replace() above.
   if (subdomainGroupSlug) {
     return <SubdomainRedirectScreen />;
+  }
+
+  // administrator.anonroom.in renders a completely separate view (its own
+  // gate on profile.is_admin lives inside AdminPanel itself) instead of the
+  // normal Home/QuestionThread/ConfessionsFeed dispatch below. It still
+  // needs AuthProvider so it can read the shared cross-subdomain session.
+  if (isAdministratorSubdomain()) {
+    return (
+      <>
+        <ToastContainer />
+        <AuthProvider>
+          <AdminPanel />
+        </AuthProvider>
+      </>
+    );
   }
 
   return (

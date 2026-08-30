@@ -42,6 +42,7 @@ const ADMIN_DISPLAY_NAME = 'ADMIN';
 const UPLOAD_TIMEOUT_MS = 60000;
 
 const Vectors = {
+  Lock: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" /></svg>,
   Back: <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M19 12H5" /><path d="M12 19l-7-7 7-7" /></svg>,
   Attach: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" /></svg>,
   Close: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>,
@@ -384,6 +385,10 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
   const { session, profile } = useAuth();
   const ownUserId = session?.user?.id;
   const isAdmin = profile?.is_admin === true;
+  // Channel mode: group.is_channel === true means only admins can send.
+  // null/false (the default, and every group that predates this column)
+  // behaves exactly as before — nothing changes for regular groups.
+  const isChannelLocked = group?.is_channel === true && !isAdmin;
 
   const [group, setGroup] = useState(null);
   const [groupStatus, setGroupStatus] = useState('loading');
@@ -788,6 +793,7 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
     e.preventDefault();
     const trimmed = text.trim();
     if (!trimmed || !session?.user || !group || sending) return;
+    if (isChannelLocked) { showToast('Only admins can send messages in this channel.', 'info'); return; }
     if (cooldownPercent > 0) { showToast('Please wait a few seconds before sending another message.', 'info'); return; }
 
     setSending(true);
@@ -815,6 +821,7 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
 
   async function sendPendingAttachment() {
     if (!pendingFile || !session?.user || !group || uploading) return;
+    if (isChannelLocked) { showToast('Only admins can send messages in this channel.', 'info'); return; }
     if (cooldownPercent > 0) { showToast('Please wait a few seconds before sending another message.', 'info'); return; }
     setUploading(true); setUploadSecondsLeft(60);
     const tick = setInterval(() => setUploadSecondsLeft((s) => (s > 0 ? s - 1 : 0)), 1000);
@@ -840,6 +847,7 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
 
   async function handleMediaPicked(url, mediaType) {
     if (!session?.user || !group || sending) return;
+    if (isChannelLocked) { showToast('Only admins can send messages in this channel.', 'info'); return; }
     if (cooldownPercent > 0) { showToast('Please wait.', 'info'); return; }
     setPickerOpen(false);
     const { error } = await supabase.from('group_messages').insert({ group_id: group.id, user_id: session.user.id, sender_name: currentSenderName(), media_url: url, media_type: mediaType, reply_to_id: replyingTo?.id ?? null, is_anon: isAnonMode });
@@ -849,6 +857,7 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
 
   async function handleConfessionSubmit(confessionText, anon, mediaFile, storyStyle) {
     setConfessionModalOpen(false);
+    if (isChannelLocked) { showToast('Only admins can send messages in this channel.', 'info'); return; }
     let mediaUrl = null; let mediaType = null;
     
     if (mediaFile) {
@@ -874,6 +883,7 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
 
   async function handleInstagramSubmit(username) {
     if (!session?.user || !group) return;
+    if (isChannelLocked) { showToast('Only admins can send messages in this channel.', 'info'); return; }
     setInstagramLoading(true); const data = await scrapeInstagram(username); setInstagramLoading(false);
     if (!data) { showToast("Couldn't find that Instagram profile.", 'error'); return; }
     setInstagramModalOpen(false);
@@ -1299,6 +1309,11 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
         {!session ? (
           <div style={{ padding: '16px', background: '#1C1D24', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
             <button onClick={() => setAuthOpen(true)} style={{ width: '100%', padding: '14px 0', borderRadius: 20, border: 'none', background: '#FF6B35', color: '#fff', fontWeight: 700, fontSize: 15, cursor: 'pointer', boxShadow: '0 6px 18px rgba(0,0,0,0.35)' }}>Sign in to send message</button>
+          </div>
+        ) : isChannelLocked ? (
+          <div style={{ padding: '16px', background: '#1C1D24', borderTop: '1px solid rgba(255,255,255,0.06)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, color: '#8B8B96', fontSize: 14, fontWeight: 600 }}>
+            {Vectors.Lock}
+            <span>Only admins can send messages in this channel</span>
           </div>
         ) : (
           <>

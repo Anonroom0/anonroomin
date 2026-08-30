@@ -4,7 +4,33 @@
  * ============================================================================
  */
 
-const RESERVED_SEGMENTS = ['www', 'anonroom', 'localhost'];
+const RESERVED_SEGMENTS = ['www', 'anonroom', 'localhost', 'administrator'];
+
+// True ONLY for the real production admin-panel subdomain
+// (administrator.anonroom.in). Unlike group subdomains, this one renders
+// its own dedicated view (AdminPanel.jsx) rather than redirecting anywhere
+// — see App.jsx's top-level dispatch. It relies on the same cross-subdomain
+// auth cookie set up in supabaseClient.js (cookieDomain = '.anonroom.in'),
+// so a session created on the main site is already valid here with no
+// separate login step.
+export function isAdministratorSubdomain() {
+  const hostname = window.location.hostname;
+  const parts = hostname.split('.');
+
+  const isLocalOrDev =
+    hostname === 'localhost' ||
+    /^\d{1,3}(\.\d{1,3}){3}$/.test(hostname) ||
+    parts.length < 3;
+
+  if (isLocalOrDev) {
+    // Local/dev fallback so the admin panel can still be tested without a
+    // real wildcard subdomain: http://localhost:5173/?admin=1
+    const params = new URLSearchParams(window.location.search);
+    return params.get('admin') === '1';
+  }
+
+  return parts[0] === 'administrator';
+}
 
 // Reserved as the FIRST path segment on the root domain, so they never get
 // mistaken for a username in the /<username> DM route. 'g' is reserved
@@ -170,6 +196,30 @@ export function getRootDomainUrl() {
 
   const rootHost = parts.slice(1).join('.'); // drop the group segment
   return `${protocol}//${rootHost}${portSuffix}/`;
+}
+
+// Builds the URL to open the admin panel — used by EditProfile.jsx's
+// "Open Admin Panel" button (admin-only). On local/dev hosts this uses the
+// ?admin=1 fallback isAdministratorSubdomain() already understands, since
+// wildcard subdomains don't resolve there.
+export function getAdministratorUrl() {
+  const { protocol, hostname, port } = window.location;
+  const parts = hostname.split('.');
+
+  const isLocalOrDev =
+    hostname === 'localhost' ||
+    /^\d{1,3}(\.\d{1,3}){3}$/.test(hostname) ||
+    parts.length < 3;
+
+  const portSuffix = port ? `:${port}` : '';
+
+  if (isLocalOrDev) {
+    return `${protocol}//${hostname}${portSuffix}/?admin=1`;
+  }
+
+  // From anonroom.in (or any group subdomain) -> administrator.anonroom.in
+  const rootHost = RESERVED_SEGMENTS.includes(parts[0]) ? parts.join('.') : parts.slice(1).join('.');
+  return `${protocol}//administrator.${rootHost}${portSuffix}/`;
 }
 
 // Builds the URL for actually opening a group — now the path-based
