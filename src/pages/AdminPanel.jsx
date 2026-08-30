@@ -250,6 +250,34 @@ function UserDetailPanel({ user, onClose }) {
   const [dmThreads, setDmThreads] = useState([]);
   const [confessions, setConfessions] = useState([]);
   const [questions, setQuestions] = useState([]);
+  const [email, setEmail] = useState(null);
+
+  // Fetched separately via the admin-get-user-email edge function — the
+  // client SDK has no access to auth.users.email, only a service-role
+  // function does. Best-effort: a failure here just leaves the email row
+  // off, it doesn't block the rest of the panel.
+  useEffect(() => {
+    let cancelled = false;
+    async function loadEmail() {
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session?.access_token) return;
+        const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+        const functionsUrl = supabaseUrl.replace('.supabase.co', '.functions.supabase.co');
+        const res = await fetch(`${functionsUrl}/admin-get-user-email`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+          body: JSON.stringify({ userId: user.id }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!cancelled && res.ok) setEmail(data.email || null);
+      } catch {
+        // best-effort — leave email as null
+      }
+    }
+    loadEmail();
+    return () => { cancelled = true; };
+  }, [user.id]);
 
   useEffect(() => {
     let cancelled = false;
@@ -308,6 +336,7 @@ function UserDetailPanel({ user, onClose }) {
         <button onClick={onClose} style={iconBtnStyle}>{Vectors.Back}</button>
         <h1 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: '#F4F3F0' }}>@{user.username || 'unknown'}</h1>
       </header>
+      {email && <div style={{ padding: '10px 20px 0', fontSize: 12.5, color: '#8B8B96' }}>{email}</div>}
 
       <div className="custom-scrollbar" style={{ flex: 1, overflowY: 'auto', padding: '20px 16px 60px' }}>
         <div style={{ maxWidth: 560, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 20 }}>

@@ -273,11 +273,14 @@ input:focus, textarea:focus, button:focus {
 
 /*
   Composer safety padding: on iPhones with a home indicator, content pinned
-  to the very bottom edge can sit under/behind it. This adds just enough
-  padding to clear it without affecting devices that don't have one.
+  to the very bottom edge can sit under/behind it. This adds enough padding
+  to clear it without affecting devices that don't have one. The extra
+  fixed 10px on top of the safe-area inset gives the composer a visible
+  gap above the on-screen keyboard too — without it, the input bar sits
+  flush against the keyboard's top edge with no breathing room.
 */
 .safe-bottom {
-  padding-bottom: env(safe-area-inset-bottom, 0px);
+  padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 10px);
 }
 
 /*

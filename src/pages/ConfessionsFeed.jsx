@@ -38,6 +38,7 @@ import { showToast, friendlyDbError } from '../lib/toast';
 import ConfessionBubble from '../components/shared/ConfessionBubble';
 import AttachmentSheet from '../components/shared/AttachmentSheet';
 import GlassPanel from '../components/shared/GlassPanel';
+import GlassToggle from '../components/shared/GlassToggle';
 import MediaViewer from './MediaViewer';
 
 // ============================================================================
@@ -92,9 +93,10 @@ const Vectors = {
 // ============================================================================
 // 3. COMPOSER SHEET
 // ============================================================================
-function ComposerSheet({ open, onClose, initialPhotoIntent, onSubmit, submitting }) {
+function ComposerSheet({ open, onClose, initialPhotoIntent, onSubmit, submitting, canAttribute }) {
   const [text, setText] = useState('');
   const [photo, setPhoto] = useState(null); // { file, previewUrl }
+  const [isAnon, setIsAnon] = useState(true);
   const [attachSheetOpen, setAttachSheetOpen] = useState(false);
   const cameraInputRef = useRef(null);
 
@@ -106,6 +108,7 @@ function ComposerSheet({ open, onClose, initialPhotoIntent, onSubmit, submitting
       setText('');
       if (photo) URL.revokeObjectURL(photo.previewUrl);
       setPhoto(null);
+      setIsAnon(true);
       setAttachSheetOpen(false);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -133,16 +136,23 @@ function ComposerSheet({ open, onClose, initialPhotoIntent, onSubmit, submitting
   function handleSubmit() {
     const trimmed = text.trim();
     if (!trimmed || submitting) return;
-    onSubmit({ text: trimmed, file: photo?.file || null });
+    onSubmit({ text: trimmed, file: photo?.file || null, isAnon: canAttribute ? isAnon : true });
   }
 
   return (
     <GlassPanel variant="sheet" onClose={submitting ? undefined : onClose}>
       <div style={{ padding: '4px 2px 2px' }}>
         <h3 style={{ margin: '0 0 4px', fontSize: 17, fontWeight: 800, color: 'var(--paper)' }}>New Confession</h3>
-        <p style={{ margin: '0 0 14px', fontSize: 13, color: 'var(--dim)' }}>
-          Posted anonymously — there's no way to attach your name here.
-        </p>
+        {canAttribute ? (
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, margin: '0 0 14px' }}>
+            <span style={{ fontSize: 13, color: 'var(--dim)' }}>{isAnon ? 'Posted anonymously' : 'Will show your name'}</span>
+            <GlassToggle checked={isAnon} onChange={setIsAnon} />
+          </div>
+        ) : (
+          <p style={{ margin: '0 0 14px', fontSize: 13, color: 'var(--dim)' }}>
+            Posted anonymously — there's no way to attach your name here.
+          </p>
+        )}
 
         <textarea
           autoFocus
@@ -380,7 +390,7 @@ export default function ConfessionsFeed({ focusConfessionId }) {
   // --------------------------------------------------------------------------
   // SUBMIT
   // --------------------------------------------------------------------------
-  async function handleComposerSubmit({ text, file }) {
+  async function handleComposerSubmit({ text, file, isAnon }) {
     setSubmitting(true);
     try {
       let photoUrl = null;
@@ -399,13 +409,16 @@ export default function ConfessionsFeed({ focusConfessionId }) {
         photoUrl = publicUrlData?.publicUrl || null;
       }
 
-      // Confessions are always fully anonymous here: no author_id, is_anon
-      // always true, group_id always null (this is the public feed).
+      // Signed-out visitors (no session) can only ever post anonymously —
+      // there's no user id to attribute to. Signed-in users can choose via
+      // the composer's toggle; author_id is only ever set when they opted
+      // out of anonymity, matching confessions_insert_own's RLS check.
+      const anon = !session?.user || isAnon;
       const { error: insertError } = await supabase.from('confessions').insert({
         text,
         photo_url: photoUrl,
-        is_anon: true,
-        author_id: null,
+        is_anon: anon,
+        author_id: anon ? null : session.user.id,
         group_id: null,
       });
       if (insertError) throw insertError;
@@ -536,6 +549,7 @@ export default function ConfessionsFeed({ focusConfessionId }) {
         initialPhotoIntent={composerPhotoIntent}
         onSubmit={handleComposerSubmit}
         submitting={submitting}
+        canAttribute={!!session?.user}
       />
 
       <MediaViewer mediaUrl={viewerMedia?.url} mediaType={viewerMedia?.type} open={viewerMedia !== null} onClose={() => setViewerMedia(null)} />

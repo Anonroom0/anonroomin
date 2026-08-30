@@ -29,6 +29,7 @@ import ReactionBar from '../components/shared/ReactionBar';
 import { showToast, friendlyDbError } from '../lib/toast';
 import { playSend, playReceive } from '../lib/soundManager';
 import { hapticSend, hapticSelect } from '../lib/haptics';
+import { useViewportHeight } from '../lib/useViewportHeight';
 
 // ============================================================================
 // 1. CONSTANTS & CONFIGURATION
@@ -385,9 +386,22 @@ function AttachmentSheet({ open, onClose, onOpenCamera, onPickInstagram }) {
 
 function InstagramModal({ open, onClose, onSubmit, loading }) {
   const [username, setUsername] = useState('');
+  // Sized against the real visible viewport (not the layout viewport) so
+  // the sheet stays pinned above the on-screen keyboard instead of the
+  // keyboard covering it — see useViewportHeight.js for why inset:0 alone
+  // isn't keyboard-safe on mobile.
+  const { height: vh, offsetTop } = useViewportHeight();
   if (!open) return null;
   return (
-    <div onClick={loading ? undefined : onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', zIndex: 50, display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
+    <div
+      onClick={loading ? undefined : onClose}
+      style={{
+        position: 'fixed', top: 0, left: 0, right: 0,
+        height: vh ? `${vh}px` : '100dvh',
+        transform: offsetTop ? `translateY(${offsetTop}px)` : undefined,
+        background: 'rgba(0,0,0,0.85)', zIndex: 50, display: 'flex', alignItems: 'flex-end', justifyContent: 'center',
+      }}
+    >
       <div onClick={(e) => e.stopPropagation()} style={{ width: '100%', maxWidth: 500, margin: '0 auto', background: '#1C1D24', borderRadius: '28px 28px 0 0', padding: '24px 20px', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
         <h3 style={{ margin: '0 0 6px', color: '#F4F3F0', display: 'flex', alignItems: 'center', gap: 8 }}><div style={{ color: '#FF6B35' }}>{Vectors.Instagram}</div> Share Instagram Profile</h3>
         <p style={{ margin: '0 0 16px', fontSize: 14, color: '#8B8B96' }}>Just the username — we'll pull the profile card automatically.</p>
