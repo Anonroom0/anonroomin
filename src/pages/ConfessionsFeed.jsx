@@ -300,10 +300,13 @@ export default function ConfessionsFeed({ focusConfessionId }) {
   // --------------------------------------------------------------------------
   // FETCH + REALTIME
   // --------------------------------------------------------------------------
+  // profiles(username, avatar_url) is only ever rendered for non-anon
+  // confessions (see ConfessionBubble's overlay) — is_anon still gates the
+  // display even though author_id is always present in the row now.
   const fetchConfessions = useCallback(async () => {
     const { data, error } = await supabase
       .from('confessions')
-      .select('*')
+      .select('*, profiles(username, avatar_url)')
       .is('group_id', null)
       .order('created_at', { ascending: false })
       .limit(FEED_LIMIT);
@@ -325,10 +328,17 @@ export default function ConfessionsFeed({ focusConfessionId }) {
     // silently ignored here.
     const channel = supabase
       .channel('public_confessions_feed')
-      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'confessions' }, (payload) => {
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'confessions' }, async (payload) => {
         const row = payload.new;
         if (row.group_id) return;
-        setConfessions((prev) => (prev.some((c) => c.id === row.id) ? prev : [row, ...prev]));
+        // Realtime payloads only carry base-table columns, no join — fetch
+        // the poster's profile ourselves when it'll actually be shown.
+        let profiles = null;
+        if (!row.is_anon && row.author_id) {
+          const { data } = await supabase.from('profiles').select('username, avatar_url').eq('id', row.author_id).maybeSingle();
+          profiles = data || null;
+        }
+        setConfessions((prev) => (prev.some((c) => c.id === row.id) ? prev : [{ ...row, profiles }, ...prev]));
       })
       .subscribe();
 
@@ -353,9 +363,9 @@ export default function ConfessionsFeed({ focusConfessionId }) {
         // `id` to text and ILIKE-prefix matching it.
         const isShort = /^[0-9a-f]{1,32}$/i.test(normalizedTarget);
         const { data } = isShort
-          ? await supabase.from('confessions').select('*').is('group_id', null)
+          ? await supabase.from('confessions').select('*, profiles(username, avatar_url)').is('group_id', null)
               .eq('link_id', normalizedTarget).order('created_at', { ascending: false }).limit(1).maybeSingle()
-          : await supabase.from('confessions').select('*').eq('id', targetId).maybeSingle();
+          : await supabase.from('confessions').select('*, profiles(username, avatar_url)').eq('id', targetId).maybeSingle();
         if (data) setConfessions((prev) => prev.some((c) => c.id === data.id) ? prev : [data, ...prev]);
       })();
       return;
@@ -411,14 +421,16 @@ export default function ConfessionsFeed({ focusConfessionId }) {
 
       // Signed-out visitors (no session) can only ever post anonymously —
       // there's no user id to attribute to. Signed-in users can choose via
-      // the composer's toggle; author_id is only ever set when they opted
-      // out of anonymity, matching confessions_insert_own's RLS check.
+      // the composer's toggle; is_anon controls what other people see, but
+      // author_id is always recorded when there's a session, anon or not —
+      // matches confessions_insert_own's RLS check (see
+      // 0005_confessions_author_id_always.sql).
       const anon = !session?.user || isAnon;
       const { error: insertError } = await supabase.from('confessions').insert({
         text,
         photo_url: photoUrl,
         is_anon: anon,
-        author_id: anon ? null : session.user.id,
+        author_id: session?.user?.id || null,
         group_id: null,
       });
       if (insertError) throw insertError;
@@ -476,7 +488,16 @@ export default function ConfessionsFeed({ focusConfessionId }) {
                 background: isHighlighted ? 'color-mix(in srgb, var(--ember) 8%, transparent)' : 'transparent',
               }}
             >
-              <ConfessionBubble confession={confession} size="feed" userId={session?.user?.id} onPhotoClick={(c) => setViewerMedia({ url: c.photo_url, type: 'image' })} />
+              <ConfessionBubble
+                confession={{
+                  ...confession,
+                  author_username: confession.is_anon ? null : confession.profiles?.username || null,
+                  author_avatar_url: confession.is_anon ? null : confession.profiles?.avatar_url || null,
+                }}
+                size="feed"
+                userId={session?.user?.id}
+                onPhotoClick={(c) => setViewerMedia({ url: c.photo_url, type: 'image' })}
+              />
             </div>
           );
         })}

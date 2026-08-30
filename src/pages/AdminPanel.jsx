@@ -18,7 +18,7 @@
  * ============================================================================
  */
 
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useRef } from 'react';
 import supabase from '../lib/supabaseClient';
 import { useAuth } from '../lib/authContext';
 import AuthModal from './AuthModal';
@@ -26,6 +26,8 @@ import { hapticTap, hapticSuccess, hapticError } from '../lib/haptics';
 import { playTap, playRefreshComplete, playError } from '../lib/soundManager';
 import { showToast, friendlyDbError } from '../lib/toast';
 import ToastContainer from '../components/ToastContainer';
+
+const MEDIA_BUCKET = 'media';
 
 const Vectors = {
   Shield: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /></svg>,
@@ -39,6 +41,8 @@ const Vectors = {
   File: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /></svg>,
   Bell: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" /><path d="M13.73 21a2 2 0 0 1-3.46 0" /></svg>,
   ChevronRight: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6" /></svg>,
+  Photo: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2" /><circle cx="8.5" cy="8.5" r="1.5" /><polyline points="21 15 16 10 5 21" /></svg>,
+  MessageSquare: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /></svg>,
 };
 
 function LiquidSwitch({ checked, onChange, disabled }) {
@@ -74,8 +78,12 @@ function GroupsTab() {
   const [loading, setLoading] = useState(true);
   const [creating, setCreating] = useState(false);
   const [busyId, setBusyId] = useState(null);
+  const [coverBusyId, setCoverBusyId] = useState(null);
   const [form, setForm] = useState({ name: '', slug: '', description: '', isChannel: false });
   const [slugTouched, setSlugTouched] = useState(false);
+  const coverInputRef = useRef(null);
+  const coverTargetIdRef = useRef(null); // which group's file input is currently open ('new' for the create-group form)
+  const [newGroupCoverFile, setNewGroupCoverFile] = useState(null); // { file, previewUrl } picked before the group exists yet
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -85,6 +93,56 @@ function GroupsTab() {
   }, []);
 
   useEffect(() => { load(); }, [load]);
+
+  // Uploads a picked file to the 'media' bucket and writes the resulting
+  // public URL onto groups.cover_url — this is the column Home.jsx,
+  // GroupCard.jsx, and GroupChat.jsx already read as the group's display
+  // picture (added in 0004_admin_panel_extensions.sql), so no schema
+  // change is needed for this feature. Relies on the same
+  // media_admin_full_access storage policy StorageTab already depends on
+  // (admins can write anywhere in the bucket with their own session).
+  async function uploadGroupCover(groupId, file) {
+    const safeName = file.name.replace(/[^a-zA-Z0-9.\-_]/g, '_');
+    const path = `group-covers/${groupId}-${Date.now()}-${safeName}`;
+    const { error: uploadError } = await supabase.storage.from(MEDIA_BUCKET).upload(path, file, { upsert: false, contentType: file.type || undefined });
+    if (uploadError) throw uploadError;
+    const { data: publicUrlData } = supabase.storage.from(MEDIA_BUCKET).getPublicUrl(path);
+    const publicUrl = publicUrlData?.publicUrl;
+    if (!publicUrl) throw new Error('Could not resolve image URL.');
+    const { error: updateError } = await supabase.from('groups').update({ cover_url: publicUrl }).eq('id', groupId);
+    if (updateError) throw updateError;
+    return publicUrl;
+  }
+
+  function openCoverPicker(groupId) {
+    coverTargetIdRef.current = groupId;
+    coverInputRef.current?.click();
+  }
+
+  async function handleCoverFileChange(e) {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    const targetId = coverTargetIdRef.current;
+    if (!file || !targetId) return;
+
+    // Creating a new group: the row doesn't exist yet, so just stash the
+    // file and preview — handleCreate() uploads it right after insert.
+    if (targetId === 'new') {
+      setNewGroupCoverFile({ file, previewUrl: URL.createObjectURL(file) });
+      return;
+    }
+
+    setCoverBusyId(targetId);
+    try {
+      const publicUrl = await uploadGroupCover(targetId, file);
+      hapticSuccess(); playRefreshComplete(); showToast('Group picture updated.', 'success');
+      setGroups((gs) => gs.map((g) => (g.id === targetId ? { ...g, cover_url: publicUrl } : g)));
+    } catch (err) {
+      playError(); hapticError(); showToast(err?.message || 'Could not upload group picture.', 'error');
+    } finally {
+      setCoverBusyId(null);
+    }
+  }
 
   function handleNameChange(v) {
     setForm((f) => ({ ...f, name: v, slug: slugTouched ? f.slug : v.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '') }));
@@ -96,11 +154,24 @@ function GroupsTab() {
     if (!name || !slug) { showToast('Name and slug are required.', 'info'); return; }
     setCreating(true);
     const { data, error } = await supabase.from('groups').insert({ name, slug, description: form.description.trim() || null, is_channel: form.isChannel }).select().single();
+    if (error) { setCreating(false); playError(); hapticError(); showToast(error.message?.includes('duplicate') ? 'That slug is already taken.' : friendlyDbError(), 'error'); return; }
+
+    let created = data;
+    if (newGroupCoverFile) {
+      try {
+        const publicUrl = await uploadGroupCover(created.id, newGroupCoverFile.file);
+        created = { ...created, cover_url: publicUrl };
+      } catch (err) {
+        showToast("Group created, but the picture didn't upload.", 'info');
+      }
+      URL.revokeObjectURL(newGroupCoverFile.previewUrl);
+      setNewGroupCoverFile(null);
+    }
+
     setCreating(false);
-    if (error) { playError(); hapticError(); showToast(error.message?.includes('duplicate') ? 'That slug is already taken.' : friendlyDbError(), 'error'); return; }
     hapticSuccess(); playRefreshComplete(); showToast('Group created.', 'success');
     setForm({ name: '', slug: '', description: '', isChannel: false }); setSlugTouched(false);
-    setGroups((g) => [data, ...g]);
+    setGroups((g) => [created, ...g]);
   }
 
   async function toggleChannel(group) {
@@ -124,9 +195,28 @@ function GroupsTab() {
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 20 }}>
+      {/* Shared hidden file input for every cover picker (create form +
+          each group row) — coverTargetIdRef says which one is "open". */}
+      <input ref={coverInputRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handleCoverFileChange} />
+
       <Card>
         <h3 style={{ margin: '0 0 12px', fontSize: 14, fontWeight: 700, color: '#F4F3F0' }}>Create Group</h3>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 4 }}>
+            <button
+              type="button"
+              onClick={() => openCoverPicker('new')}
+              style={{
+                width: 52, height: 52, borderRadius: '50%', border: '1px dashed rgba(255,255,255,0.2)',
+                background: newGroupCoverFile ? `url(${newGroupCoverFile.previewUrl}) center/cover` : '#1C1D24',
+                display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#8B8B96', cursor: 'pointer', flexShrink: 0, padding: 0,
+              }}
+              title="Upload group picture"
+            >
+              {!newGroupCoverFile && Vectors.Photo}
+            </button>
+            <span style={{ fontSize: 12.5, color: '#8B8B96' }}>{newGroupCoverFile ? 'Picture selected' : 'Group picture (optional)'}</span>
+          </div>
           <input value={form.name} onChange={(e) => handleNameChange(e.target.value)} placeholder="Group name" style={inputStyle} />
           <input value={form.slug} onChange={(e) => { setSlugTouched(true); setForm((f) => ({ ...f, slug: e.target.value.toLowerCase().replace(/[^a-z0-9-]/g, '') })); }} placeholder="slug" style={inputStyle} />
           <input value={form.description} onChange={(e) => setForm((f) => ({ ...f, description: e.target.value }))} placeholder="Description (optional)" style={inputStyle} />
@@ -149,9 +239,25 @@ function GroupsTab() {
             {groups.map((g) => (
               <Card key={g.id}>
                 <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12 }}>
-                  <div style={{ minWidth: 0 }}>
-                    <div style={{ fontSize: 15, fontWeight: 700, color: '#F4F3F0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{g.name}</div>
-                    <div style={{ fontSize: 12.5, color: '#8B8B96' }}>/{g.slug}{g.is_channel ? ' · channel' : ''}</div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
+                    <button
+                      type="button"
+                      onClick={() => openCoverPicker(g.id)}
+                      disabled={coverBusyId === g.id}
+                      style={{
+                        width: 38, height: 38, borderRadius: '50%', border: 'none', flexShrink: 0, padding: 0, cursor: 'pointer',
+                        background: g.cover_url ? `url(${g.cover_url}) center/cover` : '#FF6B35',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#fff',
+                        opacity: coverBusyId === g.id ? 0.5 : 1,
+                      }}
+                      title="Change group picture"
+                    >
+                      {!g.cover_url && (coverBusyId === g.id ? Vectors.Spinner : Vectors.Photo)}
+                    </button>
+                    <div style={{ minWidth: 0 }}>
+                      <div style={{ fontSize: 15, fontWeight: 700, color: '#F4F3F0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{g.name}</div>
+                      <div style={{ fontSize: 12.5, color: '#8B8B96' }}>/{g.slug}{g.is_channel ? ' · channel' : ''}</div>
+                    </div>
                   </div>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 14, flexShrink: 0 }}>
                     <LiquidSwitch checked={!!g.is_channel} onChange={() => toggleChannel(g)} disabled={busyId === g.id} />
@@ -404,12 +510,104 @@ function UserDetailPanel({ user, onClose }) {
 }
 
 // ----------------------------------------------------------------------------
+// CONFESSIONS TAB — every confession (public feed + group-mirrored), newest
+// first, with a delete button. Same confessions_delete_owner_or_admin RLS
+// policy as UserDetailPanel's per-user delete already relies on — this is
+// just the same capability surfaced as its own top-level tab instead of
+// requiring a click into a specific user first. Joins profiles(username)
+// so admins can see who actually posted an "anonymous" confession — now
+// possible because author_id is always recorded regardless of is_anon
+// (see 0005_confessions_author_id_always.sql).
+// ----------------------------------------------------------------------------
+const CONFESSIONS_PAGE_LIMIT = 100;
+
+function ConfessionsTab() {
+  const [confessions, setConfessions] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [busyId, setBusyId] = useState(null);
+  const [filter, setFilter] = useState('all'); // 'all' | 'public' | 'group'
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    const { data, error } = await supabase
+      .from('confessions')
+      .select('*, profiles(username, avatar_url)')
+      .order('created_at', { ascending: false })
+      .limit(CONFESSIONS_PAGE_LIMIT);
+    if (error) showToast(friendlyDbError(), 'error'); else setConfessions(data || []);
+    setLoading(false);
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  async function handleDelete(confession) {
+    if (!window.confirm('Delete this confession? This cannot be undone.')) return;
+    setBusyId(confession.id);
+    const { error } = await supabase.from('confessions').delete().eq('id', confession.id);
+    setBusyId(null);
+    if (error) { showToast(friendlyDbError(), 'error'); return; }
+    hapticSuccess(); showToast('Confession deleted.', 'success');
+    setConfessions((cs) => cs.filter((c) => c.id !== confession.id));
+  }
+
+  const filtered = confessions.filter((c) => {
+    if (filter === 'public') return !c.group_id;
+    if (filter === 'group') return !!c.group_id;
+    return true;
+  });
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <div style={{ display: 'flex', gap: 6 }}>
+        {[{ id: 'all', label: 'All' }, { id: 'public', label: 'Public feed' }, { id: 'group', label: 'Groups' }].map((f) => (
+          <button
+            key={f.id}
+            onClick={() => { hapticTap(); playTap(); setFilter(f.id); }}
+            style={{
+              padding: '7px 14px', borderRadius: 999, border: 'none', fontSize: 13, fontWeight: 600, cursor: 'pointer',
+              background: filter === f.id ? '#FF6B35' : 'rgba(255,255,255,0.06)', color: filter === f.id ? '#fff' : '#8B8B96',
+            }}
+          >
+            {f.label}
+          </button>
+        ))}
+      </div>
+      <div style={{ fontSize: 13, color: '#8B8B96' }}>{filtered.length} of {confessions.length} confessions (latest {CONFESSIONS_PAGE_LIMIT})</div>
+
+      {loading ? (
+        <div style={{ display: 'flex', justifyContent: 'center', padding: 30, color: '#FF6B35' }}>{Vectors.Spinner}</div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {filtered.map((c) => (
+            <Card key={c.id}>
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: 10 }}>
+                {c.photo_url && (
+                  <img src={c.photo_url} alt="" style={{ width: 44, height: 44, borderRadius: 10, objectFit: 'cover', flexShrink: 0 }} />
+                )}
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ fontSize: 13.5, color: '#F4F3F0', wordBreak: 'break-word' }}>{c.text || <em style={{ color: '#8B8B96' }}>(no text)</em>}</div>
+                  <div style={{ fontSize: 11.5, color: '#8B8B96', marginTop: 4 }}>
+                    {c.group_id ? 'group' : 'public'} · {c.is_anon ? 'anonymous' : 'shown'}
+                    {c.profiles?.username && <> · <span style={{ color: c.is_anon ? '#FF6B35' : '#8B8B96' }}>@{c.profiles.username}{c.is_anon ? ' (hidden)' : ''}</span></>}
+                    {' · '}{new Date(c.created_at).toLocaleString()}
+                  </div>
+                </div>
+                <button onClick={() => handleDelete(c)} disabled={busyId === c.id} style={iconBtnStyle}>{Vectors.Trash}</button>
+              </div>
+            </Card>
+          ))}
+          {filtered.length === 0 && <div style={{ color: '#8B8B96', fontSize: 14, textAlign: 'center', padding: 20 }}>No confessions found.</div>}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ----------------------------------------------------------------------------
 // STORAGE TAB — browses/cleans the 'media' bucket. Relies on the
 // media_admin_full_access storage.objects policy (migration 0004) so this
 // works with the caller's own session, no service-role key needed.
 // ----------------------------------------------------------------------------
-const MEDIA_BUCKET = 'media';
-
 function formatBytes(bytes) {
   if (!bytes) return '0 B';
   const units = ['B', 'KB', 'MB', 'GB'];
@@ -626,6 +824,7 @@ export default function AdminPanel() {
   const tabs = [
     { id: 'groups', label: 'Groups', icon: Vectors.Hash },
     { id: 'users', label: 'Users', icon: Vectors.Users },
+    { id: 'confessions', label: 'Confessions', icon: Vectors.MessageSquare },
     { id: 'storage', label: 'Storage', icon: Vectors.Database },
     { id: 'push', label: 'Push', icon: Vectors.Bell },
   ];
@@ -654,6 +853,7 @@ export default function AdminPanel() {
         <div style={{ maxWidth: 560, margin: '0 auto' }}>
           {tab === 'groups' && <GroupsTab />}
           {tab === 'users' && <UsersTab ownUserId={session.user.id} />}
+          {tab === 'confessions' && <ConfessionsTab />}
           {tab === 'storage' && <StorageTab />}
           {tab === 'push' && <PushTab session={session} />}
         </div>

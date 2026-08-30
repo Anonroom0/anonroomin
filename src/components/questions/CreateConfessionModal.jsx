@@ -9,10 +9,12 @@
  * 'public' — the exact same row shape the public feed itself reads (see
  * ConfessionsFeed.jsx's own composer).
  *
- * Anonymity: `confessions_insert_own`'s RLS check requires
- * (is_anon = true AND author_id IS NULL) OR (is_anon = false AND author_id =
- * auth.uid()) — so the toggle here directly drives which of those two
- * shapes gets inserted, exactly like GroupChat.jsx's own confession toggle.
+ * Anonymity: `confessions_insert_own`'s RLS check requires author_id =
+ * auth.uid() on every insert, anon or not (see
+ * 0005_confessions_author_id_always.sql) — author_id is always recorded so
+ * moderators can trace a confession back to its poster, but is_anon is what
+ * the toggle here actually drives, and it's what every reader (feed, group
+ * inline, story) uses to decide whether to show the poster's name/avatar.
  * ========================================================================= */
 
 import { useState, useRef, useEffect } from 'react';
@@ -231,7 +233,11 @@ function CreateConfessionModalContent({ onCreated }) {
           group_id: null,
           visibility: 'public',
           is_anon: isAnon,
-          author_id: isAnon ? null : session.user.id,
+          // Always recorded, even when posting anonymously — is_anon is
+          // what drives hiding the name/avatar in the UI, not whether the
+          // row remembers who posted it (matches confessions_insert_own's
+          // RLS check, see 0005_confessions_author_id_always.sql).
+          author_id: session.user.id,
           // Only the preset ids — no rendered image is uploaded anywhere;
           // the story viewer renders this on demand (see 0002 migration).
           story_style: storyStyle && trimmedText ? storyStyle : null,

@@ -75,7 +75,7 @@ async function loadChannelItems(channel) {
   if (channel.type === 'group') {
     const { data, error } = await supabase
       .from('confessions')
-      .select('*')
+      .select('*, profiles(username, avatar_url)')
       .eq('group_id', channel.id)
       .gte('created_at', since)
       .order('created_at', { ascending: true }); 
@@ -86,7 +86,7 @@ async function loadChannelItems(channel) {
   if (channel.type === 'public-confessions') {
     const { data, error } = await supabase
       .from('confessions')
-      .select('*')
+      .select('*, profiles(username, avatar_url)')
       .is('group_id', null)
       .gte('created_at', since)
       .order('created_at', { ascending: false }); 
@@ -181,6 +181,14 @@ function CustomizedConfessionCard({ confession }) {
   const [previewUrl, setPreviewUrl] = useState(null);
   const urlRef = useRef(null);
 
+  // Same is_anon gating as ConfessionBubble's own overlay — only shown for
+  // non-anonymous confessions, using whichever author fields are present
+  // (joined `profiles` from loadChannelItems, or flat author_username /
+  // author_avatar_url from a caller that already has them locally).
+  const authorUsername = !confession.is_anon ? (confession.profiles?.username || confession.author_username || null) : null;
+  const authorAvatarUrl = !confession.is_anon ? (confession.profiles?.avatar_url || confession.author_avatar_url || null) : null;
+  const showAuthorOverlay = Boolean(authorUsername || authorAvatarUrl);
+
   useEffect(() => {
     let cancelled = false;
     generateStoryImage({
@@ -221,8 +229,30 @@ function CustomizedConfessionCard({ confession }) {
         overflow: 'hidden',
         background: 'var(--glass-white)',
         border: '1px solid var(--glass-border)',
+        position: 'relative',
       }}
     >
+      {showAuthorOverlay && (
+        <div
+          style={{
+            position: 'absolute', top: 10, left: 10, zIndex: 2,
+            display: 'flex', alignItems: 'center', gap: 6,
+            padding: '3px 10px 3px 3px', borderRadius: 999,
+            background: 'rgba(0,0,0,0.55)', backdropFilter: 'blur(6px)',
+          }}
+        >
+          {authorAvatarUrl ? (
+            <img src={authorAvatarUrl} alt="" style={{ width: 20, height: 20, borderRadius: '50%', objectFit: 'cover', display: 'block', flexShrink: 0 }} />
+          ) : (
+            <div style={{ width: 20, height: 20, borderRadius: '50%', background: 'var(--ember)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, fontWeight: 800, color: '#fff', flexShrink: 0 }}>
+              {(authorUsername || '?').slice(0, 1).toUpperCase()}
+            </div>
+          )}
+          <span style={{ fontSize: 11.5, fontWeight: 700, color: '#fff', maxWidth: 140, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+            {authorUsername ? `@${authorUsername}` : 'Someone'}
+          </span>
+        </div>
+      )}
       {previewUrl ? (
         <img src={previewUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
       ) : (

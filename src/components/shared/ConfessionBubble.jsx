@@ -147,6 +147,19 @@ export default function ConfessionBubble({ confession, onReply, onPhotoClick, si
 
   useEffect(() => () => { if (styledCardUrlRef.current) URL.revokeObjectURL(styledCardUrlRef.current); }, []);
 
+  // Not-anonymous confessions overlay the poster's name + avatar on top of
+  // the card, NGL/IG-story style. Callers pass this through either as a
+  // flat author_username/author_avatar_url pair (GroupChat.jsx, which
+  // already has sender_name/profiles.avatar_url on hand) or as a joined
+  // `profiles` object (ConfessionsFeed.jsx/StoryViewer.jsx, which select
+  // `*, profiles(username, avatar_url)`) — either shape works here. Always
+  // gated on is_anon, regardless of what's present in author_id underneath
+  // (see 0005_confessions_author_id_always.sql for why author_id is always
+  // recorded now even for anonymous posts).
+  const authorUsername = !confession.is_anon ? (confession.profiles?.username || confession.author_username || null) : null;
+  const authorAvatarUrl = !confession.is_anon ? (confession.profiles?.avatar_url || confession.author_avatar_url || null) : null;
+  const showAuthorOverlay = Boolean(authorUsername || authorAvatarUrl);
+
   const mediaUrl = confession.photo_url || confession.media_url;
   const mediaType = detectMediaType(mediaUrl, confession.media_type);
   const isVideo = mediaType === 'video';
@@ -164,13 +177,49 @@ export default function ConfessionBubble({ confession, onReply, onPhotoClick, si
     if (isStory) setStoryChromeVisible((v) => !v);
   }
 
+  // Small IG/NGL-style "posted by" chip, absolutely positioned over the
+  // top-left corner of a card. Only ever rendered when showAuthorOverlay is
+  // true, i.e. is_anon === false and we actually have a name/avatar to show.
+  function AuthorOverlay() {
+    if (!showAuthorOverlay) return null;
+    return (
+      <div
+        style={{
+          position: 'absolute',
+          top: 10,
+          left: 10,
+          zIndex: 2,
+          display: 'flex',
+          alignItems: 'center',
+          gap: 6,
+          padding: '3px 10px 3px 3px',
+          borderRadius: 999,
+          background: 'rgba(0,0,0,0.55)',
+          backdropFilter: 'blur(6px)',
+        }}
+      >
+        {authorAvatarUrl ? (
+          <img src={authorAvatarUrl} alt="" style={{ width: 20, height: 20, borderRadius: '50%', objectFit: 'cover', display: 'block', flexShrink: 0 }} />
+        ) : (
+          <div style={{ width: 20, height: 20, borderRadius: '50%', background: 'var(--ember)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: 9, fontWeight: 800, color: '#fff', flexShrink: 0 }}>
+            {(authorUsername || '?').slice(0, 1).toUpperCase()}
+          </div>
+        )}
+        <span style={{ fontSize: 11.5, fontWeight: 700, color: '#fff', maxWidth: 140, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+          {authorUsername ? `@${authorUsername}` : 'Someone'}
+        </span>
+      </div>
+    );
+  }
+
   // --- Customized rendering: no header strip/label at all, just the
   // rendered Shape+Background body (text is baked into the image), with
   // the same reply affordance underneath as the standard card. ---
   if (storyStyle && confession.text) {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: '70%', margin: isStory ? 0 : '16px 0' }}>
-        <div style={{ width: '100%', maxWidth: preset.maxWidth }}>
+        <div style={{ width: '100%', maxWidth: preset.maxWidth, position: 'relative' }}>
+          <AuthorOverlay />
           <div
             onClick={handleBodyTap}
             style={{
@@ -297,8 +346,10 @@ export default function ConfessionBubble({ confession, onReply, onPhotoClick, si
             borderRadius: '0 0 20px 20px',
             overflow: 'hidden',
             cursor: isStory ? 'pointer' : 'default',
+            position: 'relative',
           }}
         >
+          <AuthorOverlay />
           {mediaUrl && (isVideo || isImage) && (
             <div
               onClick={(e) => {

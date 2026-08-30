@@ -564,6 +564,9 @@ export default function QuestionThread({ questionId, onBack, onShareReply }) {
         visibility: 'public',
         group_id: null,
         is_anon: true,
+        // Always recorded now (see 0005_confessions_author_id_always.sql) —
+        // isAuthor being true here means ownUserId is set.
+        author_id: ownUserId,
       });
       if (confessionError) {
         console.error(confessionError);
