@@ -268,16 +268,9 @@ function DMLiquidAvatar({ identity, size = 42, isAnon = false }) {
     );
   }
 
-  const colors = [
-    'linear-gradient(135deg, #ff5e62 0%, #ff9966 100%)',
-    'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
-    'linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)',
-    'linear-gradient(135deg, #fa709a 0%, #fee140 100%)',
-  ];
-  const colorIndex = (identity.name || '').length % colors.length;
-
+  // Solid brand ember — matches EditProfile.jsx and LiquidAvatar.jsx.
   return (
-    <div style={{ ...containerStyle, background: colors[colorIndex], color: '#ffffff', fontWeight: 700, fontSize: size * 0.4 }}>
+    <div style={{ ...containerStyle, background: '#FF6B35', color: '#ffffff', fontWeight: 700, fontSize: size * 0.4 }}>
       {getInitials(identity.name)}
     </div>
   );

@@ -41,13 +41,10 @@
  * animation's ~400ms so the class can be re-added on the next message.
  * ========================================================================= */
 
-const FALLBACK_GRADIENTS = [
-  'linear-gradient(135deg, #ff5e62 0%, #ff9966 100%)',
-  'linear-gradient(135deg, #4facfe 0%, #00f2fe 100%)',
-  'linear-gradient(135deg, #43e97b 0%, #38f9d7 100%)',
-  'linear-gradient(135deg, #fa709a 0%, #fee140 100%)',
-  'linear-gradient(135deg, #a18cd1 0%, #fbc2eb 100%)',
-];
+// Solid brand ember — matches the avatar treatment in EditProfile.jsx.
+// (Previously a 5-color rainbow gradient rotation keyed off name length;
+// replaced for brand consistency across all fallback avatars app-wide.)
+const FALLBACK_COLOR = '#FF6B35';
 
 function getInitials(name) {
   if (!name) return '?';
@@ -127,12 +124,11 @@ export default function LiquidAvatar({
       </div>
     );
   } else {
-    const colorIndex = (name || '').length % FALLBACK_GRADIENTS.length;
     content = (
       <div
         style={{
           ...circleStyle,
-          background: FALLBACK_GRADIENTS[colorIndex],
+          background: FALLBACK_COLOR,
           color: '#ffffff',
           fontWeight: 700,
           fontSize: size * 0.4,
