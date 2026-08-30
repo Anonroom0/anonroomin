@@ -700,31 +700,35 @@ function SizeField({ scaleId, onChange }) {
   );
 }
 
-export default function ShareStorySheet({ open, onClose, mode = 'question', question, reply, message }) {
+export default function ShareStorySheet({ open, onClose, mode = 'question', question, reply, message, customizable = true, lockedStyle = null }) {
   if (!open) return null;
   return (
     <GlassPanel variant="sheet" onClose={onClose}>
-      <ShareStorySheetContent mode={mode} question={question} reply={reply} message={message} />
+      <ShareStorySheetContent mode={mode} question={question} reply={reply} message={message} customizable={customizable} lockedStyle={lockedStyle} />
     </GlassPanel>
   );
 }
 
-function ShareStorySheetContent({ mode, question, reply, message }) {
+function ShareStorySheetContent({ mode, question, reply, message, customizable, lockedStyle }) {
   const requestClose = useGlassPanelClose();
 
-  // Every field starts from a random preset each time the sheet mounts
-  // (i.e. every time it's opened), rather than always defaulting to the
-  // first entry in each list.
-  const [backgroundId, setBackgroundId] = useState(() => randomId(BACKGROUND_STRUCTURES));
-  const [colorId, setColorId] = useState(() => randomId(ACCENT_COLORS));
-  const [shapeId, setShapeId] = useState(() => randomId(BODY_SHAPES));
-  const [scaleId, setScaleId] = useState(() => randomId(BODY_SCALES));
+  // customizable=false (see StoryViewer's "Share as Story" menu action) skips
+  // all of that: it pins the four fields to whatever style is already on the
+  // item (lockedStyle, e.g. a confession's saved story_style) and forces the
+  // 'basic' template so that style actually renders — or, when the item was
+  // never customized in the first place (lockedStyle is null), pins to the
+  // fixed 'tweet' ("Standard") template instead. Either way no random pick,
+  // no Random button, no customization strips — there is nothing to change.
+  const [backgroundId, setBackgroundId] = useState(() => (!customizable && lockedStyle) ? lockedStyle.backgroundId : randomId(BACKGROUND_STRUCTURES));
+  const [colorId, setColorId] = useState(() => (!customizable && lockedStyle) ? lockedStyle.colorId : randomId(ACCENT_COLORS));
+  const [shapeId, setShapeId] = useState(() => (!customizable && lockedStyle) ? lockedStyle.shapeId : randomId(BODY_SHAPES));
+  const [scaleId, setScaleId] = useState(() => (!customizable && lockedStyle) ? lockedStyle.scaleId : randomId(BODY_SCALES));
 
   // 'basic' = the fully customizable Background/Colour/Shape/Size system
   // above; 'tweet' = a single fixed, professional realistic-post preset
   // (see storyImageGenerator's drawTweetSlide) — no customization strips,
   // just a toggle. Works for all three modes (question/reply/message).
-  const [template, setTemplate] = useState('basic');
+  const [template, setTemplate] = useState(() => (!customizable ? (lockedStyle ? 'basic' : 'tweet') : 'basic'));
 
   const [colorPickerOpen, setColorPickerOpen] = useState(false);
 
@@ -863,7 +867,7 @@ function ShareStorySheetContent({ mode, question, reply, message }) {
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div style={{ fontSize: 20, fontWeight: 900, color: 'var(--paper)' }}>Share to Story</div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          {template === 'basic' && (
+          {customizable && template === 'basic' && (
             <button
               type="button"
               onClick={handleRandomize}
@@ -885,40 +889,45 @@ function ShareStorySheetContent({ mode, question, reply, message }) {
       </div>
 
       {/* Basic (fully customizable) vs Tweet (single fixed, professional
-          realistic-post preset) — applies to all three share modes. */}
-      <div
-        role="tablist"
-        aria-label="Story style"
-        style={{ display: 'flex', gap: 4, padding: 4, borderRadius: 16, background: 'var(--glass-white)', border: '1px solid var(--glass-border)', flexShrink: 0 }}
-      >
-        {[
-          { id: 'tweet', label: 'Standard' },
-          { id: 'basic', label: 'Customization' },
-        ].map((opt) => {
-          const active = template === opt.id;
-          return (
-            <button
-              key={opt.id}
-              type="button"
-              role="tab"
-              aria-selected={active}
-              onClick={() => { if (!active) { hapticSelect(); playTap(); setTemplate(opt.id); } }}
-              style={{
-                flex: 1,
-                padding: '10px 0',
-                borderRadius: 12,
-                border: 'none',
-                background: active ? 'var(--ember)' : 'transparent',
-                color: active ? 'var(--ink)' : 'var(--dim)',
-                fontSize: 13.5,
-                fontWeight: 800,
-              }}
-            >
-              {opt.label}
-            </button>
-          );
-        })}
-      </div>
+          realistic-post preset) — applies to all three share modes. Hidden
+          entirely when customizable=false: the template is already pinned
+          (to whichever style the item was created with, or Standard if it
+          wasn't customized), so there's nothing to switch between. */}
+      {customizable && (
+        <div
+          role="tablist"
+          aria-label="Story style"
+          style={{ display: 'flex', gap: 4, padding: 4, borderRadius: 16, background: 'var(--glass-white)', border: '1px solid var(--glass-border)', flexShrink: 0 }}
+        >
+          {[
+            { id: 'tweet', label: 'Standard' },
+            { id: 'basic', label: 'Customization' },
+          ].map((opt) => {
+            const active = template === opt.id;
+            return (
+              <button
+                key={opt.id}
+                type="button"
+                role="tab"
+                aria-selected={active}
+                onClick={() => { if (!active) { hapticSelect(); playTap(); setTemplate(opt.id); } }}
+                style={{
+                  flex: 1,
+                  padding: '10px 0',
+                  borderRadius: 12,
+                  border: 'none',
+                  background: active ? 'var(--ember)' : 'transparent',
+                  color: active ? 'var(--ink)' : 'var(--dim)',
+                  fontSize: 13.5,
+                  fontWeight: 800,
+                }}
+              >
+                {opt.label}
+              </button>
+            );
+          })}
+        </div>
+      )}
 
       <div style={{ position: 'relative', width: '100%', maxWidth: 240, margin: '0 auto', flexShrink: 0 }}>
         <div
@@ -1008,20 +1017,25 @@ function ShareStorySheetContent({ mode, question, reply, message }) {
       {/* Selection strips sit directly below the preview — both are
           centre-locked scroll wheels now: the highlight window is fixed,
           the strip scrolls under it. Only shown for the 'basic' template —
-          'tweet' is a single fixed preset with nothing to customize. */}
-      {template === 'basic' ? (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 14, flexShrink: 0 }}>
-          <BackgroundCarousel selectedId={backgroundId} onChange={setBackgroundId} />
-          <ShapeCarousel selectedId={shapeId} onChange={setShapeId} scale={scale} />
-          <div style={{ display: 'flex', gap: 10 }}>
-            <ColourField color={color} onOpen={() => { hapticTap(); setColorPickerOpen(true); }} />
-            <SizeField scaleId={scaleId} onChange={setScaleId} />
+          'tweet' is a single fixed preset with nothing to customize. Hidden
+          entirely when customizable=false — the style is already fixed
+          (either the item's own saved style, or Standard), so there's
+          nothing here to show or change. */}
+      {customizable && (
+        template === 'basic' ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14, flexShrink: 0 }}>
+            <BackgroundCarousel selectedId={backgroundId} onChange={setBackgroundId} />
+            <ShapeCarousel selectedId={shapeId} onChange={setShapeId} scale={scale} />
+            <div style={{ display: 'flex', gap: 10 }}>
+              <ColourField color={color} onOpen={() => { hapticTap(); setColorPickerOpen(true); }} />
+              <SizeField scaleId={scaleId} onChange={setScaleId} />
+            </div>
           </div>
-        </div>
-      ) : (
-        <p style={{ margin: 0, fontSize: 12.5, color: 'var(--dim)', textAlign: 'center', lineHeight: 1.4, flexShrink: 0 }}>
-          A fixed, professional realistic-post style — nothing to customize here.
-        </p>
+        ) : (
+          <p style={{ margin: 0, fontSize: 12.5, color: 'var(--dim)', textAlign: 'center', lineHeight: 1.4, flexShrink: 0 }}>
+            A fixed, professional realistic-post style — nothing to customize here.
+          </p>
+        )
       )}
 
       <div style={{ flexShrink: 0 }}>

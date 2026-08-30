@@ -1142,6 +1142,7 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
                                      is_confession: true,
                                      media_url: message.media_url || null,
                                      media_type: message.media_type || null,
+                                     story_style: message.story_style || null,
                                    });
                                  },
                                },
@@ -1425,6 +1426,8 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
           open={!!sharingMessage}
           onClose={() => setSharingMessage(null)}
           message={sharingMessage}
+          customizable={!sharingMessage.is_confession}
+          lockedStyle={sharingMessage.is_confession ? (sharingMessage.story_style || null) : null}
         />
       )}
     </div>

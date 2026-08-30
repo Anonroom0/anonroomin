@@ -12,6 +12,7 @@ import MediaViewer from '../../pages/MediaViewer';
 import { hapticTap, hapticSelect } from '../../lib/haptics';
 import { playTap } from '../../lib/soundManager';
 import { generateStoryImage, CANVAS_WIDTH, CANVAS_HEIGHT } from '../../lib/storyImageGenerator';
+import ShareStorySheet from '../questions/ShareStorySheet';
 
 const STORY_WINDOW_MS = 24 * 60 * 60 * 1000;
 const IDLE_HIDE_MS = 4000;
@@ -112,6 +113,38 @@ function buildShareUrl(channel, item) {
     return `${getGroupUrl(channel.slug)}#story-${toShortId(item.id)}`;
   }
   return `${window.location.origin}/#story-${toShortId(item.id)}`;
+}
+
+// "Share as Story" (three-dots menu) → ShareStorySheet, in read-only/
+// non-customizable form (see that component's customizable/lockedStyle
+// props). Maps whichever channel/item is currently open onto the sheet's
+// mode="question"|"message" shapes — a public-questions item is a question
+// row as-is (same as Home.jsx's own sharingQuestion wiring); anything else
+// (a group or public-confessions item) is a confession, so it's normalized
+// into the same flat message shape GroupChat.jsx's own confession-bubble
+// "Share as Story" action builds. `lockedStyle` carries the item's own
+// story_style (see CustomizedConfessionCard above) when it was posted with
+// a customized style, so the sheet renders that instead of the Standard
+// preset — but never lets it be changed here either way.
+function buildShareStoryTarget(channel, item) {
+  if (!channel || !item) return null;
+  if (channel.type === 'public-questions') {
+    return { mode: 'question', question: item, lockedStyle: null };
+  }
+  return {
+    mode: 'message',
+    message: {
+      id: item.id,
+      text: item.text || (item.media_type ? `Sent a ${item.media_type}` : ''),
+      sender_name: item.is_anon ? 'Anonymous' : (item.profiles?.username || item.author_username || 'Anonymous'),
+      avatar_url: item.is_anon ? null : (item.profiles?.avatar_url || item.author_avatar_url || null),
+      is_anon: item.is_anon,
+      is_confession: true,
+      media_url: item.photo_url || item.media_url || null,
+      media_type: item.media_type || null,
+    },
+    lockedStyle: item.story_style || null,
+  };
 }
 
 // ============================================================================
@@ -402,6 +435,7 @@ export default function StoryViewer({ channels, startIndex = 0, initialItemId, o
   const [slideKey, setSlideKey] = useState(0);
   
   const [viewerMedia, setViewerMedia] = useState(null);
+  const [shareStoryTarget, setShareStoryTarget] = useState(null);
 
   // Live drag state driving the fluid gesture system below — updated on
   // every pointermove so the card tracks the finger 1:1 while a gesture is
@@ -679,6 +713,14 @@ export default function StoryViewer({ channels, startIndex = 0, initialItemId, o
     }
   }
 
+  function handleShareAsStory() {
+    if (!channel || !item) return;
+    hapticSelect();
+    playTap();
+    setMenuOpen(false);
+    setShareStoryTarget(buildShareStoryTarget(channel, item));
+  }
+
   if (!channel) return null;
 
   // A confession rendered via CustomizedConfessionCard (see above) draws
@@ -861,6 +903,25 @@ export default function StoryViewer({ channels, startIndex = 0, initialItemId, o
                 }}
               >
                 Share
+              </button>
+              <button
+                type="button"
+                className="chat-row"
+                onClick={handleShareAsStory}
+                style={{
+                  display: 'block',
+                  width: '100%',
+                  textAlign: 'left',
+                  padding: '10px 14px',
+                  border: 'none',
+                  background: 'transparent',
+                  color: 'var(--paper)',
+                  fontSize: 14,
+                  fontWeight: 600,
+                  cursor: 'pointer',
+                }}
+              >
+                Share as Story
               </button>
             </div>
           )}
@@ -1101,6 +1162,23 @@ export default function StoryViewer({ channels, startIndex = 0, initialItemId, o
         open={viewerMedia !== null} 
         onClose={() => setViewerMedia(null)} 
       />
+
+      {/* "Share as Story" (three-dots menu) — always non-customizable: pins
+          to the item's own saved style if it has one, otherwise the
+          Standard preset (see buildShareStoryTarget above). Opens with the
+          tutorial and a Copy Link row same as every other ShareStorySheet
+          use in the app. */}
+      {shareStoryTarget && (
+        <ShareStorySheet
+          open={!!shareStoryTarget}
+          onClose={() => setShareStoryTarget(null)}
+          mode={shareStoryTarget.mode}
+          question={shareStoryTarget.question}
+          message={shareStoryTarget.message}
+          customizable={false}
+          lockedStyle={shareStoryTarget.lockedStyle}
+        />
+      )}
 
       <style>{`
         @keyframes story-slide-from-right {

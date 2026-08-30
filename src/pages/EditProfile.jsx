@@ -43,16 +43,69 @@ function LiquidInput({ icon, label, type = "text", value, onChange, isTextArea =
   const isFloating = isFocused || (value && value.length > 0);
 
   return (
-    <div style={{ position: 'relative', display: 'flex', alignItems: isTextArea ? 'flex-start' : 'center', gap: 12, background: readOnly ? '#15161B' : '#1C1D24', border: '1px solid', borderColor: isFocused && !readOnly ? '#FF6B35' : 'rgba(255,255,255,0.06)', borderRadius: 16, padding: isTextArea ? '16px' : '8px 16px', boxShadow: isFocused && !readOnly ? '0 0 0 4px rgba(255,107,53,0.15)' : 'inset 0 1px 3px rgba(0,0,0,0.1)', transition: 'all 0.2s', marginTop: 12, opacity: readOnly ? 0.6 : 1, cursor: readOnly ? 'not-allowed' : 'text' }}>
-      <div style={{ color: isFocused && !readOnly ? '#FF6B35' : '#8B8B96', transition: 'color 0.2s', paddingTop: isTextArea ? 2 : 0 }}>{icon}</div>
-      <div style={{ position: 'relative', flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-        {isTextArea ? (
-          <textarea name={`pf-${label.replace(/[^a-zA-Z0-9]/g, '').toLowerCase()}`} autoComplete="off-nope" autoCorrect="off" autoCapitalize="off" spellCheck="false" data-lpignore="true" data-1p-ignore data-form-type="other" value={value} onChange={onChange} onFocus={() => { if(!readOnly) setIsFocused(true); }} onBlur={() => setIsFocused(false)} readOnly={readOnly} rows={4} style={{ width: '100%', border: 'none', background: 'transparent', outline: 'none', fontSize: 16, color: '#F4F3F0', fontFamily: 'inherit', resize: 'none', paddingTop: 12, zIndex: 1, pointerEvents: readOnly ? 'none' : 'auto' }} />
-        ) : (
-          <input type={type === 'text' ? 'search' : type} name={`pf-${label.replace(/[^a-zA-Z0-9]/g, '').toLowerCase()}`} autoComplete="off-nope" autoCorrect="off" autoCapitalize="off" spellCheck="false" data-lpignore="true" data-1p-ignore data-form-type="other" value={value} onChange={onChange} onFocus={() => { if(!readOnly) setIsFocused(true); }} onBlur={() => setIsFocused(false)} readOnly={readOnly} style={{ width: '100%', border: 'none', background: 'transparent', outline: 'none', fontSize: 16, color: '#F4F3F0', padding: '12px 0 4px', zIndex: 1, pointerEvents: readOnly ? 'none' : 'auto' }} />
-        )}
-        <label style={{ position: 'absolute', top: isTextArea ? 14 : '50%', left: 0, transform: isFloating ? (isTextArea ? 'translateY(-20px) scale(0.85)' : 'translateY(-24px) scale(0.85)') : (isTextArea ? 'translateY(0)' : 'translateY(-50%)'), transformOrigin: 'left top', color: '#8B8B96', fontSize: 16, pointerEvents: 'none', transition: 'all 0.2s', zIndex: 0 }}>{label}</label>
+    <div
+      style={{
+        position: 'relative',
+        display: 'flex',
+        alignItems: isTextArea ? 'flex-start' : 'center',
+        gap: 14,
+        background: readOnly ? 'rgba(255,255,255,0.03)' : 'var(--glass-white)',
+        border: '1.5px solid',
+        borderColor: isFocused && !readOnly ? 'var(--ember)' : 'var(--glass-border)',
+        borderRadius: 22,
+        padding: isTextArea ? '16px 18px' : '6px 14px',
+        boxShadow: isFocused && !readOnly
+          ? '0 0 0 5px rgba(255,107,53,0.14), 0 6px 16px rgba(0,0,0,0.25)'
+          : '0 2px 8px rgba(0,0,0,0.18)',
+        backdropFilter: 'blur(14px)',
+        WebkitBackdropFilter: 'blur(14px)',
+        transition: 'all 0.25s cubic-bezier(0.2, 0.8, 0.2, 1)',
+        marginTop: 14,
+        opacity: readOnly ? 0.55 : 1,
+        cursor: readOnly ? 'not-allowed' : 'text',
+      }}
+    >
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          width: 34,
+          height: 34,
+          flexShrink: 0,
+          borderRadius: 14,
+          background: isFocused && !readOnly ? 'rgba(255,107,53,0.18)' : 'rgba(255,255,255,0.05)',
+          color: isFocused && !readOnly ? 'var(--ember)' : 'var(--dim)',
+          transition: 'all 0.25s ease',
+          marginTop: isTextArea ? 2 : 0,
+        }}
+      >
+        {icon}
       </div>
+      <div style={{ position: 'relative', flex: 1, display: 'flex', flexDirection: 'column', justifyContent: 'center', minHeight: isTextArea ? 'auto' : 44 }}>
+        {isTextArea ? (
+          <textarea name={`pf-${label.replace(/[^a-zA-Z0-9]/g, '').toLowerCase()}`} autoComplete="off-nope" autoCorrect="off" autoCapitalize="off" spellCheck="false" data-lpignore="true" data-1p-ignore data-form-type="other" value={value} onChange={onChange} onFocus={() => { if(!readOnly) setIsFocused(true); }} onBlur={() => setIsFocused(false)} readOnly={readOnly} rows={4} style={{ width: '100%', border: 'none', background: 'transparent', outline: 'none', fontSize: 16, color: 'var(--paper)', fontFamily: 'inherit', resize: 'none', paddingTop: 14, zIndex: 1, pointerEvents: readOnly ? 'none' : 'auto', lineHeight: 1.5 }} />
+        ) : (
+          <input type={type === 'text' ? 'search' : type} name={`pf-${label.replace(/[^a-zA-Z0-9]/g, '').toLowerCase()}`} autoComplete="off-nope" autoCorrect="off" autoCapitalize="off" spellCheck="false" data-lpignore="true" data-1p-ignore data-form-type="other" value={value} onChange={onChange} onFocus={() => { if(!readOnly) setIsFocused(true); }} onBlur={() => setIsFocused(false)} readOnly={readOnly} style={{ width: '100%', border: 'none', background: 'transparent', outline: 'none', fontSize: 16, color: 'var(--paper)', padding: '14px 0 6px', zIndex: 1, pointerEvents: readOnly ? 'none' : 'auto' }} />
+        )}
+        <label style={{ position: 'absolute', top: isTextArea ? 16 : '50%', left: 0, transform: isFloating ? (isTextArea ? 'translateY(-22px) scale(0.82)' : 'translateY(-25px) scale(0.82)') : (isTextArea ? 'translateY(0)' : 'translateY(-50%)'), transformOrigin: 'left top', color: isFocused && !readOnly ? 'var(--ember)' : 'var(--dim)', fontWeight: 600, fontSize: 15, pointerEvents: 'none', transition: 'all 0.2s cubic-bezier(0.2, 0.8, 0.2, 1)', zIndex: 0 }}>{label}</label>
+      </div>
+    </div>
+  );
+}
+
+// Small pill-shaped "AboutYou/Notifications/..." section header — icon chip
+// + uppercase label, purely decorative, used to break the form into
+// visually distinct rounded groups below.
+function SectionLabel({ icon, children }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, margin: '0 0 10px 4px' }}>
+      {icon && (
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', width: 22, height: 22, borderRadius: 8, background: 'rgba(255,107,53,0.14)', color: 'var(--ember)' }}>
+          {icon}
+        </div>
+      )}
+      <h3 style={{ margin: 0, fontSize: 12.5, fontWeight: 800, color: 'var(--dim)', textTransform: 'uppercase', letterSpacing: 0.8 }}>{children}</h3>
     </div>
   );
 }
@@ -169,93 +222,124 @@ export default function EditProfile({ open, onClose }) {
         }}
       />
 
-      {/* THE SHEET (No CSS Classes used here to prevent overriding) */}
+      {/* THE SHEET */}
       <div
         onClick={(e) => e.stopPropagation()}
         style={{
           position: 'relative', zIndex: 2, pointerEvents: 'auto',
           width: '100%', maxWidth: 560, margin: '0 auto', height: '90dvh',
-          backgroundColor: '#1C1D24', // SOLID MATTE HEX
-          borderTopLeftRadius: 28, borderTopRightRadius: 28,
-          borderTop: '1px solid rgba(255,255,255,0.08)',
-          boxShadow: '0 -10px 40px rgba(0,0,0,0.6)',
+          background: 'linear-gradient(180deg, #1E1F27 0%, var(--ink-2) 100%)',
+          borderTopLeftRadius: 32, borderTopRightRadius: 32,
+          border: '1px solid var(--glass-border)', borderBottom: 'none',
+          boxShadow: '0 -18px 50px rgba(0,0,0,0.55)',
           display: 'flex', flexDirection: 'column',
+          overflow: 'hidden',
           transform: isVisible ? 'translateY(0)' : 'translateY(100%)',
           transition: 'transform 0.35s cubic-bezier(0.2, 0.8, 0.2, 1)'
         }}
       >
+        {/* Decorative grab handle — purely visual bottom-sheet affordance */}
+        <div style={{ display: 'flex', justifyContent: 'center', paddingTop: 10 }}>
+          <div style={{ width: 40, height: 4.5, borderRadius: 999, background: 'rgba(255,255,255,0.16)' }} />
+        </div>
+
         <div
           style={{
-            display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 20px', 
-            backgroundColor: '#1C1D24', borderBottom: '1px solid rgba(255,255,255,0.06)', zIndex: 10
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 18px 16px',
+            borderBottom: '1px solid var(--glass-border)', zIndex: 10
           }}
         >
-          <button onClick={handleClose} style={{ display: 'flex', alignItems: 'center', gap: 6, border: 'none', background: 'transparent', color: '#FF6B35', fontSize: 16, fontWeight: 500, cursor: 'pointer', padding: '4px 8px', borderRadius: 8, marginLeft: -8 }}>
+          <button onClick={handleClose} style={{ display: 'flex', alignItems: 'center', gap: 4, border: 'none', background: 'var(--glass-white)', color: 'var(--ember)', fontSize: 15, fontWeight: 700, cursor: 'pointer', padding: '8px 14px 8px 10px', borderRadius: 999 }}>
             {Vectors.Back} <span>Close</span>
           </button>
-          <h1 style={{ margin: 0, fontSize: 17, fontWeight: 700, color: '#F4F3F0', position: 'absolute', left: '50%', transform: 'translateX(-50%)' }}>Edit Profile</h1>
-          <button onClick={handleSignOut} title="Sign Out" style={{ border: 'none', background: 'transparent', padding: '8px', borderRadius: '50%', color: '#FF6B35', cursor: 'pointer', display: 'flex', alignItems: 'center', marginRight: -8 }}>
+          <h1 style={{ margin: 0, fontSize: 17, fontWeight: 800, color: 'var(--paper)', position: 'absolute', left: '50%', transform: 'translateX(-50%)', letterSpacing: 0.2 }}>Edit Profile</h1>
+          <button onClick={handleSignOut} title="Sign Out" style={{ border: '1px solid var(--glass-border)', background: 'var(--glass-white)', padding: '9px', borderRadius: '50%', color: 'var(--ember)', cursor: 'pointer', display: 'flex', alignItems: 'center' }}>
             {Vectors.LogOut}
           </button>
         </div>
 
-        <div className="custom-scrollbar" style={{ flex: 1, overflowY: 'auto', padding: '24px 20px 60px' }}>
-          <div style={{ maxWidth: 440, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 32 }}>
+        <div className="custom-scrollbar" style={{ flex: 1, overflowY: 'auto', padding: '28px 20px 60px' }}>
+          <div style={{ maxWidth: 440, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 30 }}>
 
-            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 12 }}>
-              <button onClick={() => { hapticTap(); playTap(); fileInputRef.current?.click(); }} disabled={uploadingAvatar} style={{ width: 120, height: 120, borderRadius: '50%', border: 'none', padding: 0, cursor: uploadingAvatar ? 'default' : 'pointer', position: 'relative', overflow: 'hidden', background: '#FF6B35', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 6px 18px rgba(0,0,0,0.35)', transition: 'transform 0.2s' }}>
-                {avatarUrl ? ( <img src={avatarUrl} alt="Avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> ) : ( <span style={{ color: '#fff', fontSize: 40, fontWeight: 800 }}>{getInitials(displayName)}</span> )}
-                <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.4)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#fff', opacity: uploadingAvatar ? 1 : 0, transition: 'opacity 0.2s' }}>
-                  {uploadingAvatar ? Vectors.Spinner : Vectors.Camera}
-                  <span style={{ fontSize: 12, fontWeight: 700, marginTop: 4 }}>{uploadingAvatar ? 'Uploading' : 'Edit'}</span>
+            <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14 }}>
+              <button
+                onClick={() => { hapticTap(); playTap(); fileInputRef.current?.click(); }}
+                disabled={uploadingAvatar}
+                style={{
+                  width: 128, height: 128, borderRadius: '50%', border: 'none', padding: 4,
+                  cursor: uploadingAvatar ? 'default' : 'pointer', position: 'relative',
+                  background: 'linear-gradient(135deg, var(--ember), #FFB199)',
+                  display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  boxShadow: '0 10px 30px rgba(255,107,53,0.28), 0 4px 14px rgba(0,0,0,0.35)',
+                  transition: 'transform 0.2s ease',
+                }}
+              >
+                <div style={{ width: '100%', height: '100%', borderRadius: '50%', overflow: 'hidden', background: 'var(--ink-2)', display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
+                  {avatarUrl ? ( <img src={avatarUrl} alt="Avatar" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> ) : ( <span style={{ color: 'var(--paper)', fontSize: 38, fontWeight: 800 }}>{getInitials(displayName)}</span> )}
+                  <div style={{ position: 'absolute', inset: 0, background: 'rgba(0,0,0,0.45)', display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: '#fff', opacity: uploadingAvatar ? 1 : 0, transition: 'opacity 0.2s' }}>
+                    {uploadingAvatar ? Vectors.Spinner : Vectors.Camera}
+                    <span style={{ fontSize: 12, fontWeight: 700, marginTop: 4 }}>{uploadingAvatar ? 'Uploading' : 'Edit'}</span>
+                  </div>
+                </div>
+                {/* Decorative camera badge pinned to the ring's edge */}
+                <div style={{ position: 'absolute', bottom: 2, right: 2, width: 34, height: 34, borderRadius: '50%', background: 'var(--ink-2)', border: '3px solid var(--ink)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--ember)', pointerEvents: 'none' }}>
+                  <div style={{ transform: 'scale(0.62)', display: 'flex' }}>{Vectors.Camera}</div>
                 </div>
               </button>
               <input ref={fileInputRef} type="file" accept="image/*" onChange={handleAvatarPick} style={{ display: 'none' }} />
             </div>
 
             <div>
-              <h3 style={{ margin: '0 0 8px 12px', fontSize: 13, fontWeight: 600, color: '#8B8B96', textTransform: 'uppercase', letterSpacing: 0.5 }}>About You</h3>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <SectionLabel icon={Vectors.User}>About You</SectionLabel>
+              <div className="glass-panel" style={{ display: 'flex', flexDirection: 'column', gap: 4, padding: 10, background: 'rgba(255,255,255,0.02)' }}>
                 <LiquidInput icon={Vectors.User} label="Username (Cannot be changed)" value={profile?.username ? `@${profile.username}` : ''} readOnly={true} />
                 <LiquidInput icon={Vectors.User} label="Biography" isTextArea={true} value={bio} onChange={(e) => setBio(e.target.value)} />
               </div>
             </div>
 
             <div>
-              <h3 style={{ margin: '0 0 8px 12px', fontSize: 13, fontWeight: 600, color: '#8B8B96', textTransform: 'uppercase', letterSpacing: 0.5 }}>Notifications</h3>
-              <button onClick={() => { hapticTap(); playTap(); setNotificationPanelOpen(true); }} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 16px', background: '#15161B', borderRadius: 16, border: '1px solid rgba(255,255,255,0.06)', width: '100%', cursor: 'pointer', textAlign: 'left' }}>
-                <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                  <div style={{ color: '#FF6B35' }}>{Vectors.Bell}</div>
-                  <div style={{ display: 'flex', flexDirection: 'column' }}>
-                    <span style={{ fontSize: 16, fontWeight: 500, color: '#F4F3F0' }}>Notification Settings</span>
-                    <span style={{ fontSize: 13, color: '#8B8B96' }}>Manage what AnonRoom can notify you about</span>
+              <SectionLabel icon={Vectors.Bell}>Notifications</SectionLabel>
+              <button
+                className="glass-panel"
+                onClick={() => { hapticTap(); playTap(); setNotificationPanelOpen(true); }}
+                style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 18px', border: '1px solid var(--glass-border)', width: '100%', cursor: 'pointer', textAlign: 'left', transition: 'transform 0.15s ease' }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+                  <div style={{ width: 40, height: 40, borderRadius: 14, background: 'rgba(255,107,53,0.14)', color: 'var(--ember)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{Vectors.Bell}</div>
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                    <span style={{ fontSize: 15.5, fontWeight: 700, color: 'var(--paper)' }}>Notification Settings</span>
+                    <span style={{ fontSize: 13, color: 'var(--dim)' }}>Manage what AnonRoom can notify you about</span>
                   </div>
                 </div>
-                <div style={{ color: '#8B8B96' }}>{Vectors.ChevronRight}</div>
+                <div style={{ color: 'var(--dim)' }}>{Vectors.ChevronRight}</div>
               </button>
             </div>
 
             {profile?.is_admin && (
               <div>
-                <h3 style={{ margin: '0 0 8px 12px', fontSize: 13, fontWeight: 600, color: '#8B8B96', textTransform: 'uppercase', letterSpacing: 0.5 }}>Admin</h3>
+                <SectionLabel icon={Vectors.Shield}>Admin</SectionLabel>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-                  <button onClick={() => { hapticTap(); playTap(); window.open(getAdministratorUrl(), '_blank', 'noopener,noreferrer'); }} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '14px 16px', background: '#15161B', borderRadius: 16, border: '1px solid rgba(255,255,255,0.06)', width: '100%', cursor: 'pointer', textAlign: 'left' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-                      <div style={{ color: '#FF6B35' }}>{Vectors.Shield}</div>
-                      <div style={{ display: 'flex', flexDirection: 'column' }}>
-                        <span style={{ fontSize: 16, fontWeight: 500, color: '#F4F3F0' }}>Open Admin Panel</span>
-                        <span style={{ fontSize: 13, color: '#8B8B96' }}>Groups, users, storage, test push — administrator.anonroom.in</span>
+                  <button
+                    className="glass-panel"
+                    onClick={() => { hapticTap(); playTap(); window.open(getAdministratorUrl(), '_blank', 'noopener,noreferrer'); }}
+                    style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 18px', border: '1px solid var(--glass-border)', width: '100%', cursor: 'pointer', textAlign: 'left', transition: 'transform 0.15s ease' }}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+                      <div style={{ width: 40, height: 40, borderRadius: 14, background: 'rgba(255,215,0,0.14)', color: 'var(--admin-1)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{Vectors.Shield}</div>
+                      <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                        <span style={{ fontSize: 15.5, fontWeight: 700, color: 'var(--paper)' }}>Open Admin Panel</span>
+                        <span style={{ fontSize: 13, color: 'var(--dim)' }}>Groups, users, storage, test push — administrator.anonroom.in</span>
                       </div>
                     </div>
-                    <div style={{ color: '#8B8B96' }}>{Vectors.ExternalLink}</div>
+                    <div style={{ color: 'var(--dim)' }}>{Vectors.ExternalLink}</div>
                   </button>
                 </div>
               </div>
             )}
 
             <div>
-              <h3 style={{ margin: '0 0 8px 12px', fontSize: 13, fontWeight: 600, color: '#8B8B96', textTransform: 'uppercase', letterSpacing: 0.5 }}>Social Links</h3>
-              <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
+              <SectionLabel icon={Vectors.Hash}>Social Links</SectionLabel>
+              <div className="glass-panel" style={{ display: 'flex', flexDirection: 'column', gap: 4, padding: 10, background: 'rgba(255,255,255,0.02)' }}>
                 <LiquidInput icon={Vectors.Twitter} label="Twitter / X" value={twitter} onChange={(e) => setTwitter(e.target.value)} />
                 <LiquidInput icon={Vectors.Instagram} label="Instagram" value={instagram} onChange={(e) => setInstagram(e.target.value)} />
                 <LiquidInput icon={Vectors.Link} label="Personal Website" type="url" value={website} onChange={(e) => setWebsite(e.target.value)} />
@@ -263,14 +347,36 @@ export default function EditProfile({ open, onClose }) {
             </div>
 
             <div>
-              <h3 style={{ margin: '0 0 8px 12px', fontSize: 13, fontWeight: 600, color: '#8B8B96', textTransform: 'uppercase', letterSpacing: 0.5 }}>Private Information</h3>
-              <LiquidInput icon={Vectors.Calendar} label="Birthday" type="date" value={birthday} onChange={(e) => setBirthday(e.target.value)} />
+              <SectionLabel icon={Vectors.Calendar}>Private Information</SectionLabel>
+              <div className="glass-panel" style={{ padding: 10, background: 'rgba(255,255,255,0.02)' }}>
+                <LiquidInput icon={Vectors.Calendar} label="Birthday" type="date" value={birthday} onChange={(e) => setBirthday(e.target.value)} />
+              </div>
             </div>
 
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 12 }}>
-              {error && <div style={{ color: '#FF6B35', fontSize: 14, fontWeight: 500, textAlign: 'center', background: 'rgba(255,107,53,0.1)', padding: '10px', borderRadius: 12 }}>{error}</div>}
-              {success && <div style={{ color: '#2FD8C4', fontSize: 14, fontWeight: 600, textAlign: 'center', background: 'rgba(47,216,196,0.1)', padding: '10px', borderRadius: 12, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>{Vectors.Check} {success}</div>}
-              <button onClick={handleSave} disabled={!hasChanges || saving} style={{ padding: '16px 0', borderRadius: 18, border: 'none', background: hasChanges ? '#FF6B35' : 'rgba(255,255,255,0.06)', color: hasChanges ? '#fff' : '#8B8B96', fontWeight: 700, fontSize: 16, cursor: hasChanges ? 'pointer' : 'default', transition: 'background 0.2s', marginBottom: 16 }}>
+            <div style={{ display: 'flex', flexDirection: 'column', gap: 12, marginTop: 8 }}>
+              {error && (
+                <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, color: 'var(--danger)', fontSize: 14, fontWeight: 600, textAlign: 'center', background: 'rgba(255,107,107,0.1)', border: '1px solid rgba(255,107,107,0.2)', padding: '12px', borderRadius: 18 }}>
+                  {error}
+                </div>
+              )}
+              {success && (
+                <div style={{ color: 'var(--signal)', fontSize: 14, fontWeight: 700, textAlign: 'center', background: 'rgba(47,216,196,0.1)', border: '1px solid rgba(47,216,196,0.2)', padding: '12px', borderRadius: 18, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8 }}>
+                  {Vectors.Check} {success}
+                </div>
+              )}
+              <button
+                onClick={handleSave}
+                disabled={!hasChanges || saving}
+                style={{
+                  padding: '17px 0', borderRadius: 999, border: 'none',
+                  background: hasChanges ? 'linear-gradient(135deg, var(--ember), #FF8A5C)' : 'rgba(255,255,255,0.06)',
+                  color: hasChanges ? '#fff' : 'var(--dim)',
+                  fontWeight: 800, fontSize: 16, letterSpacing: 0.2,
+                  cursor: hasChanges ? 'pointer' : 'default',
+                  boxShadow: hasChanges ? '0 10px 26px rgba(255,107,53,0.32)' : 'none',
+                  transition: 'all 0.25s ease', marginBottom: 16,
+                }}
+              >
                 {saving ? 'Saving Changes...' : 'Save Profile'}
               </button>
             </div>
