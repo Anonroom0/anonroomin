@@ -2,13 +2,37 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <link rel="icon" type="image/svg+xml" href="/vite.svg" />
-    
+
+    <!-- Favicons -->
+    <link rel="icon" type="image/x-icon" href="/favicon.ico" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+    <link rel="manifest" href="/site.webmanifest" />
+    <meta name="theme-color" content="#0C0D10" />
+
     <!-- STRICT VIEWPORT: Disables zoom completely and ensures edge-to-edge fitting -->
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-    
+
     <title>Anonroom</title>
-    
+    <meta name="description" content="Anonroom — anonymous group chats, confessions, and DMs." />
+
+    <!-- Open Graph / link preview (WhatsApp, iMessage, Discord, Facebook) -->
+    <meta property="og:type" content="website" />
+    <meta property="og:site_name" content="Anonroom" />
+    <meta property="og:title" content="Anonroom" />
+    <meta property="og:description" content="Anonymous group chats, confessions, and DMs." />
+    <meta property="og:url" content="https://anonroom.in" />
+    <meta property="og:image" content="https://anonroom.in/og-image.png" />
+    <meta property="og:image:width" content="1200" />
+    <meta property="og:image:height" content="630" />
+
+    <!-- Twitter / X card -->
+    <meta name="twitter:card" content="summary_large_image" />
+    <meta name="twitter:title" content="Anonroom" />
+    <meta name="twitter:description" content="Anonymous group chats, confessions, and DMs." />
+    <meta name="twitter:image" content="https://anonroom.in/og-image.png" />
+
     <style>
       /* Global Mobile App Reset */
       html, body {
@@ -22,7 +46,7 @@
         background: #000;
         color: #fff;
       }
-      
+
       #root {
         width: 100%;
         height: 100%;
@@ -35,8 +59,6 @@
         font-size: 16px !important;
       }
     </style>
-
-
   </head>
   <body>
     <div id="root"></div>
