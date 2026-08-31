@@ -3,7 +3,9 @@
  * ============================================================================
  * supabase/functions/admin-get-user-email/index.ts
  *
- * POST only. Body: { userId }.
+ * POST only. Body: { userId } OR { userIds: string[] } (batch — used by
+ * AdminPanel.jsx's Users tab "Table view", which shows every visible user's
+ * email at once instead of one lazy fetch per detail-panel visit).
  *
  * The client-side Supabase SDK has no way to read auth.users.email (that
  * table isn't exposed to PostgREST/RLS) — only a service-role key can, via
@@ -13,8 +15,12 @@
  * 1. Verifies the caller's Supabase JWT against Supabase Auth, then checks
  *    the matching profiles row has is_admin = true. Rejects with 403
  *    otherwise.
- * 2. On success, looks up the target user by id via the Auth Admin API
- *    (service role) and returns just their email.
+ * 2. On success:
+ *    - { userId } -> looks up that one user via the Auth Admin API
+ *      (service role) and returns { email }.
+ *    - { userIds } -> looks up each id (best-effort — a single missing user
+ *      doesn't fail the whole batch) and returns { emails: { [userId]: email
+ *      | null } }.
  * ========================================================================= */
 
 import { createClient } from 'npm:@supabase/supabase-js@2';
@@ -85,9 +91,29 @@ Deno.serve(async (req) => {
     return jsonResponse({ error: 'invalid JSON body' }, 400);
   }
 
-  const { userId } = payload ?? {};
+  const { userId, userIds } = payload ?? {};
+
+  if (Array.isArray(userIds)) {
+    // Capped so one careless client-side call can't fan this out into
+    // hundreds of Auth Admin API requests — the Users tab table view only
+    // ever needs one page's worth (see USERS_PAGE_SIZE in AdminPanel.jsx).
+    const capped = userIds.slice(0, 100);
+    const entries = await Promise.all(
+      capped.map(async (id) => {
+        try {
+          const { data, error } = await supabaseAdmin.auth.admin.getUserById(id);
+          if (error || !data?.user) return [id, null];
+          return [id, data.user.email ?? null];
+        } catch {
+          return [id, null];
+        }
+      }),
+    );
+    return jsonResponse({ emails: Object.fromEntries(entries) });
+  }
+
   if (!userId) {
-    return jsonResponse({ error: 'userId is required' }, 400);
+    return jsonResponse({ error: 'userId or userIds is required' }, 400);
   }
 
   const { data, error } = await supabaseAdmin.auth.admin.getUserById(userId);

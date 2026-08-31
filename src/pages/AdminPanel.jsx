@@ -42,6 +42,7 @@ import React, { useEffect, useState, useCallback, useRef, useMemo } from 'react'
 import supabase from '../lib/supabaseClient';
 import { useAuth } from '../lib/authContext';
 import AuthModal from './AuthModal';
+import { AdminDmMonitor } from './DirectMessages';
 import LiquidAvatar from '../components/shared/LiquidAvatar';
 import { hapticTap, hapticSuccess, hapticError } from '../lib/haptics';
 import { playTap, playRefreshComplete, playError, playClose } from '../lib/soundManager';
@@ -109,6 +110,7 @@ function GlobalAdminStyle() {
         border-radius: 10px;
       }
 
+      .admin-scrollbar { -webkit-overflow-scrolling: touch; overscroll-behavior: contain; }
       .admin-scrollbar::-webkit-scrollbar { width: 8px; height: 8px; }
       .admin-scrollbar::-webkit-scrollbar-track { background: transparent; }
       .admin-scrollbar::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.12); border-radius: 999px; }
@@ -658,6 +660,9 @@ function UsersTab({ ownUserId, actor }) {
   const [roleFilter, setRoleFilter] = useState('all'); // 'all' | 'admin' | 'banned'
   const [page, setPage] = useState(1);
   const [banColumnMissing, setBanColumnMissing] = useState(false);
+  const [viewMode, setViewMode] = useState('cards'); // 'cards' | 'table'
+  const [emailsByUserId, setEmailsByUserId] = useState({});
+  const [emailsLoading, setEmailsLoading] = useState(false);
   const [confirm, ConfirmUI] = useConfirm();
 
   const load = useCallback(async () => {
@@ -722,6 +727,39 @@ function UsersTab({ ownUserId, actor }) {
   const pageSafe = Math.min(page, totalPages);
   const pageItems = filtered.slice((pageSafe - 1) * USERS_PAGE_SIZE, pageSafe * USERS_PAGE_SIZE);
 
+  // Table view fetches emails in one batched call (admin-get-user-email's
+  // { userIds } mode) for whichever page is currently visible, rather than
+  // one call per row — only runs while the table is actually shown, and
+  // only for ids this tab hasn't already fetched.
+  useEffect(() => {
+    if (viewMode !== 'table') return;
+    const idsNeeded = pageItems.map((u) => u.id).filter((id) => !(id in emailsByUserId));
+    if (idsNeeded.length === 0) return;
+    let cancelled = false;
+    async function loadEmails() {
+      setEmailsLoading(true);
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!session?.access_token) return;
+        const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+        const functionsUrl = supabaseUrl.replace('.supabase.co', '.functions.supabase.co');
+        const res = await fetch(`${functionsUrl}/admin-get-user-email`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+          body: JSON.stringify({ userIds: idsNeeded }),
+        });
+        const data = await res.json().catch(() => ({}));
+        if (!cancelled && res.ok && data.emails) setEmailsByUserId((prev) => ({ ...prev, ...data.emails }));
+      } catch {
+        // best-effort — table just shows a placeholder for whichever rows failed
+      } finally {
+        if (!cancelled) setEmailsLoading(false);
+      }
+    }
+    loadEmails();
+    return () => { cancelled = true; };
+  }, [viewMode, pageItems, emailsByUserId]);
+
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
       <div style={{ display: 'flex', gap: 8 }}>
@@ -742,6 +780,14 @@ function UsersTab({ ownUserId, actor }) {
             <button key={f.id} onClick={() => { hapticTap(); playTap(); setRoleFilter(f.id); }} style={pillBtnStyle(roleFilter === f.id)}>{f.label}</button>
           ))}
         </div>
+        <div style={{ display: 'flex', gap: 6 }}>
+          {[{ id: 'cards', label: 'Cards' }, { id: 'table', label: 'Table' }].map((v) => (
+            <button key={v.id} onClick={() => { hapticTap(); playTap(); setViewMode(v.id); }} style={pillBtnStyle(viewMode === v.id)}>{v.label}</button>
+          ))}
+        </div>
+      </div>
+
+      <div style={{ display: 'flex', justifyContent: 'flex-end' }}>
         <button onClick={() => exportUsersCsv(filtered)} disabled={filtered.length === 0} style={{ ...iconBtnStyle, width: 'auto', padding: '6px 12px', display: 'flex', gap: 6, alignItems: 'center', fontSize: 12.5, fontWeight: 600, color: filtered.length ? '#F4F3F0' : '#8B8B96' }}>
           {Vectors.Download} Export CSV
         </button>
@@ -754,34 +800,69 @@ function UsersTab({ ownUserId, actor }) {
         </div>
       )}
 
-      {loading ? <SkeletonRows count={5} /> : (
+      {loading ? <SkeletonRows count={5} /> : viewMode === 'table' ? (
+        <div className="admin-scrollbar" style={{ overflowX: 'auto', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 14 }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13.5 }}>
+            <thead>
+              <tr style={{ background: '#15161B' }}>
+                <th style={tableHeadStyle}>User</th>
+                <th style={tableHeadStyle}>Username</th>
+                <th style={tableHeadStyle}>Email</th>
+              </tr>
+            </thead>
+            <tbody>
+              {pageItems.map((u) => (
+                <tr key={u.id} className="admin-row-hover" onClick={() => setDetailUser(u)} style={{ cursor: 'pointer', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
+                  <td style={tableCellStyle}><LiquidAvatar identity={{ avatar_url: u.avatar_url, name: u.username, is_admin: u.is_admin }} size={30} kind="user" /></td>
+                  <td style={{ ...tableCellStyle, fontWeight: 700, color: u.is_admin ? '#FF6B35' : '#F4F3F0' }}>@{u.username || 'unknown'}</td>
+                  <td style={{ ...tableCellStyle, color: '#C9C8D3' }}>
+                    {u.id in emailsByUserId ? (emailsByUserId[u.id] || <span style={{ color: '#8B8B96' }}>—</span>) : (emailsLoading ? <span style={{ color: '#8B8B96' }}>Loading…</span> : <span style={{ color: '#8B8B96' }}>—</span>)}
+                  </td>
+                </tr>
+              ))}
+              {pageItems.length === 0 && (
+                <tr><td colSpan={3} style={{ padding: 20, textAlign: 'center', color: '#8B8B96' }}>No users found.</td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
           {pageItems.map((u) => (
-            <Card key={u.id}>
-              <button onClick={() => setDetailUser(u)} style={{ display: 'flex', alignItems: 'center', gap: 12, width: '100%', border: 'none', background: 'transparent', padding: 0, cursor: 'pointer', textAlign: 'left' }}>
-                <LiquidAvatar identity={{ avatar_url: u.avatar_url, name: u.username, is_admin: u.is_admin }} size={36} kind="user" />
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 15, fontWeight: 700, color: u.is_admin ? '#FF6B35' : '#F4F3F0', display: 'flex', alignItems: 'center', gap: 6 }}>
-                    @{u.username || 'unknown'}
-                    {u.is_banned && <span style={badgeStyle('#FF6B6B')}>Banned</span>}
-                  </div>
-                  <div style={{ fontSize: 12, color: '#8B8B96' }}>{u.is_admin ? 'Admin' : 'Member'}</div>
-                </div>
-                <div style={{ color: '#8B8B96', flexShrink: 0 }}>{Vectors.ChevronRight}</div>
-              </button>
-              <div style={{ marginTop: 10, display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-                <button onClick={(e) => { e.stopPropagation(); toggleAdmin(u); }} disabled={busyId === u.id || u.id === ownUserId} style={{ ...primaryBtnStyle(busyId === u.id || u.id === ownUserId), width: 'auto', padding: '8px 14px', fontSize: 13, marginTop: 0 }}>
-                  {u.is_admin ? 'Remove admin' : 'Make admin'}
+            <Card key={u.id} style={{ position: 'relative' }}>
+              {/* Ban toggle lives in the card's top-right corner, separate from
+                  the row below, so it's never confused with "open detail". */}
+              {!banColumnMissing && (
+                <button
+                  onClick={(e) => { e.stopPropagation(); toggleBanned(u); }}
+                  disabled={busyId === u.id || u.id === ownUserId}
+                  title={u.is_banned ? 'Unban' : 'Ban'}
+                  style={{ position: 'absolute', top: 10, right: 10, border: 'none', width: 30, height: 30, borderRadius: '50%', cursor: busyId === u.id || u.id === ownUserId ? 'default' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', color: u.is_banned ? '#2FD8C4' : '#FF6B6B', background: 'rgba(255,255,255,0.06)', opacity: u.id === ownUserId ? 0.4 : 1 }}
+                >
+                  {Vectors.Ban}
                 </button>
-                {!banColumnMissing && (
-                  <button
-                    onClick={(e) => { e.stopPropagation(); toggleBanned(u); }}
-                    disabled={busyId === u.id || u.id === ownUserId}
-                    style={{ ...iconBtnStyle, width: 'auto', padding: '8px 14px', fontSize: 13, display: 'flex', alignItems: 'center', gap: 6, color: u.is_banned ? '#2FD8C4' : '#FF6B6B', background: 'rgba(255,255,255,0.06)' }}
-                  >
-                    {Vectors.Ban} {u.is_banned ? 'Unban' : 'Ban'}
-                  </button>
-                )}
+              )}
+              <div style={{ display: 'flex', alignItems: 'center', gap: 12, paddingRight: banColumnMissing ? 0 : 34 }}>
+                <div onClick={() => setDetailUser(u)} style={{ display: 'flex', alignItems: 'center', gap: 12, flex: 1, minWidth: 0, cursor: 'pointer' }}>
+                  <LiquidAvatar identity={{ avatar_url: u.avatar_url, name: u.username, is_admin: u.is_admin }} size={36} kind="user" />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 15, fontWeight: 700, color: u.is_admin ? '#FF6B35' : '#F4F3F0', display: 'flex', alignItems: 'center', gap: 6 }}>
+                      @{u.username || 'unknown'}
+                      {u.is_banned && <span style={badgeStyle('#FF6B6B')}>Banned</span>}
+                    </div>
+                    <div style={{ fontSize: 12, color: '#8B8B96', marginTop: 2 }}>
+                      {u.is_admin ? 'Admin' : 'Member'} · Joined {new Date(u.created_at).toLocaleDateString()}
+                    </div>
+                  </div>
+                </div>
+                {/* Make-admin control lives inside the row itself now, as a
+                    compact switch, instead of a separate full-width button
+                    underneath the card. */}
+                <div onClick={(e) => e.stopPropagation()} style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
+                  <span style={{ fontSize: 11, color: '#8B8B96', fontWeight: 600 }}>Admin</span>
+                  <LiquidSwitch checked={u.is_admin} onChange={() => toggleAdmin(u)} disabled={busyId === u.id || u.id === ownUserId} />
+                </div>
+                <div onClick={() => setDetailUser(u)} style={{ color: '#8B8B96', flexShrink: 0, cursor: 'pointer', display: 'flex' }}>{Vectors.ChevronRight}</div>
               </div>
             </Card>
           ))}
@@ -820,34 +901,39 @@ function UserDetailPanel({ user, actor, onClose }) {
   const [confessions, setConfessions] = useState([]);
   const [questions, setQuestions] = useState([]);
   const [email, setEmail] = useState(null);
+  const [emailLoading, setEmailLoading] = useState(false);
+  const [emailRevealed, setEmailRevealed] = useState(false);
+  const [monitorThread, setMonitorThread] = useState(null); // { id, otherUsername } | null
   const [confirm, ConfirmUI] = useConfirm();
 
-  // Fetched separately via the admin-get-user-email edge function — the
-  // client SDK has no access to auth.users.email, only a service-role
-  // function does. Best-effort: a failure here just leaves the email row
-  // off, it doesn't block the rest of the panel.
-  useEffect(() => {
-    let cancelled = false;
-    async function loadEmail() {
-      try {
-        const { data: { session } } = await supabase.auth.getSession();
-        if (!session?.access_token) return;
-        const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
-        const functionsUrl = supabaseUrl.replace('.supabase.co', '.functions.supabase.co');
-        const res = await fetch(`${functionsUrl}/admin-get-user-email`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
-          body: JSON.stringify({ userId: user.id }),
-        });
-        const data = await res.json().catch(() => ({}));
-        if (!cancelled && res.ok) setEmail(data.email || null);
-      } catch {
-        // best-effort — leave email as null
-      }
+  // Fetched via the admin-get-user-email edge function on demand ONLY —
+  // the client SDK has no access to auth.users.email, only a service-role
+  // function does, so this used to fire automatically on every panel open.
+  // Now it only runs when the admin actually taps "Show email", so opening
+  // a user's detail panel never fires an edge-function call they didn't
+  // ask for. Best-effort: a failure here just leaves the email off, it
+  // doesn't block the rest of the panel.
+  async function loadEmail() {
+    setEmailRevealed(true);
+    setEmailLoading(true);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (!session?.access_token) return;
+      const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+      const functionsUrl = supabaseUrl.replace('.supabase.co', '.functions.supabase.co');
+      const res = await fetch(`${functionsUrl}/admin-get-user-email`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${session.access_token}` },
+        body: JSON.stringify({ userId: user.id }),
+      });
+      const data = await res.json().catch(() => ({}));
+      if (res.ok) setEmail(data.email || null);
+    } catch {
+      // best-effort — leave email as null
+    } finally {
+      setEmailLoading(false);
     }
-    loadEmail();
-    return () => { cancelled = true; };
-  }, [user.id]);
+  }
 
   useEffect(() => {
     let cancelled = false;
@@ -911,7 +997,17 @@ function UserDetailPanel({ user, actor, onClose }) {
         <h1 style={{ margin: 0, fontSize: 16, fontWeight: 700, color: '#F4F3F0' }}>@{user.username || 'unknown'}</h1>
         {user.is_banned && <span style={badgeStyle('#FF6B6B')}>Banned</span>}
       </header>
-      {email && <div style={{ padding: '10px 20px 0', fontSize: 12.5, color: '#8B8B96' }}>{email}</div>}
+      <div style={{ padding: '10px 20px 0' }}>
+        {!emailRevealed ? (
+          <button onClick={loadEmail} style={{ ...iconBtnStyle, width: 'auto', padding: '6px 12px', fontSize: 12.5, fontWeight: 600, color: '#F4F3F0' }}>
+            Show email
+          </button>
+        ) : emailLoading ? (
+          <span style={{ fontSize: 12.5, color: '#8B8B96' }}>Loading email…</span>
+        ) : (
+          <span style={{ fontSize: 14, fontWeight: 700, color: '#F4F3F0' }}>{email || 'No email on file.'}</span>
+        )}
+      </div>
 
       <div className="admin-scrollbar" style={{ flex: 1, overflowY: 'auto', padding: '20px 16px 60px' }}>
         <div style={{ maxWidth: 560, margin: '0 auto', display: 'flex', flexDirection: 'column', gap: 20 }}>
@@ -928,7 +1024,18 @@ function UserDetailPanel({ user, actor, onClose }) {
               <div>
                 <SectionLabel>DM threads ({dmThreads.length})</SectionLabel>
                 <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-                  {dmThreads.map((t) => <Card key={t.id}><span style={{ fontSize: 14, color: '#F4F3F0' }}>with @{t.otherUsername}</span></Card>)}
+                  {/* Each thread is a button — clicking it opens a read-only
+                      "monitor" view of that conversation (see AdminDmMonitor
+                      in DirectMessages.jsx), not the normal send-capable DM
+                      view a regular user gets. */}
+                  {dmThreads.map((t) => (
+                    <button key={t.id} onClick={() => setMonitorThread(t)} style={{ width: '100%', textAlign: 'left', border: 'none', padding: 0, cursor: 'pointer', background: 'transparent' }}>
+                      <Card style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+                        <span style={{ fontSize: 14, color: '#F4F3F0' }}>with @{t.otherUsername}</span>
+                        <span style={{ color: '#8B8B96', display: 'flex' }}>{Vectors.ChevronRight}</span>
+                      </Card>
+                    </button>
+                  ))}
                   {dmThreads.length === 0 && <div style={{ color: '#8B8B96', fontSize: 13 }}>None.</div>}
                 </div>
               </div>
@@ -972,6 +1079,15 @@ function UserDetailPanel({ user, actor, onClose }) {
           )}
         </div>
       </div>
+      {monitorThread && (
+        <AdminDmMonitor
+          threadId={monitorThread.id}
+          otherUsername={monitorThread.otherUsername}
+          viewedUsername={user.username}
+          viewedUserId={user.id}
+          onClose={() => setMonitorThread(null)}
+        />
+      )}
       {ConfirmUI}
     </div>
   );
@@ -1072,12 +1188,39 @@ function ConfessionsTab({ actor }) {
 // open the specific user who asked it in the Users tab first. Same
 // questions_delete_owner_or_admin RLS policy.
 // ----------------------------------------------------------------------------
+// The app auto-creates a "personal" question with this exact text on every
+// user's profile (see CreateQuestionModal.jsx's 'personal' type) — it's not
+// something any one user typed, so it clutters this tab with one identical
+// row per user. Matched case-insensitively / trimmed rather than an exact
+// string compare, since punctuation on the auto-generated copy could drift
+// over time without this filter silently stopping working.
+const AUTO_GENERATED_QUESTION_TEXT = 'ask me anything anonymously';
+function isAutoGeneratedQuestion(text) {
+  return (text || '').trim().toLowerCase() === AUTO_GENERATED_QUESTION_TEXT;
+}
+const HIDE_AUTO_QUESTIONS_KEY = 'anonroom_admin_hide_auto_questions';
+
 function QuestionsTab({ actor }) {
   const [questions, setQuestions] = useState([]);
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState(null);
   const [query, setQuery] = useState('');
+  // Defaults to hidden — that's the whole point of this toggle — but
+  // remembers the admin's choice across visits via localStorage (this is
+  // purely a display filter, never a delete, so it's safe to persist
+  // client-side rather than needing a server-side column).
+  const [hideAutoGenerated, setHideAutoGenerated] = useState(() => {
+    try { return localStorage.getItem(HIDE_AUTO_QUESTIONS_KEY) !== 'false'; } catch { return true; }
+  });
   const [confirm, ConfirmUI] = useConfirm();
+
+  function toggleHideAutoGenerated() {
+    setHideAutoGenerated((prev) => {
+      const next = !prev;
+      try { localStorage.setItem(HIDE_AUTO_QUESTIONS_KEY, String(next)); } catch { /* best-effort */ }
+      return next;
+    });
+  }
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -1100,11 +1243,15 @@ function QuestionsTab({ actor }) {
     logAdminAction(actor, 'question.deleted', 'question', question.id, { via: 'questions_tab' });
   }
 
+  const autoGeneratedCount = useMemo(() => questions.filter((q) => isAutoGeneratedQuestion(q.text)).length, [questions]);
+
   const filtered = useMemo(() => {
+    let list = questions;
+    if (hideAutoGenerated) list = list.filter((item) => !isAutoGeneratedQuestion(item.text));
     const q = query.trim().toLowerCase();
-    if (!q) return questions;
-    return questions.filter((item) => item.text?.toLowerCase().includes(q) || item.profiles?.username?.toLowerCase().includes(q));
-  }, [questions, query]);
+    if (!q) return list;
+    return list.filter((item) => item.text?.toLowerCase().includes(q) || item.profiles?.username?.toLowerCase().includes(q));
+  }, [questions, query, hideAutoGenerated]);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
@@ -1112,6 +1259,15 @@ function QuestionsTab({ actor }) {
         <span style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#8B8B96', display: 'flex' }}>{Vectors.Search}</span>
         <input value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Search question text or author…" style={{ ...inputStyle, paddingLeft: 34 }} />
       </div>
+
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+          <LiquidSwitch checked={hideAutoGenerated} onChange={toggleHideAutoGenerated} />
+          <span style={{ fontSize: 13, color: '#F4F3F0', fontWeight: 600 }}>Hide "Ask Me Anything Anonymously"</span>
+        </div>
+        {autoGeneratedCount > 0 && <span style={{ fontSize: 12, color: '#8B8B96' }}>{autoGeneratedCount} auto-generated</span>}
+      </div>
+
       <div style={{ fontSize: 13, color: '#8B8B96' }}>{filtered.length} of {questions.length} questions (latest {FEED_PAGE_LIMIT})</div>
 
       {loading ? <SkeletonRows count={4} /> : (
@@ -1383,6 +1539,8 @@ const inputStyle = { width: '100%', boxSizing: 'border-box', border: '1px solid 
 const selectStyle = { boxSizing: 'border-box', border: '1px solid rgba(255,255,255,0.08)', outline: 'none', background: '#1C1D24', borderRadius: 12, padding: '0 10px', fontSize: 13, color: '#F4F3F0', cursor: 'pointer' };
 const fieldLabelStyle = { fontSize: 11.5, fontWeight: 600, color: '#8B8B96', textTransform: 'uppercase', letterSpacing: 0.4, marginTop: 4 };
 const iconBtnStyle = { border: 'none', background: 'rgba(255,255,255,0.06)', width: 32, height: 32, borderRadius: '50%', color: '#8B8B96', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 };
+const tableHeadStyle = { textAlign: 'left', padding: '10px 14px', fontSize: 11.5, fontWeight: 700, color: '#8B8B96', textTransform: 'uppercase', letterSpacing: 0.4 };
+const tableCellStyle = { padding: '10px 14px', verticalAlign: 'middle' };
 function primaryBtnStyle(disabled) {
   return { width: '100%', marginTop: 4, padding: '12px 0', borderRadius: 14, border: 'none', background: disabled ? 'rgba(255,255,255,0.06)' : '#FF6B35', color: disabled ? '#8B8B96' : '#fff', fontWeight: 700, fontSize: 15, cursor: disabled ? 'default' : 'pointer' };
 }
@@ -1496,10 +1654,10 @@ export default function AdminPanel() {
 
   if (isDesktop) {
     return (
-      <div style={{ minHeight: '100dvh', background: '#0C0D10', display: 'flex' }}>
+      <div style={{ height: '100dvh', overflow: 'hidden', background: '#0C0D10', display: 'flex' }}>
         <GlobalAdminStyle />
         <ToastContainer />
-        <aside style={{ width: 232, flexShrink: 0, background: '#15161B', borderRight: '1px solid rgba(255,255,255,0.06)', display: 'flex', flexDirection: 'column', padding: '20px 12px', position: 'sticky', top: 0, height: '100dvh' }}>
+        <aside style={{ width: 232, flexShrink: 0, background: '#15161B', borderRight: '1px solid rgba(255,255,255,0.06)', display: 'flex', flexDirection: 'column', padding: '20px 12px', height: '100%' }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '0 8px 20px' }}>
             <div style={{ color: '#FF6B35' }}>{Vectors.Shield}</div>
             <span style={{ fontSize: 16, fontWeight: 700, color: '#F4F3F0' }}>Admin Panel</span>
@@ -1537,17 +1695,17 @@ export default function AdminPanel() {
   }
 
   return (
-    <div style={{ minHeight: '100dvh', background: '#0C0D10', display: 'flex', flexDirection: 'column' }}>
+    <div style={{ height: '100dvh', overflow: 'hidden', background: '#0C0D10', display: 'flex', flexDirection: 'column' }}>
       <GlobalAdminStyle />
       <ToastContainer />
-      <header style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '16px 20px', background: '#1C1D24', borderBottom: '1px solid rgba(255,255,255,0.06)', position: 'sticky', top: 0, zIndex: 10 }}>
+      <header style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: 10, padding: '16px 20px', background: '#1C1D24', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
         <div style={{ color: '#FF6B35' }}>{Vectors.Shield}</div>
         <h1 style={{ margin: 0, fontSize: 17, fontWeight: 700, color: '#F4F3F0', flex: 1 }}>Admin Panel</h1>
         <span style={{ fontSize: 13, color: '#8B8B96' }}>@{profile.username}</span>
         <button onClick={handleSignOut} disabled={signingOut} style={iconBtnStyle} title="Sign out">{Vectors.LogOut}</button>
       </header>
 
-      <div className="admin-scrollbar" style={{ display: 'flex', gap: 4, padding: '10px 16px', background: '#1C1D24', borderBottom: '1px solid rgba(255,255,255,0.06)', position: 'sticky', top: 61, zIndex: 9, overflowX: 'auto' }}>
+      <div className="admin-scrollbar" style={{ flexShrink: 0, display: 'flex', gap: 4, padding: '10px 16px', background: '#1C1D24', borderBottom: '1px solid rgba(255,255,255,0.06)', overflowX: 'auto' }}>
         {tabs.map((t) => (
           <button
             key={t.id}

@@ -18,7 +18,13 @@
  *   - admin.html directly (e.g. local dev: http://localhost:5173/admin.html)
  *   - administrator.anonroom.in in production (rewritten to /admin.html —
  *     see vercel.json)
- *   - anonroom.in/admin in production (same rewrite, path-based fallback)
+ *
+ * NOT reachable via anonroom.in/admin. That path-based fallback used to
+ * exist in vercel.json but was removed: it collided with the /<username>
+ * DM route (see src/lib/subdomain.js's getDmUsernameFromPath), so a user
+ * whose username happened to be "admin" could never open a DM at
+ * anonroom.in/admin — it always opened the admin panel instead. The admin
+ * panel is administrator.anonroom.in ONLY now.
  * ============================================================================
  */
 

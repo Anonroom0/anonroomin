@@ -24,14 +24,23 @@
         margin: 0;
         padding: 0;
         width: 100vw;
-        min-height: 100dvh;
+        height: 100dvh;
+        /* Bounded (not just min-height) + hidden here on purpose: AdminPanel.jsx's
+           own wrapper is height:100dvh + overflow:hidden with a single scrollable
+           content pane inside it (className="admin-scrollbar"). Scrolling happens
+           there, not at the body level — matching index.html's app-shell pattern
+           instead of relying on page scroll interacting with this page's sticky
+           header/tab bar and fixed-position modals (ConfirmDialog, UserDetailPanel,
+           AdminDmMonitor). */
+        overflow: hidden;
         background: #0C0D10;
         color: #fff;
       }
 
       #root {
         width: 100%;
-        min-height: 100dvh;
+        height: 100%;
+        overflow: hidden;
       }
 
       input, textarea, select, button {

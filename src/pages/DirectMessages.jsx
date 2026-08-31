@@ -1337,3 +1337,114 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
     </div>
   );
 }
+
+// ============================================================================
+// 6. ADMIN MONITOR VIEW (read-only) — used ONLY by AdminPanel.jsx's
+// ============================================================================
+// UserDetailPanel, when an admin clicks one of a user's DM threads to
+// "monitor" it. Deliberately a SEPARATE component from the main export
+// above rather than a mode flag on it:
+//
+// - The main component always resolves/creates a thread scoped to the
+//   logged-in user's own id (openThreadWithUserId + the session's userId —
+//   see fetchOrCreateThread's usage of userId above). An admin viewing
+//   someone else's conversation isn't a participant in it at all, so that
+//   whole "my thread with X" resolution path doesn't apply here — this
+//   fetches a thread by its id directly instead.
+// - It's read-only by construction: no composer, no send/upload/react/
+//   delete handlers wired up at all, so there's no risk of an admin
+//   accidentally posting into a conversation they're only supposed to be
+//   observing. Whether the admin should even be able to SELECT the rows in
+//   the first place is still enforced server-side by RLS on dm_threads /
+//   dm_messages, same "server enforces it, this UI is just the view" split
+//   as the rest of the admin panel.
+//
+// Renders as its own fixed-position full-screen layer (zIndex 60) so it
+// stacks above UserDetailPanel's own overlay (zIndex 50).
+function AdminMonitorMessageBubble({ message, isFromViewedUser }) {
+  const isInstagram = !!message.instagram_username;
+  const isStickerOrGif = message.media_type === 'gif' || message.media_type === 'sticker';
+  const bubbleBackground = isStickerOrGif ? 'transparent' : (isFromViewedUser ? '#2A2B32' : '#15161B');
+
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', alignItems: isFromViewedUser ? 'flex-end' : 'flex-start', marginBottom: 10 }}>
+      <div style={{ maxWidth: '78%', padding: isStickerOrGif ? 0 : '10px 14px', borderRadius: 18, background: bubbleBackground, border: isStickerOrGif ? 'none' : '1px solid rgba(255,255,255,0.06)' }}>
+        {isInstagram ? (
+          <InstagramCard message={message} isOwn={isFromViewedUser} />
+        ) : message.media_url ? (
+          message.media_type === 'video' ? (
+            <VideoBubble src={message.media_url} />
+          ) : message.media_type === 'audio' ? (
+            <AudioBubble src={message.media_url} isOwn={isFromViewedUser} />
+          ) : (
+            <img src={message.media_url} alt="Attachment" style={{ maxWidth: 220, maxHeight: 220, borderRadius: 12, display: 'block', objectFit: 'cover' }} />
+          )
+        ) : null}
+        {message.text && <span style={{ fontSize: 14, whiteSpace: 'pre-wrap', wordBreak: 'break-word', color: '#F4F3F0' }}>{message.text}</span>}
+        {!message.text && !message.media_url && !isInstagram && <span style={{ fontSize: 13, color: '#8B8B96', fontStyle: 'italic' }}>(empty message)</span>}
+      </div>
+      <span style={{ fontSize: 10.5, color: '#8B8B96', marginTop: 3, padding: '0 4px' }}>
+        {message.is_anon ? 'Anonymous · ' : ''}{formatTime(message.created_at)}
+      </span>
+    </div>
+  );
+}
+
+export function AdminDmMonitor({ threadId, otherUsername, viewedUsername, viewedUserId, onClose }) {
+  const [status, setStatus] = useState('loading'); // 'loading' | 'ready' | 'error'
+  const [messages, setMessages] = useState([]);
+
+  const load = useCallback(async () => {
+    setStatus('loading');
+    const { data, error } = await supabase.from('dm_messages').select('*').eq('thread_id', threadId).order('created_at', { ascending: true }).limit(300);
+    if (error) { setStatus('error'); return; }
+    setMessages(data || []);
+    setStatus('ready');
+  }, [threadId]);
+
+  useEffect(() => { load(); }, [load]);
+
+  // Light realtime follow — new messages posted while an admin has a
+  // thread open for monitoring still show up without a manual refresh.
+  useEffect(() => {
+    const channel = supabase.channel(`admin_dm_monitor:${threadId}`)
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'dm_messages', filter: `thread_id=eq.${threadId}` }, (payload) => {
+        setMessages((prev) => (prev.some((m) => m.id === payload.new.id) ? prev : [...prev, payload.new]));
+      })
+      .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'dm_messages', filter: `thread_id=eq.${threadId}` }, (payload) => {
+        setMessages((prev) => prev.filter((m) => m.id !== payload.old.id));
+      })
+      .subscribe();
+    return () => { supabase.removeChannel(channel); };
+  }, [threadId]);
+
+  return (
+    <div className="no-copy-text" style={{ position: 'fixed', inset: 0, zIndex: 60, background: '#0C0D10', display: 'flex', flexDirection: 'column' }}>
+      <header style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: 12, padding: '14px 20px', background: '#1C1D24', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
+        <button onClick={onClose} style={{ border: 'none', background: 'rgba(255,255,255,0.06)', width: 32, height: 32, borderRadius: '50%', color: '#F4F3F0', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{Vectors.Back}</button>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 15, fontWeight: 700, color: '#F4F3F0' }}>@{viewedUsername || 'unknown'} ↔ @{otherUsername || 'unknown'}</div>
+          <div style={{ fontSize: 11.5, color: '#FF6B35', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.4 }}>Monitoring · read only</div>
+        </div>
+      </header>
+
+      <div className="admin-scrollbar" style={{ flex: 1, overflowY: 'auto', WebkitOverflowScrolling: 'touch', padding: '18px 16px' }}>
+        {status === 'loading' && (
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#FF6B35' }}>{Vectors.Spinner}</div>
+        )}
+        {status === 'error' && (
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: 12, color: '#8B8B96' }}>
+            <p>Couldn't load this thread.</p>
+            <button onClick={load} style={{ background: '#FF6B35', color: '#fff', border: 'none', padding: '8px 16px', borderRadius: 10, cursor: 'pointer', fontWeight: 700 }}>Retry</button>
+          </div>
+        )}
+        {status === 'ready' && messages.length === 0 && (
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#8B8B96', fontSize: 14 }}>No messages in this thread yet.</div>
+        )}
+        {status === 'ready' && messages.map((message) => (
+          <AdminMonitorMessageBubble key={message.id} message={message} isFromViewedUser={message.sender_id === viewedUserId} />
+        ))}
+      </div>
+    </div>
+  );
+}
