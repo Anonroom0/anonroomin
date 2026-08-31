@@ -7,12 +7,16 @@
 const RESERVED_SEGMENTS = ['www', 'anonroom', 'localhost', 'administrator'];
 
 // True ONLY for the real production admin-panel subdomain
-// (administrator.anonroom.in). Unlike group subdomains, this one renders
-// its own dedicated view (AdminPanel.jsx) rather than redirecting anywhere
-// — see App.jsx's top-level dispatch. It relies on the same cross-subdomain
-// auth cookie set up in supabaseClient.js (cookieDomain = '.anonroom.in'),
-// so a session created on the main site is already valid here with no
-// separate login step.
+// (administrator.anonroom.in). Not currently read by App.jsx — that
+// subdomain is now rewritten at the CDN level straight to the standalone
+// admin.html entry point (see vercel.json + src/admin-main.jsx) rather than
+// being detected and branched on inside the main app's component tree.
+// Kept here as a small utility in case any future admin-only tooling still
+// needs a "is this the admin host?" check (e.g. for the local-dev
+// ?admin=1 fallback below), and because AdminPanel.jsx itself still relies
+// on the shared cross-subdomain auth cookie from supabaseClient.js
+// (cookieDomain = '.anonroom.in') for a session created on the main site
+// to already be valid there with no separate login step.
 export function isAdministratorSubdomain() {
   const hostname = window.location.hostname;
   const parts = hostname.split('.');

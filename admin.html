@@ -1,0 +1,57 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+
+    <!-- Favicons (shared with the main app) -->
+    <link rel="icon" type="image/x-icon" href="/favicon.ico" />
+    <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32x32.png" />
+    <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16x16.png" />
+    <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />
+    <meta name="theme-color" content="#0C0D10" />
+
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+
+    <title>Anonroom Admin</title>
+    <meta name="description" content="Anonroom admin panel." />
+    <!-- Deliberately no Open Graph / Twitter card tags and no robots-indexable
+         description beyond the above — this page is never meant to be shared
+         or crawled. -->
+    <meta name="robots" content="noindex, nofollow" />
+
+    <style>
+      html, body {
+        margin: 0;
+        padding: 0;
+        width: 100vw;
+        min-height: 100dvh;
+        background: #0C0D10;
+        color: #fff;
+      }
+
+      #root {
+        width: 100%;
+        min-height: 100dvh;
+      }
+
+      input, textarea, select, button {
+        font-size: 16px;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <!--
+      Standalone bundle: this file — not index.html — is the browser entry
+      point for the admin panel. It boots src/admin-main.jsx directly,
+      which never imports App.jsx or Home.jsx, so the admin panel ships
+      as its own Vite build output, its own JS bundle, and is never
+      mounted alongside (or inside) the main chat app's component tree.
+      See vite.config.js's build.rollupOptions.input for the matching
+      multi-page build wiring, and vercel.json for the production
+      host/path rewrites that route administrator.anonroom.in and /admin
+      here instead of to index.html.
+    -->
+    <script type="module" src="/src/admin-main.jsx"></script>
+  </body>
+</html>

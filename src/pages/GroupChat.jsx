@@ -496,6 +496,22 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
     if (!groupSlug) return;
     let isMounted = true;
     setGroupStatus('loading');
+    // See the matching comment in DirectMessages.jsx's thread-switch effect
+    // — clearing these up front (rather than only once the new group
+    // resolves) is what stops the previous group's messages from flashing
+    // on screen while the new one is still loading.
+    setGroup(null);
+    setMessages([]);
+    setMessagesLoading(true);
+    setHasMoreMessages(true);
+    setReplyingTo(null);
+    setSelectedMessages([]);
+    setHighlightedMsgId(null);
+    setHasUnreadMention(false);
+    setLatestMentionId(null);
+    setIsSearching(false);
+    setChatSearchQuery('');
+    setMenuOpen(false);
 
     async function initializeGroup() {
       try {
@@ -622,9 +638,11 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
 
         const isMentioned = ownUserId && newMsg.mentioned_user_ids?.includes(ownUserId);
         if (isMentioned) { setHasUnreadMention(true); setLatestMentionId(newMsg.id); }
-        // Our own sends already get playSend()/hapticSend() in handleSend();
-        // only play the incoming tone for messages from someone else so a
-        // send doesn't double-fire both sounds via this same realtime echo.
+        // Our own sends already get playSend()/hapticSend() AND an instant
+        // optimistic bubble in handleSend()/handleMediaPicked() (reconciled
+        // by real id once the insert responds) — only play the incoming
+        // tone for messages from someone else, and the `some(...)` dedup
+        // below means this echo of our own row is a no-op once reconciled.
         if (newMsg.user_id !== ownUserId) playReceive();
         setMessages((prev) => (prev.some((m) => m.id === newMsg.id) ? prev : [newMsg, ...prev]));
       })
@@ -812,6 +830,17 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
 
   const currentSenderName = () => (isAnonMode ? 'Anonymous' : (profile?.is_admin ? ADMIN_DISPLAY_NAME : (profile?.username || 'Anonymous')));
 
+  // Swaps a temp optimistic message for its canonical DB row — see the
+  // matching helper/comment in DirectMessages.jsx. Guards against the
+  // realtime INSERT echo (above) having already added the real row first.
+  function reconcileOptimisticMessage(tempId, finalRow) {
+    setMessages((prev) => {
+      const withoutTemp = prev.filter((m) => m.id !== tempId);
+      if (finalRow && withoutTemp.some((m) => m.id === finalRow.id)) return withoutTemp;
+      return finalRow ? [finalRow, ...withoutTemp] : withoutTemp;
+    });
+  }
+
   async function handleSend(e) {
     e.preventDefault();
     const trimmed = text.trim();
@@ -819,19 +848,42 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
     if (isChannelLocked) { showToast('Only admins can send messages in this channel.', 'info'); return; }
     if (cooldownPercent > 0) { showToast('Please wait a few seconds before sending another message.', 'info'); return; }
 
-    setSending(true);
-    const mentionedUsernames = [...trimmed.matchAll(/@([a-zA-Z0-9_]+)/g)].map((m) => m[1].toLowerCase());
-    let mentionedIds = [];
-    if (mentionedUsernames.length > 0) {
-      const { data } = await supabase.from('profiles').select('id').in('username', mentionedUsernames);
-      if (data) mentionedIds = data.map((p) => p.id);
-    }
+    const tempId = `temp-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const replyToId = replyingTo?.id ?? null;
+    const senderName = currentSenderName();
+    const optimisticMsg = {
+      id: tempId, group_id: group.id, user_id: session.user.id, sender_name: senderName, text: trimmed,
+      media_url: null, media_type: null, reply_to_id: replyToId, mentioned_user_ids: [], is_anon: isAnonMode,
+      is_confession: false, created_at: new Date().toISOString(),
+      profiles: isAnonMode ? null : { avatar_url: profile?.avatar_url || null },
+      _pending: true,
+    };
+    // Show the bubble immediately — the mention lookup + insert + realtime
+    // round trips below no longer block the sender from seeing their own
+    // message appear.
+    setMessages((prev) => [optimisticMsg, ...prev]);
+    setText(''); setReplyingTo(null); setPickerOpen(false);
+    playSend(); hapticSend(); cooldownRef.current?.start();
 
-    const { error } = await supabase.from('group_messages').insert({ group_id: group.id, user_id: session.user.id, sender_name: currentSenderName(), text: trimmed, reply_to_id: replyingTo?.id ?? null, mentioned_user_ids: mentionedIds, is_anon: isAnonMode });
-    setSending(false);
-    if (error) { console.error(error); showToast(friendlyDbError(), 'error'); return; }
-    playSend(); hapticSend();
-    setText(''); setReplyingTo(null); setPickerOpen(false); cooldownRef.current?.start();
+    setSending(true);
+    try {
+      const mentionedUsernames = [...trimmed.matchAll(/@([a-zA-Z0-9_]+)/g)].map((m) => m[1].toLowerCase());
+      let mentionedIds = [];
+      if (mentionedUsernames.length > 0) {
+        const { data } = await supabase.from('profiles').select('id').in('username', mentionedUsernames);
+        if (data) mentionedIds = data.map((p) => p.id);
+      }
+
+      const { data, error } = await supabase.from('group_messages').insert({ group_id: group.id, user_id: session.user.id, sender_name: senderName, text: trimmed, reply_to_id: replyToId, mentioned_user_ids: mentionedIds, is_anon: isAnonMode }).select('*, profiles(avatar_url)').single();
+      if (error) throw error;
+      reconcileOptimisticMessage(tempId, data);
+    } catch (err) {
+      console.error(err);
+      showToast(friendlyDbError(), 'error');
+      setMessages((prev) => prev.map((m) => (m.id === tempId ? { ...m, _pending: false, _failed: true } : m)));
+    } finally {
+      setSending(false);
+    }
   }
 
   function handleAttachmentSelected(e) {
@@ -873,9 +925,20 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
     if (isChannelLocked) { showToast('Only admins can send messages in this channel.', 'info'); return; }
     if (cooldownPercent > 0) { showToast('Please wait.', 'info'); return; }
     setPickerOpen(false);
-    const { error } = await supabase.from('group_messages').insert({ group_id: group.id, user_id: session.user.id, sender_name: currentSenderName(), media_url: url, media_type: mediaType, reply_to_id: replyingTo?.id ?? null, is_anon: isAnonMode });
-    if (error) showToast(friendlyDbError(), 'error');
-    else { setReplyingTo(null); cooldownRef.current?.start(); }
+
+    const tempId = `temp-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const replyToId = replyingTo?.id ?? null;
+    const senderName = currentSenderName();
+    setMessages((prev) => [{ id: tempId, group_id: group.id, user_id: session.user.id, sender_name: senderName, text: null, media_url: url, media_type: mediaType, reply_to_id: replyToId, mentioned_user_ids: [], is_anon: isAnonMode, is_confession: false, created_at: new Date().toISOString(), profiles: isAnonMode ? null : { avatar_url: profile?.avatar_url || null }, _pending: true }, ...prev]);
+    setReplyingTo(null); playSend(); hapticSend(); cooldownRef.current?.start();
+
+    const { data, error } = await supabase.from('group_messages').insert({ group_id: group.id, user_id: session.user.id, sender_name: senderName, media_url: url, media_type: mediaType, reply_to_id: replyToId, is_anon: isAnonMode }).select('*, profiles(avatar_url)').single();
+    if (error) {
+      showToast(friendlyDbError(), 'error');
+      setMessages((prev) => prev.map((m) => (m.id === tempId ? { ...m, _pending: false, _failed: true } : m)));
+      return;
+    }
+    reconcileOptimisticMessage(tempId, data);
   }
 
   async function handleConfessionSubmit(confessionText, anon, mediaFile, storyStyle) {
@@ -1292,7 +1355,9 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
                         </div>
 
                         <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4 }}>
-                          <span style={{ fontSize: 11, color: '#8B8B96', marginInline: 4, fontWeight: 500 }}>{formatTime(message.created_at)}</span>
+                          <span style={{ fontSize: 11, color: message._failed ? '#FF6B6B' : '#8B8B96', marginInline: 4, fontWeight: 500 }}>
+                            {message._pending ? 'Sending…' : message._failed ? 'Failed to send' : formatTime(message.created_at)}
+                          </span>
                         </div>
                       </div>
                     </div>
@@ -1395,41 +1460,4 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
               <button type="button" onClick={() => setPickerOpen((v) => !v)} disabled={uploading || selectedMessages.length > 0} style={{ width: 36, height: 36, borderRadius: '50%', border: 'none', background: pickerOpen ? 'rgba(255,255,255,0.06)' : 'transparent', color: pickerOpen ? '#F4F3F0' : '#8B8B96', cursor: 'pointer', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{Vectors.Smiley}</button>
               {/* type="search" is kept (not "text") purely as the anti-autofill
                   hack this codebase uses throughout — see LiquidInput in
-                  EditProfile.jsx for the same trick. Left alone, that type
-                  makes mobile keyboards show a magnifying-glass "search" key
-                  instead of "send", and some mobile browsers don't submit the
-                  enclosing form on that key for a type="search" input. 
-                  enterKeyHint="send" fixes the key's icon/label without
-                  touching the anti-autofill type, and the onKeyDown gives an
-                  explicit, guaranteed send path (calling the same handleSend
-                  used by the form's onSubmit/the send button) so Enter always
-                  works even on keyboards that ignore enterKeyHint. */}
-              <input type="search" enterKeyHint="send" name="group-chat-message-f" autoComplete="off-nope" autoCorrect="off" autoCapitalize="off" spellCheck="false" data-lpignore="true" data-1p-ignore data-form-type="other" readOnly={composerLocked} value={text} onChange={(e) => setText(e.target.value.slice(0, MAX_TEXT_LENGTH))} maxLength={MAX_TEXT_LENGTH} onFocus={() => { setComposerLocked(false); setPickerOpen(false); }} onBlur={() => setComposerLocked(true)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); if (!uploading && selectedMessages.length === 0) handleSend(e); } }} placeholder={uploading ? 'Uploading media...' : 'Message'} disabled={uploading || selectedMessages.length > 0} style={{ flex: 1, border: '1px solid rgba(255,255,255,0.06)', outline: 'none', background: '#15161B', borderRadius: 24, padding: '12px 18px', fontSize: 15, color: '#F4F3F0', transition: 'border-color 0.2s' }} />
-              <SendButton canSend={!!text.trim()} sending={sending || uploading} cooldownPercent={cooldownPercent} />
-            </form>
-          </>
-        )}
-      </div>
-
-      <AttachmentSheet open={attachSheetOpen} onClose={() => setAttachSheetOpen(false)} onOpenCamera={() => { setAttachSheetOpen(false); cameraInputRef.current?.click(); }} onPickInstagram={() => { setAttachSheetOpen(false); setInstagramModalOpen(true); }} onPickConfession={() => { setAttachSheetOpen(false); setConfessionModalOpen(true); }} />
-      <ConfessionModal open={confessionModalOpen} onClose={() => setConfessionModalOpen(false)} onSubmit={handleConfessionSubmit} />
-      <InstagramModal open={instagramModalOpen} onClose={() => !instagramLoading && setInstagramModalOpen(false)} onSubmit={handleInstagramSubmit} loading={instagramLoading} />
-
-      <MediaViewer mediaUrl={viewerMedia?.url} mediaType={viewerMedia?.type} open={viewerMedia !== null} onClose={() => setViewerMedia(null)} />
-      <ProfileCard userId={profileCardUserId} open={!!profileCardUserId} onClose={() => setProfileCardUserId(null)} />
-      {groupCardOpen && <GroupCard groupSlug={groupSlug} open={groupCardOpen} onClose={() => setGroupCardOpen(false)} />}
-      <AuthModal open={authOpen} onClose={() => setAuthOpen(false)} initialTab="signin" onVerified={() => setAuthOpen(false)} />
-
-      {sharingMessage && (
-        <ShareStorySheet
-          mode="message"
-          open={!!sharingMessage}
-          onClose={() => setSharingMessage(null)}
-          message={sharingMessage}
-          customizable={!sharingMessage.is_confession}
-          lockedStyle={sharingMessage.is_confession ? (sharingMessage.story_style || null) : null}
-        />
-      )}
-    </div>
-  );
-}
+                  EditProfile.jsx for the same trick.

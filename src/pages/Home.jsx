@@ -761,12 +761,13 @@ const [sharingReply, setSharingReply] = useState(null); // NEW — { question, r
           >
             {activeChatId ? (
               activeChatType === 'dm' ? (
-                <DirectMessages openThreadWithUserId={activeChatId} onBack={closeActiveChat} onThreadReady={handleThreadReady} />
+                <DirectMessages key={`dm-${activeChatId}`} openThreadWithUserId={activeChatId} onBack={closeActiveChat} onThreadReady={handleThreadReady} />
               ) : activeChatType === 'group' ? (
-                <GroupChat groupSlug={activeChatId} onBack={closeActiveChat} onGroupResolved={handleGroupResolved} />
+                <GroupChat key={`group-${activeChatId}`} groupSlug={activeChatId} onBack={closeActiveChat} onGroupResolved={handleGroupResolved} />
               ) : activeChatType === 'question' ? (
                 
   <QuestionThread
+    key={`question-${activeChatId}`}
     questionId={activeChatId}
     onBack={closeActiveChat}
     onShareReply={(question, reply) => setSharingReply({ question, reply })}

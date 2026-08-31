@@ -594,6 +594,24 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
 
     let isMounted = true;
     setThreadStatus('loading');
+    // Clear the previous thread's state up front — see this effect's
+    // header comment. Without this, switching straight from one DM to
+    // another (same component instance) would leave the OLD thread's
+    // activeThread/messages sitting in state through the network round
+    // trip below, which is what let the previous conversation flash on
+    // screen for a moment before the new one replaced it.
+    setActiveThread(null);
+    setMessages([]);
+    setMessagesLoading(true);
+    setHasMoreMessages(true);
+    setReplyingTo(null);
+    setSelectedMessages([]);
+    setHighlightedMsgId(null);
+    setHasUnreadMention(false);
+    setLatestMentionId(null);
+    setIsSearching(false);
+    setChatSearchQuery('');
+    setMenuOpen(false);
 
     async function initializeThread() {
       try {
@@ -694,6 +712,10 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
         const newMsg = payload.new;
         const isMentioned = userId && newMsg.mentioned_user_ids?.includes(userId);
         if (isMentioned) { setHasUnreadMention(true); setLatestMentionId(newMsg.id); }
+        // Our own sends are already shown instantly as an optimistic bubble
+        // (see handleSend/handleMediaPicked) and already played playSend()
+        // at that moment, so this realtime echo of our own insert should
+        // never play the incoming tone or add a second copy of the bubble.
         if (newMsg.sender_id !== userId) playReceive();
         setMessages((prev) => prev.some(m => m.id === newMsg.id) ? prev : [newMsg, ...prev]);
       })
@@ -872,19 +894,52 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
     setReplyingTo({ id: message.id, sender_name: senderName, text: message.text, media_url: message.media_url, media_type: message.media_type, instagram_username: message.instagram_username });
   }, [userId, activeThread]);
 
+  // Swaps a temp optimistic message for its canonical DB row, guarding
+  // against the case where the realtime INSERT echo (see the channel
+  // subscription above) already added the real row by the time this
+  // resolves — whichever arrives first wins, the other is a no-op, and
+  // there is never a moment with both the temp bubble and its real
+  // replacement on screen at once.
+  function reconcileOptimisticMessage(tempId, finalRow) {
+    setMessages((prev) => {
+      const withoutTemp = prev.filter((m) => m.id !== tempId);
+      if (finalRow && withoutTemp.some((m) => m.id === finalRow.id)) return withoutTemp;
+      return finalRow ? [{ ...finalRow, _pending: false }, ...withoutTemp] : withoutTemp;
+    });
+  }
+
   async function handleSend(e) {
     e.preventDefault();
     const trimmed = text.trim();
     if (!trimmed || !userId || !activeThread || sending) return;
     if (cooldownPercent > 0) { showToast("Please wait a few seconds before sending another message.", 'info'); return; }
 
+    const tempId = `temp-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const replyToId = replyingTo?.id ?? null;
+    const optimisticMsg = {
+      id: tempId, thread_id: activeThread.id, sender_id: userId, text: trimmed,
+      media_url: null, media_type: null, reply_to_id: replyToId, mentioned_user_ids: [],
+      is_anon: false, created_at: new Date().toISOString(), _pending: true,
+    };
+    // Show the bubble immediately — don't make the sender wait on the
+    // mention lookup, the insert, or the realtime round trip below.
+    setMessages((prev) => [optimisticMsg, ...prev]);
+    setText(''); setReplyingTo(null); setPickerOpen(false);
+    playSend(); hapticSend(); cooldownRef.current?.start();
+
     setSending(true);
-    const mentionedIds = await resolveMentionedIds(trimmed);
-    const { error } = await supabase.from('dm_messages').insert({ thread_id: activeThread.id, sender_id: userId, text: trimmed, reply_to_id: replyingTo?.id ?? null, mentioned_user_ids: mentionedIds, is_anon: false });
-    setSending(false);
-    if (error) { console.error(error); showToast(friendlyDbError(), 'error'); return; }
-    playSend(); hapticSend();
-    setText(''); setReplyingTo(null); setPickerOpen(false); cooldownRef.current?.start();
+    try {
+      const mentionedIds = await resolveMentionedIds(trimmed);
+      const { data, error } = await supabase.from('dm_messages').insert({ thread_id: activeThread.id, sender_id: userId, text: trimmed, reply_to_id: replyToId, mentioned_user_ids: mentionedIds, is_anon: false }).select().single();
+      if (error) throw error;
+      reconcileOptimisticMessage(tempId, data);
+    } catch (err) {
+      console.error(err);
+      showToast(friendlyDbError(), 'error');
+      setMessages((prev) => prev.map((m) => (m.id === tempId ? { ...m, _pending: false, _failed: true } : m)));
+    } finally {
+      setSending(false);
+    }
   }
 
   function handleAttachmentSelected(e) {
@@ -928,9 +983,19 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
     if (!userId || !activeThread || sending) return;
     if (cooldownPercent > 0) { showToast("Please wait a few seconds before sending another message.", 'info'); return; }
     setPickerOpen(false);
-    const { error } = await supabase.from('dm_messages').insert({ thread_id: activeThread.id, sender_id: userId, media_url: url, media_type: mediaType, reply_to_id: replyingTo?.id ?? null, is_anon: false });
-    if (error) { console.error(error); showToast(friendlyDbError(), 'error'); return; }
-    setReplyingTo(null); cooldownRef.current?.start();
+
+    const tempId = `temp-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    const replyToId = replyingTo?.id ?? null;
+    setMessages((prev) => [{ id: tempId, thread_id: activeThread.id, sender_id: userId, text: null, media_url: url, media_type: mediaType, reply_to_id: replyToId, mentioned_user_ids: [], is_anon: false, created_at: new Date().toISOString(), _pending: true }, ...prev]);
+    setReplyingTo(null); playSend(); hapticSend(); cooldownRef.current?.start();
+
+    const { data, error } = await supabase.from('dm_messages').insert({ thread_id: activeThread.id, sender_id: userId, media_url: url, media_type: mediaType, reply_to_id: replyToId, is_anon: false }).select().single();
+    if (error) {
+      console.error(error); showToast(friendlyDbError(), 'error');
+      setMessages((prev) => prev.map((m) => (m.id === tempId ? { ...m, _pending: false, _failed: true } : m)));
+      return;
+    }
+    reconcileOptimisticMessage(tempId, data);
   }
 
   function handleEmojiPicked(char) { setText((prev) => prev + char); }
@@ -1156,7 +1221,9 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
                         />
                       </div>
 
-                      <span style={{ fontSize: 11, color: '#8B8B96', marginTop: 4, marginInline: 4, fontWeight: 500 }}>{formatTime(message.created_at)}</span>
+                      <span style={{ fontSize: 11, color: message._failed ? '#FF6B6B' : '#8B8B96', marginTop: 4, marginInline: 4, fontWeight: 500 }}>
+                        {message._pending ? 'Sending…' : message._failed ? 'Failed to send' : formatTime(message.created_at)}
+                      </span>
                     </div>
                   </div>
                 </SwipeableMessage>

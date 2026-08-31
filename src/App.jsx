@@ -36,6 +36,11 @@
  * Dependencies: React, AuthProvider, Supabase, ToastContainer,
  * src/lib/subdomain.js, src/lib/visitorId.js, Home, QuestionThread,
  * ConfessionsFeed
+ *
+ * NOT dispatched here: the admin panel. administrator.anonroom.in is a
+ * fully standalone page now (admin.html -> src/admin-main.jsx ->
+ * AdminPanel.jsx) — see that file's header comment. It has never appeared
+ * in this component tree, and isn't imported by this file at all.
  * ============================================================================
  */
 
@@ -47,8 +52,7 @@ import ConfessionsFeed from './pages/ConfessionsFeed';
 import ResetPassword from './pages/ResetPassword';
 import supabase from './lib/supabaseClient';
 import ToastContainer from './components/ToastContainer';
-import { getQuestionIdFromPath, isConfessionsFeedPath, isResetPasswordPath, isGroupSubdomain, getGroupSlugFromRealSubdomain, getGroupUrl, isAdministratorSubdomain } from './lib/subdomain';
-import AdminPanel from './pages/AdminPanel';
+import { getQuestionIdFromPath, isConfessionsFeedPath, isResetPasswordPath, isGroupSubdomain, getGroupSlugFromRealSubdomain, getGroupUrl } from './lib/subdomain';
 import { getCookie, setCookie, getOrCreateVisitorId } from './lib/visitorId';
 import './styles/tokens.css';
 
@@ -374,20 +378,12 @@ export default function App() {
     return <SubdomainRedirectScreen />;
   }
 
-  // administrator.anonroom.in renders a completely separate view (its own
-  // gate on profile.is_admin lives inside AdminPanel itself) instead of the
-  // normal Home/QuestionThread/ConfessionsFeed dispatch below. It still
-  // needs AuthProvider so it can read the shared cross-subdomain session.
-  if (isAdministratorSubdomain()) {
-    return (
-      <>
-        <ToastContainer />
-        <AuthProvider>
-          <AdminPanel />
-        </AuthProvider>
-      </>
-    );
-  }
+  // NOTE: administrator.anonroom.in no longer renders anything from this
+  // component tree at all. It's rewritten at the server/CDN level (see
+  // vercel.json) straight to admin.html, a completely separate Vite entry
+  // point that boots src/admin-main.jsx -> AdminPanel.jsx directly — never
+  // through App.jsx or Home.jsx. See admin-main.jsx's header comment for
+  // the full standalone-page rationale.
 
   return (
     <>
