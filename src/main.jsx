@@ -1,8 +1,23 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
+import { isAdministratorSubdomain } from './lib/subdomain';
 import './styles/tokens.css';
 import './styles/animations.css';
+
+// Safety-net redirect: administrator.<root domain> is supposed to be served
+// admin.html directly at the host level (see vercel.json's host-based
+// rewrite), so this main app (index.html -> main.jsx -> App.jsx) should
+// never even load there. If it DOES end up loading here anyway — e.g. the
+// hosting rewrite hasn't taken effect, a CDN edge is serving a stale/cached
+// response, or the site is opened somewhere the rewrite doesn't apply —
+// this catches it client-side and hard-navigates to /admin.html instead of
+// silently rendering the normal home page on the admin host. Runs before
+// React mounts and bails out immediately so nothing else in this file
+// executes.
+if (isAdministratorSubdomain() && !window.location.pathname.startsWith('/admin.html')) {
+  window.location.replace('/admin.html');
+} else {
 
 // Register the Service Worker for Push Notifications
 if ('serviceWorker' in navigator) {
@@ -51,3 +66,5 @@ ReactDOM.createRoot(document.getElementById('root')).render(
     <App />
   </React.StrictMode>
 );
+
+}
