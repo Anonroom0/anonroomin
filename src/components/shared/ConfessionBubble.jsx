@@ -15,34 +15,32 @@
  *
  * Always horizontally centered — never left/right-aligned like a normal
  * chat bubble, regardless of size. Structure is fixed across all three
- * sizes: an --ember, low-opacity header strip ("Confession" + relative
- * timestamp) sits above a rectangular --glass-white body (20px radius)
- * with a reserved 4:5 image area (only rendered when photo_url is present),
- * then the confession text, then a bottom row with a reply affordance.
+ * sizes: a gradient header strip carries the confession TEXT itself (bold
+ * rounded display font, NGL-sticker style — no "Confession" label, no
+ * timestamp here) sitting above a rectangular --glass-white body (20px
+ * radius) with a reserved 4:5 image area (only rendered when photo_url is
+ * present), then a bottom row with a reply affordance on the left and the
+ * relative timestamp on the right.
  * (Reactions were previously shown here via an embedded ReactionBar, but
  * that has been removed from this component — callers that still want a
  * reaction bar for a confession render their own ReactionBar externally,
  * e.g. GroupChat.jsx and StoryViewer.jsx already do.)
  *
- * size="story" fills more of the screen and auto-hides the reply/react
- * chrome until the viewer taps once — the IG/NGL story convention
- * StoryViewer.jsx relies on. Tapping again (or the caller re-mounting on
- * story change) can re-hide it; this component only owns the show/hide
- * state itself, keyed off its own tap handler.
+ * size="story" fills more of the screen and auto-hides the reply chrome
+ * until the viewer taps once — the IG/NGL story convention StoryViewer.jsx
+ * relies on. Tapping again (or the caller re-mounting on story change) can
+ * re-hide it; this component only owns the show/hide state itself, keyed
+ * off its own tap handler.
  *
  * This preserves the same underlying content GroupChat.jsx already rendered
  * inline for is_confession messages (a labeled, gradient-tinted bubble with
- * the confession text and a reply affordance) — restyled to the header-
- * strip + glass-body structure specified here, now with reactions and an
+ * the confession text and a reply affordance) — restyled to the gradient-
+ * header + glass-body structure specified here, now with reactions and an
  * optional photo/video, shared verbatim across all three surfaces instead of
  * being reimplemented per-page.
  *
  * Dependencies: React, src/components/shared/ReactionBar.jsx, MediaViewer.jsx
  * ========================================================================= */
-/** ===========================================================================
- * CONFESSION BUBBLE — shared NGL-style confession card
- * ============================================================================
- */
 
 import React, { useEffect, useRef, useState } from 'react';
 import MediaViewer from '../../pages/MediaViewer';
@@ -54,20 +52,30 @@ const SIZE_PRESETS = {
     bodyPadding: '16px 18px',
     textSize: 15.5,
     headerTextSize: 11.5,
+    headerFontSize: 18,
   },
   feed: {
     maxWidth: 380,
     bodyPadding: '18px 20px',
     textSize: 16.5,
     headerTextSize: 12,
+    headerFontSize: 20,
   },
   story: {
     maxWidth: 340,
     bodyPadding: '22px 22px',
     textSize: 19,
     headerTextSize: 12.5,
+    headerFontSize: 22,
   },
 };
+
+// Bold, rounded display font stack — matches the chunky comic-style
+// lettering used on the gradient sticker in the reference screenshot
+// (Fredoka / Baloo-style rounded sans, falling back to a system rounded
+// sans, then generic sans-serif).
+const HEADER_FONT_STACK =
+  "'Fredoka', 'Baloo 2', 'Poppins', 'SF Pro Rounded', 'Segoe UI', sans-serif";
 
 function relativeTime(dateString) {
   if (!dateString) return '';
@@ -108,9 +116,9 @@ export default function ConfessionBubble({ confession, onReply, onPhotoClick, si
   // — see GroupChat.jsx's ConfessionModal) carry a {backgroundId, colorId,
   // shapeId, scaleId} style choice instead of rendering as the plain
   // header+glass-body card below. When present, the chosen Shape+Background
-  // is rendered inline via generateConfessionCardImage — no "Confession"
-  // label, just the body shape sitting on its background, exactly like the
-  // shape would look inside the customization story flow.
+  // is rendered inline via generateConfessionCardImage — no header strip,
+  // just the body shape sitting on its background, exactly like the shape
+  // would look inside the customization story flow.
   const storyStyle = confession.story_style || null;
   const [styledCardUrl, setStyledCardUrl] = useState(null);
   const [styledCardLoading, setStyledCardLoading] = useState(Boolean(storyStyle));
@@ -212,9 +220,58 @@ export default function ConfessionBubble({ confession, onReply, onPhotoClick, si
     );
   }
 
-  // --- Customized rendering: no header strip/label at all, just the
-  // rendered Shape+Background body (text is baked into the image), with
-  // the same reply affordance underneath as the standard card. ---
+  // Bottom row shared by both the standard card and the customized-style
+  // card: Reply affordance on the left, relative timestamp on the right.
+  function BottomRow() {
+    return (
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: 10,
+          padding: `10px ${preset.bodyPadding.split(' ')[1]} 14px`,
+          borderTop: '1px solid var(--glass-border)',
+        }}
+      >
+        {onReply ? (
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              onReply(confession);
+            }}
+            style={{
+              border: 'none',
+              background: 'transparent',
+              color: 'var(--dim)',
+              fontSize: 13,
+              fontWeight: 600,
+              cursor: 'pointer',
+              padding: 0,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 6,
+            }}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="9 17 4 12 9 7" />
+              <path d="M20 18v-2a4 4 0 0 0-4-4H4" />
+            </svg>
+            Reply
+          </button>
+        ) : <span />}
+
+        <span style={{ fontSize: preset.headerTextSize, color: 'var(--dim)' }}>
+          {relativeTime(confession.created_at)}
+        </span>
+      </div>
+    );
+  }
+
+  // --- Customized rendering: no header strip at all (text is baked into
+  // the rendered Shape+Background image), with the same bottom row
+  // underneath as the standard card. ---
   if (storyStyle && confession.text) {
     return (
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', width: '70%', margin: isStory ? 0 : '16px 0' }}>
@@ -242,9 +299,9 @@ export default function ConfessionBubble({ confession, onReply, onPhotoClick, si
             )}
           </div>
 
-          {showChrome && (onReply || mediaUrl) && (
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-start', gap: 18, padding: '10px 4px 0' }}>
-              {onReply && (
+          {showChrome && (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 18, padding: '10px 4px 0' }}>
+              {onReply ? (
                 <button
                   type="button"
                   onClick={(e) => { e.stopPropagation(); onReply(confession); }}
@@ -256,31 +313,37 @@ export default function ConfessionBubble({ confession, onReply, onPhotoClick, si
                   </svg>
                   Reply
                 </button>
-              )}
-              {/* The generated styled card above only ever bakes in the
-                  confession's text — an attached photo/video is never part
-                  of that image (and was previously not reachable at all
-                  when a confession had both a custom style and media) — so
-                  this is the only way to actually see it. */}
-              {mediaUrl && (
-                <button
-                  type="button"
-                  onClick={(e) => {
-                    e.stopPropagation();
-                    if (onPhotoClick) {
-                      onPhotoClick({ ...confession, photo_url: mediaUrl, media_url: mediaUrl, media_type: mediaType });
-                    } else {
-                      setLocalMediaOpen(true);
-                    }
-                  }}
-                  style={{ border: 'none', background: 'transparent', color: 'var(--ember)', fontSize: 13, fontWeight: 700, cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center', gap: 6 }}
-                >
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
-                  </svg>
-                  View attachment
-                </button>
-              )}
+              ) : <span />}
+
+              <div style={{ display: 'flex', alignItems: 'center', gap: 14 }}>
+                {/* The generated styled card above only ever bakes in the
+                    confession's text — an attached photo/video is never part
+                    of that image (and was previously not reachable at all
+                    when a confession had both a custom style and media) — so
+                    this is the only way to actually see it. */}
+                {mediaUrl && (
+                  <button
+                    type="button"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      if (onPhotoClick) {
+                        onPhotoClick({ ...confession, photo_url: mediaUrl, media_url: mediaUrl, media_type: mediaType });
+                      } else {
+                        setLocalMediaOpen(true);
+                      }
+                    }}
+                    style={{ border: 'none', background: 'transparent', color: 'var(--ember)', fontSize: 13, fontWeight: 700, cursor: 'pointer', padding: 0, display: 'flex', alignItems: 'center', gap: 6 }}
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.3" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" />
+                    </svg>
+                    View attachment
+                  </button>
+                )}
+                <span style={{ fontSize: preset.headerTextSize, color: 'var(--dim)' }}>
+                  {relativeTime(confession.created_at)}
+                </span>
+              </div>
             </div>
           )}
         </div>
@@ -306,34 +369,31 @@ export default function ConfessionBubble({ confession, onReply, onPhotoClick, si
       }}
     >
       <div style={{ width: '100%', maxWidth: preset.maxWidth }}>
-        {/* Header strip */}
+        {/* Header strip — hardcoded "Confession" label, bold rounded
+            display font, gradient sticker style. The actual confession
+            TEXT is not here — it renders in the greyish body below. */}
         <div
           style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 6,
-            padding: '6px 14px',
-            borderRadius: '16px 16px 0 0',
-            background: 'color-mix(in srgb, var(--ember) 16%, transparent)',
+            padding: '14px 18px',
+            borderRadius: '20px 20px 0 0',
+            background: 'linear-gradient(135deg, #6a5cf5 0%, #3ea6f7 100%)',
             border: '1px solid var(--glass-border)',
             borderBottom: 'none',
           }}
         >
-          <span
+          <div
             style={{
-              fontSize: preset.headerTextSize,
-              fontWeight: 800,
-              letterSpacing: 0.4,
-              textTransform: 'uppercase',
-              color: 'var(--ember)',
+              fontFamily: HEADER_FONT_STACK,
+              fontSize: preset.headerFontSize,
+              fontWeight: 700,
+              lineHeight: 1.3,
+              color: '#fff',
+              textAlign: 'center',
+              textShadow: '0 1px 2px rgba(0,0,0,0.15)',
             }}
           >
             Confession
-          </span>
-          <span style={{ fontSize: preset.headerTextSize, color: 'var(--dim)' }}>·</span>
-          <span style={{ fontSize: preset.headerTextSize, color: 'var(--dim)' }}>
-            {relativeTime(confession.created_at)}
-          </span>
+          </div>
         </div>
 
         {/* Body */}
@@ -389,7 +449,7 @@ export default function ConfessionBubble({ confession, onReply, onPhotoClick, si
                   style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }}
                 />
               )}
-              
+
               {isVideo && (
                 <div style={{ position: 'absolute', top: 12, right: 12, background: 'rgba(0,0,0,0.45)', borderRadius: '50%', width: 28, height: 28, display: 'flex', alignItems: 'center', justifyContent: 'center', backdropFilter: 'blur(4px)' }}>
                   <svg width="14" height="14" viewBox="0 0 24 24" fill="white" stroke="white" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -440,47 +500,10 @@ export default function ConfessionBubble({ confession, onReply, onPhotoClick, si
             </div>
           )}
 
-          {showChrome && onReply && (
-            <div
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'flex-start',
-                gap: 10,
-                padding: `10px ${preset.bodyPadding.split(' ')[1]} 14px`,
-                borderTop: confession.text || mediaUrl ? '1px solid var(--glass-border)' : 'none',
-              }}
-            >
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  onReply(confession);
-                }}
-                style={{
-                  border: 'none',
-                  background: 'transparent',
-                  color: 'var(--dim)',
-                  fontSize: 13,
-                  fontWeight: 600,
-                  cursor: 'pointer',
-                  padding: 0,
-                  display: 'flex',
-                  alignItems: 'center',
-                  gap: 6,
-                }}
-              >
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  <polyline points="9 17 4 12 9 7" />
-                  <path d="M20 18v-2a4 4 0 0 0-4-4H4" />
-                </svg>
-                Reply
-              </button>
-            </div>
-          )}
+          {showChrome && <BottomRow />}
         </div>
       </div>
-      
+
       {/* Local fallback MediaViewer */}
       <MediaViewer
         mediaUrl={mediaUrl}
