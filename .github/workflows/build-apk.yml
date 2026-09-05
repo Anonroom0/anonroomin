@@ -24,8 +24,8 @@ jobs:
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
 
-      - name: Install Capacitor
-        run: npm install @capacitor/core @capacitor/cli @capacitor/android @capacitor/status-bar
+      - name: Install Capacitor CLI + Android platform
+        run: npm install @capacitor/cli @capacitor/android
 
       - name: Init Capacitor config
         run: npx cap init "Anonroom" "in.anonroom.app" --web-dir=dist
