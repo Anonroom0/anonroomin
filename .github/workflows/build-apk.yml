@@ -33,6 +33,21 @@ jobs:
       - name: Add Android platform
         run: npx cap add android
 
+      - name: Fix Kotlin stdlib version conflict
+        run: |
+          cat >> android/build.gradle << 'EOF'
+
+          allprojects {
+              configurations.all {
+                  resolutionStrategy {
+                      force 'org.jetbrains.kotlin:kotlin-stdlib:1.9.24'
+                      force 'org.jetbrains.kotlin:kotlin-stdlib-jdk7:1.9.24'
+                      force 'org.jetbrains.kotlin:kotlin-stdlib-jdk8:1.9.24'
+                  }
+              }
+          }
+          EOF
+
       - name: Copy web build into Android project
         run: npx cap copy android
 
