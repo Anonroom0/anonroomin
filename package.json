@@ -9,6 +9,8 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@capacitor/core": "^6.1.2",
+    "@capacitor/status-bar": "^6.0.1",
     "@supabase/supabase-js": "^2.45.0",
     "mkdir": "^0.0.2",
     "react": "^18.3.1",
