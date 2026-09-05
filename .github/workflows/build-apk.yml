@@ -11,7 +11,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: 20
 
@@ -25,7 +25,7 @@ jobs:
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
 
       - name: Install Capacitor
-        run: npm install @capacitor/core @capacitor/cli @capacitor/android
+        run: npm install @capacitor/core @capacitor/cli @capacitor/android @capacitor/status-bar
 
       - name: Init Capacitor config
         run: npx cap init "Anonroom" "in.anonroom.app" --web-dir=dist
@@ -47,6 +47,17 @@ jobs:
               }
           }
           EOF
+
+      - name: Add location permissions
+        run: |
+          sed -i '/<uses-permission android:name="android.permission.INTERNET" \/>/a\    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />\n    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />' android/app/src/main/AndroidManifest.xml
+
+      - name: Set app icon
+        run: |
+          npm install -g cordova-res
+          mkdir -p resources
+          cp public/android-chrome-512x512.png resources/icon.png
+          cordova-res android --skip-config --copy
 
       - name: Copy web build into Android project
         run: npx cap copy android
