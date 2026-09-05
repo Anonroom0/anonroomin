@@ -517,6 +517,8 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
   const [threadStatus, setThreadStatus] = useState('loading');
 
   const [messages, setMessages] = useState([]);
+  const [typingName, setTypingName] = useState(null);
+  const typingTimeoutRef = useRef(null);
   const [messagesLoading, setMessagesLoading] = useState(true);
   const [hasMoreMessages, setHasMoreMessages] = useState(true);
   const [loadingMoreMessages, setLoadingMoreMessages] = useState(false);
@@ -615,6 +617,36 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
 
     async function initializeThread() {
       try {
+        // Bots are indistinguishable from real users at this layer — any
+        // caller that already knows how to open a DM with a "user id" can
+        // open one with a bot's id the same way. Check bots first (cheap,
+        // small table) before assuming openThreadWithUserId is a profile.
+        const { data: botRow } = await supabase.from('bots').select('id, name, avatar_url, dm_enabled, active').eq('id', openThreadWithUserId).maybeSingle();
+
+        if (botRow) {
+          if (!botRow.active || !botRow.dm_enabled) {
+            if (isMounted) { setThreadStatus('error'); showToast('This chat is not available right now.', 'error'); }
+            return;
+          }
+          const { data: existingBotThread, error: findBotError } = await supabase.from('dm_threads').select('id, user_a, bot_id').eq('user_a', userId).eq('bot_id', botRow.id).limit(1);
+          if (findBotError) throw findBotError;
+
+          let botThreadRow = existingBotThread?.[0] || null;
+          if (!botThreadRow) {
+            const { data: createdBotThread, error: createBotError } = await supabase.from('dm_threads').insert({ user_a: userId, user_b: null, bot_id: botRow.id }).select('id, user_a, bot_id').single();
+            if (createBotError) throw createBotError;
+            botThreadRow = createdBotThread;
+          }
+
+          if (isMounted) {
+            const resolvedBotUser = { id: botRow.id, username: botRow.name, avatar_url: botRow.avatar_url, is_admin: false, is_bot: true };
+            setActiveThread({ id: botThreadRow.id, otherUser: resolvedBotUser });
+            setThreadStatus('ready');
+            if (onThreadReadyRef.current) onThreadReadyRef.current({ id: resolvedBotUser.id, username: resolvedBotUser.username });
+          }
+          return;
+        }
+
         const { data: existingRows, error: findError } = await supabase.from('dm_threads').select('id, user_a, user_b').or(`and(user_a.eq.${userId},user_b.eq.${openThreadWithUserId}),and(user_a.eq.${openThreadWithUserId},user_b.eq.${userId})`).limit(1);
         if (findError) throw findError;
 
@@ -722,9 +754,14 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
       .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'dm_messages', filter: `thread_id=eq.${activeThread.id}` }, (payload) => {
          setMessages((prev) => prev.filter(m => m.id !== payload.old.id));
       })
+      .on('broadcast', { event: 'typing' }, ({ payload }) => {
+        setTypingName(payload?.name || null);
+        if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+        typingTimeoutRef.current = setTimeout(() => setTypingName(null), 4000);
+      })
       .subscribe();
 
-    return () => { supabase.removeChannel(channel); };
+    return () => { supabase.removeChannel(channel); if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current); };
   }, [activeThread?.id, userId, fetchMessagesAndReceipts]);
 
   useEffect(() => {
@@ -1301,6 +1338,11 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
           <button onClick={() => setReplyingTo(null)} style={{ border: 'none', background: 'rgba(255,255,255,0.06)', width: 28, height: 28, borderRadius: '50%', color: '#F4F3F0', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{Vectors.Close}</button>
         </div>
 
+        {typingName && (
+          <div style={{ position: 'absolute', top: -26, left: 16, fontSize: 12, color: '#8B8B96', fontStyle: 'italic' }}>
+            {typingName} is typing…
+          </div>
+        )}
         <form onSubmit={handleSend} autoComplete="off-nope" data-form-type="other" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px', background: '#1C1D24', borderTop: replyingTo ? 'none' : '1px solid rgba(255,255,255,0.06)', position: 'relative', zIndex: 20 }}>
           <EmojiGifPicker open={pickerOpen} onClose={() => setPickerOpen(false)} onEmoji={handleEmojiPicked} onMedia={handleMediaPicked} />
           <button type="button" onClick={() => setAttachSheetOpen(true)} disabled={uploading || cooldownPercent > 0 || selectedMessages.length > 0} style={{ width: 36, height: 36, borderRadius: '50%', border: 'none', background: 'transparent', color: '#8B8B96', cursor: 'pointer', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{uploading ? Vectors.Spinner : Vectors.Attach}</button>

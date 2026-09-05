@@ -1,0 +1,127 @@
+[
+  {
+    "id": "angry",
+    "label": "Angry",
+    "emoji": "😠"
+  },
+  {
+    "id": "sweet",
+    "label": "Sweet",
+    "emoji": "🥰"
+  },
+  {
+    "id": "bad",
+    "label": "Bad / Rude",
+    "emoji": "😈"
+  },
+  {
+    "id": "sarcastic",
+    "label": "Sarcastic",
+    "emoji": "🙄"
+  },
+  {
+    "id": "savage",
+    "label": "Savage / Roast",
+    "emoji": "🔥"
+  },
+  {
+    "id": "wholesome",
+    "label": "Wholesome",
+    "emoji": "🌸"
+  },
+  {
+    "id": "chaotic",
+    "label": "Chaotic",
+    "emoji": "🤪"
+  },
+  {
+    "id": "dramatic",
+    "label": "Dramatic",
+    "emoji": "🎭"
+  },
+  {
+    "id": "motivational",
+    "label": "Motivational",
+    "emoji": "💪"
+  },
+  {
+    "id": "philosophical",
+    "label": "Philosophical",
+    "emoji": "🧠"
+  },
+  {
+    "id": "shy",
+    "label": "Shy",
+    "emoji": "🙈"
+  },
+  {
+    "id": "clingy",
+    "label": "Clingy / Attention-seeking",
+    "emoji": "🥺"
+  },
+  {
+    "id": "polite",
+    "label": "Polite / Formal",
+    "emoji": "🎩"
+  },
+  {
+    "id": "sad",
+    "label": "Sad / Moody",
+    "emoji": "😔"
+  },
+  {
+    "id": "excited",
+    "label": "Excited / Hype",
+    "emoji": "🎉"
+  },
+  {
+    "id": "bored",
+    "label": "Bored",
+    "emoji": "😴"
+  },
+  {
+    "id": "nerdy",
+    "label": "Nerdy",
+    "emoji": "🤓"
+  },
+  {
+    "id": "poetic",
+    "label": "Poetic",
+    "emoji": "🍂"
+  },
+  {
+    "id": "gossip",
+    "label": "Gossip / Nosy",
+    "emoji": "👀"
+  },
+  {
+    "id": "supportive",
+    "label": "Supportive",
+    "emoji": "🤝"
+  },
+  {
+    "id": "funny",
+    "label": "Funny / Meme",
+    "emoji": "😂"
+  },
+  {
+    "id": "mysterious",
+    "label": "Mysterious",
+    "emoji": "🕶️"
+  },
+  {
+    "id": "chill",
+    "label": "Chill",
+    "emoji": "😎"
+  },
+  {
+    "id": "confident",
+    "label": "Confident / Cocky",
+    "emoji": "😏"
+  },
+  {
+    "id": "lustfull",
+    "label": "Lustfull",
+    "emoji": "🔥"
+  }
+]

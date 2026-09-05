@@ -1410,7 +1410,298 @@ const ACTION_LABELS = {
   'user.admin_granted': 'granted admin', 'user.admin_removed': 'removed admin', 'user.banned': 'banned a user', 'user.unbanned': 'unbanned a user',
   'confession.deleted': 'deleted a confession', 'question.deleted': 'deleted a question', 'storage.deleted': 'deleted storage file(s)',
   'push.test_sent': 'sent a test push',
+  'bot.created': 'created a bot', 'bot.updated': 'updated a bot', 'bot.deleted': 'deleted a bot', 'bot.toggled': 'toggled a bot',
 };
+
+const BOT_AVATAR_BUCKET_PATH = 'bot-avatars';
+
+function emptyBotForm() {
+  return {
+    group_ids: [], name: '', gender: 'male', avatar_url: '', behaviors: [],
+    mode: 'reactive', self_chat_style: 'bots_only', min_interval_seconds: 60, max_interval_seconds: 240,
+    active: true, dm_enabled: false,
+  };
+}
+
+function BotsTab({ actor }) {
+  const [bots, setBots] = useState([]);
+  const [botGroupMap, setBotGroupMap] = useState({}); // { [botId]: groupId[] }
+  const [groups, setGroups] = useState([]);
+  const [behaviorCatalog, setBehaviorCatalog] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [busyId, setBusyId] = useState(null);
+  const [editing, setEditing] = useState(null); // null = closed, {} = new, {...bot} = edit
+  const [form, setForm] = useState(emptyBotForm());
+  const [saving, setSaving] = useState(false);
+  const [avatarUploading, setAvatarUploading] = useState(false);
+  const avatarInputRef = useRef(null);
+  const [confirm, ConfirmUI] = useConfirm();
+  const [groupFilter, setGroupFilter] = useState('all');
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    const [{ data: botsData, error: botsError }, { data: groupsData }, { data: linksData }] = await Promise.all([
+      supabase.from('bots').select('*').order('created_at', { ascending: false }),
+      supabase.from('groups').select('id, name').order('name', { ascending: true }),
+      supabase.from('bot_groups').select('bot_id, group_id'),
+    ]);
+    if (botsError) showToast(friendlyDbError(), 'error'); else setBots(botsData || []);
+    setGroups(groupsData || []);
+    const map = {};
+    (linksData || []).forEach(({ bot_id, group_id }) => {
+      if (!map[bot_id]) map[bot_id] = [];
+      map[bot_id].push(group_id);
+    });
+    setBotGroupMap(map);
+    setLoading(false);
+  }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  // behaviors.json is a plain static file (see public/replies/FORMAT.md) —
+  // fetched once, not part of the database.
+  useEffect(() => {
+    fetch('/replies/behaviors.json').then((r) => r.json()).then(setBehaviorCatalog).catch(() => setBehaviorCatalog([]));
+  }, []);
+
+  function openCreate() {
+    setForm(emptyBotForm());
+    setEditing({});
+  }
+
+  function openEdit(bot) {
+    setForm({
+      group_ids: botGroupMap[bot.id] || [], name: bot.name, gender: bot.gender, avatar_url: bot.avatar_url || '',
+      behaviors: bot.behaviors || [], mode: bot.mode, self_chat_style: bot.self_chat_style,
+      min_interval_seconds: bot.min_interval_seconds, max_interval_seconds: bot.max_interval_seconds,
+      active: bot.active, dm_enabled: !!bot.dm_enabled,
+    });
+    setEditing(bot);
+  }
+
+  function toggleBehavior(id) {
+    setForm((f) => ({ ...f, behaviors: f.behaviors.includes(id) ? f.behaviors.filter((b) => b !== id) : [...f.behaviors, id] }));
+  }
+
+  function toggleGroup(id) {
+    setForm((f) => ({ ...f, group_ids: f.group_ids.includes(id) ? f.group_ids.filter((g) => g !== id) : [...f.group_ids, id] }));
+  }
+
+  async function handleAvatarFile(e) {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file) return;
+    setAvatarUploading(true);
+    try {
+      const safeName = file.name.replace(/[^a-zA-Z0-9.\-_]/g, '_');
+      const path = `${BOT_AVATAR_BUCKET_PATH}/${Date.now()}-${safeName}`;
+      const { error: uploadError } = await supabase.storage.from(MEDIA_BUCKET).upload(path, file, { upsert: false, contentType: file.type || undefined });
+      if (uploadError) throw uploadError;
+      const { data: publicUrlData } = supabase.storage.from(MEDIA_BUCKET).getPublicUrl(path);
+      setForm((f) => ({ ...f, avatar_url: publicUrlData?.publicUrl || '' }));
+    } catch (err) {
+      playError(); hapticError(); showToast(err?.message || 'Could not upload avatar.', 'error');
+    } finally {
+      setAvatarUploading(false);
+    }
+  }
+
+  async function syncBotGroups(botId, groupIds) {
+    await supabase.from('bot_groups').delete().eq('bot_id', botId);
+    if (groupIds.length) {
+      await supabase.from('bot_groups').insert(groupIds.map((group_id) => ({ bot_id: botId, group_id })));
+    }
+  }
+
+  async function handleSave() {
+    const name = form.name.trim();
+    if (!name) { showToast('Bot needs a name.', 'error'); return; }
+    if (!form.group_ids.length) { showToast('Select at least one group for this bot.', 'error'); return; }
+    if (!form.behaviors.length) { showToast('Select at least one behavior.', 'error'); return; }
+
+    setSaving(true);
+    const payload = {
+      name, gender: form.gender, avatar_url: form.avatar_url || null,
+      behaviors: form.behaviors, mode: form.mode, self_chat_style: form.self_chat_style,
+      min_interval_seconds: Number(form.min_interval_seconds) || 60, max_interval_seconds: Number(form.max_interval_seconds) || 240,
+      active: form.active, dm_enabled: form.dm_enabled,
+    };
+
+    let botId = editing?.id;
+    if (botId) {
+      const { error } = await supabase.from('bots').update(payload).eq('id', botId);
+      if (error) { playError(); hapticError(); showToast(friendlyDbError(), 'error'); setSaving(false); return; }
+      logAdminAction(actor, 'bot.updated', 'bot', botId, { name });
+    } else {
+      const { data, error } = await supabase.from('bots').insert({ ...payload, created_by: actor.id }).select('id').single();
+      if (error) { playError(); hapticError(); showToast(friendlyDbError(), 'error'); setSaving(false); return; }
+      botId = data.id;
+      logAdminAction(actor, 'bot.created', 'bot', botId, { name });
+    }
+
+    const { error: groupSyncError } = await (async () => { try { await syncBotGroups(botId, form.group_ids); return {}; } catch (e) { return { error: e }; } })();
+    if (groupSyncError) { playError(); hapticError(); showToast('Bot saved, but group assignment failed — try editing it again.', 'error'); setSaving(false); setEditing(null); load(); return; }
+
+    hapticSuccess(); playRefreshComplete(); showToast(editing?.id ? 'Bot updated.' : 'Bot created.', 'success');
+    setSaving(false);
+    setEditing(null);
+    load();
+  }
+
+  async function handleDelete(bot) {
+    const ok = await confirm({ title: 'Delete bot?', message: `"${bot.name}" will stop posting immediately. Its past messages stay in the chat.`, confirmLabel: 'Delete', danger: true });
+    if (!ok) return;
+    setBusyId(bot.id);
+    const { error } = await supabase.from('bots').delete().eq('id', bot.id);
+    if (error) { playError(); hapticError(); showToast(friendlyDbError(), 'error'); setBusyId(null); return; }
+    hapticSuccess(); showToast('Bot deleted.', 'success');
+    logAdminAction(actor, 'bot.deleted', 'bot', bot.id, { name: bot.name });
+    setBots((bs) => bs.filter((b) => b.id !== bot.id));
+    setBusyId(null);
+  }
+
+  async function toggleActive(bot) {
+    setBusyId(bot.id);
+    const { error } = await supabase.from('bots').update({ active: !bot.active }).eq('id', bot.id);
+    if (error) { playError(); hapticError(); showToast(friendlyDbError(), 'error'); setBusyId(null); return; }
+    logAdminAction(actor, 'bot.toggled', 'bot', bot.id, { active: !bot.active });
+    setBots((bs) => bs.map((b) => (b.id === bot.id ? { ...b, active: !b.active } : b)));
+    setBusyId(null);
+  }
+
+  const groupNames = (botId) => (botGroupMap[botId] || []).map((gid) => groups.find((g) => g.id === gid)?.name).filter(Boolean);
+  const visibleBots = groupFilter === 'all' ? bots : bots.filter((b) => (botGroupMap[b.id] || []).includes(groupFilter));
+
+  if (loading) return <div style={{ color: '#8B8B96', textAlign: 'center', padding: 40 }}>{Vectors.Spinner}</div>;
+
+  return (
+    <div>
+      {ConfirmUI}
+      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16, gap: 10, flexWrap: 'wrap' }}>
+        <h2 style={{ margin: 0, fontSize: 18, color: '#F4F3F0' }}>Chat Bots</h2>
+        <button onClick={openCreate} disabled={!groups.length} style={{ ...primaryBtnStyle(!groups.length), width: 'auto', padding: '10px 16px' }}>+ New bot</button>
+      </div>
+
+      <div style={{ display: 'flex', gap: 6, marginBottom: 14, overflowX: 'auto' }}>
+        <button onClick={() => setGroupFilter('all')} style={pillBtnStyle(groupFilter === 'all')}>All groups</button>
+        {groups.map((g) => (
+          <button key={g.id} onClick={() => setGroupFilter(g.id)} style={pillBtnStyle(groupFilter === g.id)}>{g.name}</button>
+        ))}
+      </div>
+
+      {!visibleBots.length && <div style={{ color: '#8B8B96', fontSize: 14, textAlign: 'center', padding: 30 }}>No bots yet.</div>}
+
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 10 }}>
+        {visibleBots.map((bot) => (
+          <div key={bot.id} style={{ background: '#1C1D24', borderRadius: 16, padding: 14, display: 'flex', alignItems: 'center', gap: 12 }}>
+            <LiquidAvatar identity={{ avatar_url: bot.avatar_url, name: bot.name }} size={40} kind="user" />
+            <div style={{ flex: 1, minWidth: 0 }}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexWrap: 'wrap' }}>
+                <span style={{ fontWeight: 700, fontSize: 14.5, color: '#F4F3F0' }}>{bot.name}</span>
+                <span style={badgeStyle(bot.mode === 'self_chat' ? '#8B5CF6' : '#2FD8C4')}>{bot.mode === 'self_chat' ? 'Self-chat' : 'Reactive'}</span>
+                {bot.dm_enabled && <span style={badgeStyle('#3B82F6')}>DM</span>}
+                {!bot.active && <span style={badgeStyle('#8B8B96')}>Inactive</span>}
+              </div>
+              <div style={{ fontSize: 12.5, color: '#8B8B96', marginTop: 3 }}>
+                {groupNames(bot.id).join(', ') || 'no groups assigned'} · {bot.gender} · {(bot.behaviors || []).join(', ') || 'no behaviors'}
+              </div>
+            </div>
+            <LiquidSwitch checked={bot.active} onChange={() => toggleActive(bot)} disabled={busyId === bot.id} />
+            <button onClick={() => openEdit(bot)} style={iconBtnStyle} title="Edit bot">{Vectors.Edit}</button>
+            <button onClick={() => handleDelete(bot)} disabled={busyId === bot.id} style={{ ...iconBtnStyle, color: '#FF6B6B' }} title="Delete bot">{Vectors.Trash}</button>
+          </div>
+        ))}
+      </div>
+
+      {editing !== null && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 100, padding: 16 }}>
+          <div style={{ background: '#1C1D24', borderRadius: 20, padding: 20, width: '100%', maxWidth: 420, maxHeight: '85vh', overflowY: 'auto' }} className="admin-scrollbar">
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 14 }}>
+              <h3 style={{ margin: 0, fontSize: 16, color: '#F4F3F0' }}>{editing?.id ? 'Edit bot' : 'New bot'}</h3>
+              <button onClick={() => setEditing(null)} style={iconBtnStyle}>{Vectors.X}</button>
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 14 }}>
+              <LiquidAvatar identity={{ avatar_url: form.avatar_url, name: form.name || '?' }} size={56} kind="user" />
+              <button onClick={() => avatarInputRef.current?.click()} disabled={avatarUploading} style={{ ...iconBtnStyle, width: 'auto', padding: '8px 12px', fontSize: 13, fontWeight: 600, color: '#F4F3F0' }}>
+                {avatarUploading ? 'Uploading…' : 'Set picture'}
+              </button>
+              <input ref={avatarInputRef} type="file" accept="image/*" style={{ display: 'none' }} onChange={handleAvatarFile} />
+            </div>
+
+            <label style={{ fontSize: 12.5, color: '#8B8B96', display: 'block', marginBottom: 4 }}>Name</label>
+            <input style={{ ...inputStyle, marginBottom: 12 }} value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} placeholder="e.g. Riya" />
+
+            <label style={{ fontSize: 12.5, color: '#8B8B96', display: 'block', marginBottom: 6 }}>Groups (select any number)</label>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 14 }}>
+              {groups.map((g) => (
+                <button key={g.id} onClick={() => toggleGroup(g.id)} style={pillBtnStyle(form.group_ids.includes(g.id))}>{g.name}</button>
+              ))}
+              {!groups.length && <span style={{ fontSize: 12.5, color: '#8B8B96' }}>No groups exist yet — create one in the Groups tab first.</span>}
+            </div>
+
+            <label style={{ fontSize: 12.5, color: '#8B8B96', display: 'block', marginBottom: 4 }}>Gender (picks which reply file it uses)</label>
+            <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+              <button onClick={() => setForm((f) => ({ ...f, gender: 'male' }))} style={pillBtnStyle(form.gender === 'male')}>Male</button>
+              <button onClick={() => setForm((f) => ({ ...f, gender: 'female' }))} style={pillBtnStyle(form.gender === 'female')}>Female</button>
+            </div>
+
+            <label style={{ fontSize: 12.5, color: '#8B8B96', display: 'block', marginBottom: 6 }}>Behaviors (select any number)</label>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 14 }}>
+              {behaviorCatalog.map((b) => (
+                <button key={b.id} onClick={() => toggleBehavior(b.id)} style={pillBtnStyle(form.behaviors.includes(b.id))}>
+                  {b.emoji} {b.label}
+                </button>
+              ))}
+              {!behaviorCatalog.length && <span style={{ fontSize: 12.5, color: '#8B8B96' }}>No behaviors found — check public/replies/behaviors.json.</span>}
+            </div>
+
+            <label style={{ fontSize: 12.5, color: '#8B8B96', display: 'block', marginBottom: 4 }}>Mode</label>
+            <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
+              <button onClick={() => setForm((f) => ({ ...f, mode: 'reactive' }))} style={pillBtnStyle(form.mode === 'reactive')}>Reactive only</button>
+              <button onClick={() => setForm((f) => ({ ...f, mode: 'self_chat' }))} style={pillBtnStyle(form.mode === 'self_chat')}>Self-chat</button>
+            </div>
+            <p style={{ fontSize: 12, color: '#8B8B96', margin: '0 0 12px' }}>
+              Both modes always reply to @mentions, replies-to-it, and keyword matches. Self-chat additionally posts on its own.
+            </p>
+
+            {form.mode === 'self_chat' && (
+              <>
+                <label style={{ fontSize: 12.5, color: '#8B8B96', display: 'block', marginBottom: 4 }}>Self-chat style</label>
+                <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+                  <button onClick={() => setForm((f) => ({ ...f, self_chat_style: 'bots_only' }))} style={pillBtnStyle(form.self_chat_style === 'bots_only')}>Chat with other bots</button>
+                  <button onClick={() => setForm((f) => ({ ...f, self_chat_style: 'random_broadcast' }))} style={pillBtnStyle(form.self_chat_style === 'random_broadcast')}>Random broadcast</button>
+                </div>
+
+                <label style={{ fontSize: 12.5, color: '#8B8B96', display: 'block', marginBottom: 4 }}>Posting interval (seconds, min–max)</label>
+                <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
+                  <input type="number" min={5} style={inputStyle} value={form.min_interval_seconds} onChange={(e) => setForm((f) => ({ ...f, min_interval_seconds: e.target.value }))} />
+                  <input type="number" min={5} style={inputStyle} value={form.max_interval_seconds} onChange={(e) => setForm((f) => ({ ...f, max_interval_seconds: e.target.value }))} />
+                </div>
+              </>
+            )}
+
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+              <div>
+                <div style={{ fontSize: 13.5, color: '#F4F3F0', fontWeight: 600 }}>Allow direct messages</div>
+                <div style={{ fontSize: 12, color: '#8B8B96' }}>Users can open a 1:1 DM with this bot.</div>
+              </div>
+              <LiquidSwitch checked={form.dm_enabled} onChange={() => setForm((f) => ({ ...f, dm_enabled: !f.dm_enabled }))} />
+            </div>
+
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>
+              <span style={{ fontSize: 13.5, color: '#F4F3F0', fontWeight: 600 }}>Active</span>
+              <LiquidSwitch checked={form.active} onChange={() => setForm((f) => ({ ...f, active: !f.active }))} />
+            </div>
+
+            <button onClick={handleSave} disabled={saving} style={primaryBtnStyle(saving)}>{saving ? 'Saving…' : 'Save bot'}</button>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 
 function AuditLogTab() {
   const [rows, setRows] = useState([]);
@@ -1583,6 +1874,7 @@ export default function AdminPanel() {
     { id: 'users', label: 'Users', icon: Vectors.Users },
     { id: 'confessions', label: 'Confessions', icon: Vectors.MessageSquare },
     { id: 'questions', label: 'Questions', icon: Vectors.HelpCircle },
+    { id: 'bots', label: 'Bots', icon: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="9" width="18" height="11" rx="2" /><path d="M7 9V6a5 5 0 0 1 10 0v3" /><circle cx="9" cy="14" r="1" /><circle cx="15" cy="14" r="1" /></svg> },
     { id: 'storage', label: 'Storage', icon: Vectors.Database },
     { id: 'audit', label: 'Audit Log', icon: Vectors.Clock },
     { id: 'push', label: 'Push', icon: Vectors.Bell },
@@ -1646,6 +1938,7 @@ export default function AdminPanel() {
       {tab === 'users' && <UsersTab ownUserId={session.user.id} actor={actor} />}
       {tab === 'confessions' && <ConfessionsTab actor={actor} />}
       {tab === 'questions' && <QuestionsTab actor={actor} />}
+      {tab === 'bots' && <BotsTab actor={actor} />}
       {tab === 'storage' && <StorageTab actor={actor} />}
       {tab === 'audit' && <AuditLogTab />}
       {tab === 'push' && <PushTab session={session} actor={actor} />}

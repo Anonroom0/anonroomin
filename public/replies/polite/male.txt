@@ -1,0 +1,102 @@
+# Polite / Formal - Male (Hinglish mix)
+
+* : Acha
+* : Alright
+* : Cool
+* : Got it
+* : Haan
+* : Hmm interesting
+* : Okay noted
+* : Samajh gaya
+* : Sure
+* : Theek hai
+aaja, raaz : Main aapki baat samajhne ki koshish
+amazing : Maaf kijiye late response
+answer : Maaf kijiye agar inconvenience
+are you serious : Kripya thoda aur detail dein
+awesome, dumb : Main aapki madad ke liye yahan
+bad : Shukriya sharing ke liye
+behen, rank : Aapka input appreciated hai
+call, kaise : Kripya thoda intezaar karein
+chill : Main aapki assistance ke liye
+deep talk : Main aapki facility ke liye available
+dost : Aapka din accha jaaye
+doubt : Main aapki service ready
+dream : Kripya clear karein agar confusion ho
+drink : Dhanyavaad patience ke liye
+dumb : Kripya thoda aur detail dein
+evening : Aapki baat clear hai
+exam : Dhanyavaad aapke message ke liye
+forget : Aapki madad ke liye ready
+fun : Maaf kijiye agar der ho gayi reply mein
+funny : Aapka message important hai
+gm : Shukriya aapke time
+gussa, kya chal raha : Main aapki baat respect karta hoon
+hamesha : Shukriya aapke time
+hangout : Aapki madad ke liye ready
+hate : Kripya batayein next step
+hehe, dream : Kripya update dein jab free hon
+hola : Aapka input appreciated hai
+home : Aapka din shubh ho
+hot, tension : Aapka message important hai
+intelligent : Kripya thoda intezaar karein
+jhooth : Shukriya aapke contribution ke
+kaise : Aapka cooperation thank you
+kal : Aapka cooperation thank you
+khabar, msg : Kripya batayein next step
+kya chal raha : Shukriya sharing ke liye
+kya scene : Main aapki madad karne ko tayaar hoon
+kya, hangout : Aapki baat valuable
+love, shaam : Kripya continue karein
+maybe : Dhanyavaad aapke message ke liye
+morning, evening : Hello, kaise hain aap
+movie : Aapki baat clear hai
+msg : Aapka suggestion valuable hai
+never : Aapka din productive ho
+no : Aapka suggestion valuable hai
+okay : Maaf kijiye agar der ho gayi reply mein
+opportunity, welcome : Main aapki baat carefully sun raha hoon
+party : Shukriya aapke time ke liye
+pic : Aapka din mangalmay ho
+plan : Kripya continue karein
+play : Main aapki help ke liye present
+please : Shukriya aapke time ke liye
+pls : Main aapki baat note kar raha hoon
+pretty : Hello, kaise hain aap
+private : Main aapki baat carefully sun raha hoon
+raaz : Aapka message mila, dhanyavaad
+random, drink : Aapka din shanti se guzre
+rank : Aapki raay important hai
+result : Aapka din mangalmay ho
+safe : Maaf kijiye interruption ke liye
+selfie, where : Aapka suggestion helpful
+shaam : Maaf kijiye agar koi galtii ho
+share : Aapki raay important hai
+shayad : Kripya bataiye kaise proceed karein
+show : Aapki baat valuable
+smart : Maaf kijiye agar koi galtii ho
+so ja : Kripya batayein main kaise help kar sakta hoon
+solution : Main aapki madad ke liye yahan
+sorry : Dhanyavaad aapke feedback
+subah : Aapki baat samajh gaya main
+success : Kripya batayein main kaise help kar sakta hoon
+sun, success : Main aapki service mein hoon
+sup : Main aapki baat respect karta hoon
+sweetheart, amazing : Aapka din productive ho
+tension : Main aapki baat note kar raha hoon
+text : Maaf kijiye late response
+time : Aapka din accha jaaye
+tomorrow, zaroor : Aapki baat samajh gaya main
+try, hamesha : Aapki baat note ki
+update : Kripya update dein jab free hon
+wassup : Aapki baat note ki
+welcome : Maaf kijiye agar inconvenience
+what, time : Main aapki help ke liye present
+where : Main aapki baat consider kar raha
+work : Kripya clear karein agar confusion ho
+worry, result : Aapka din shubh ho
+yaad rakh : Main aapki service mein hoon
+yeah, maybe : Main aapki facility ke liye available
+yo, fun : Kripya bataiye kaise proceed karein
+yup, please : Main aapki service ready
+zaroor : Main aapki madad karne ko tayaar hoon

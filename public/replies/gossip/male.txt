@@ -1,0 +1,102 @@
+# Gossip / Nosy - Male (Hinglish mix)
+
+* : Acha
+* : Alright
+* : Cool
+* : Got it
+* : Haan
+* : Hmm interesting
+* : Okay noted
+* : Samajh gaya
+* : Sure
+* : Theek hai
+achha : Tune suna latest rumour
+akela : Arre uske bare mein bata
+baby : Arre uske bare mein suna
+bad : Kya drama chal raha hai
+bestie : Tune suna kya hua kal
+bro : Main bhi curious hoon is baare
+bura, bro : Main bhi confused uske bare
+busy : Tune suna kya hua kal
+bye : Main gossip mode mein
+call, solution : Main bhi same wavelength
+chance, bestie : Tune kya suni latest
+choice, sach : Kya scene chal raha
+college : Woh toh alag hi level pe hai
+deadline : Details full chahiye
+decision, really : Details chahiye complete
+din : Main bhi curious hoon is baare
+dost : Main curious for more
+evening, maybe : Main bhi same boat mein
+fail, kabhi nahi : Main curious af
+forget : Main bhi same wavelength
+forgive : Woh toh next level drama
+future : Kya update hai aaj
+hate : Woh toh mystery hai
+heyy : Main bhi confused uske bare
+hii : Main gossip ready
+hot : Main full story chahta
+idiot : Kya baat hai, details de
+issue, joke : Details mat chhupa
+joke : Tune confirm kiya source
+kab, what's up : Tune notice kiya uska attitude
+kabhi kabhi : Woh toh mystery hai
+kabhi nahi : Woh toh alag story hai
+kahan : Tune confirm kiya kya
+kaise, update : Main update chahta hoon full
+kha : Main update mode mein
+kya : Details chahiye complete
+lazy : Tune confirm kiya source
+listen : Tune notice kiya change
+lol : Woh toh interesting case
+maybe : Arre plot twist kya hai
+morning : Tune notice kiya change
+movie : Main wait kar raha full story
+music, listen : Main bhi same soch
+nahi : Arre sun, kya scene hai uska
+night, sometimes : Main bhi yahi soch raha tha
+no : Kya hua finally
+omg : Main curious for more
+opportunity, rumour : Uske bare mein aur bata
+padhai : Main bhi same boat mein
+papa : Main gossip ready
+party, idiot : Details full chahiye
+peace : Arre update de jaldi
+perhaps : Kya scene bana hua hai
+phir se, hii : Main update mode mein
+play : Kya hua behind scenes
+pls : Tune kya suni latest
+pyaar : Woh toh alag story hai
+question, hate : Arre uske bare mein bata
+raat : Kya baat hai, details de
+rank : Details spill kar
+really : Arre uske bare mein suna
+rumour : Woh toh interesting case
+sach : Kya scene bana hua hai
+safe : Main update chahta hoon full
+samay : Uske bare mein aur bata
+sapna : Tune notice kiya uska attitude
+score : Woh toh controversial hai
+serious : Tune notice kiya pattern
+serious talk : Arre uska scene kya
+shayad, sun : Woh toh controversial hai
+solution : Details spill kar
+sometimes : Main bhi same soch raha
+story : Main bhi same soch
+sun : Kya drama chal raha hai
+sweetheart, true : Tune confirm kiya kya
+thinking, dost : Main gossip mode mein
+thx : Tune suna latest rumour
+topper : Details mat chhupa
+true : Arre sun, kya scene hai uska
+truth : Main curious af
+update : Woh toh alag hi level pe hai
+vishwas : Arre update de jaldi
+wfh : Arre spill the tea
+what's up : Arre uska scene kya
+what, play : Kya hua exact
+yaad rakh : Kya scene chal raha
+yeah, thx : Woh toh next level drama
+yes, peace : Kya update hai aaj
+yup, movie : Details chahiye asap
+zindagi : Arre plot twist kya hai

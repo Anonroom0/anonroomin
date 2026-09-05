@@ -407,6 +407,8 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
   const [groupStatus, setGroupStatus] = useState('loading');
 
   const [messages, setMessages] = useState([]);
+  const [typingName, setTypingName] = useState(null);
+  const typingTimeoutRef = useRef(null);
   const [messagesLoading, setMessagesLoading] = useState(true);
   const [hasMoreMessages, setHasMoreMessages] = useState(true);
   const [loadingMoreMessages, setLoadingMoreMessages] = useState(false);
@@ -649,9 +651,14 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
       .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'group_messages', filter: `group_id=eq.${group.id}` }, (payload) => {
         setMessages((prev) => prev.filter((m) => m.id !== payload.old.id));
       })
+      .on('broadcast', { event: 'typing' }, ({ payload }) => {
+        setTypingName(payload?.name || null);
+        if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
+        typingTimeoutRef.current = setTimeout(() => setTypingName(null), 4000);
+      })
       .subscribe();
 
-    return () => { supabase.removeChannel(channel); };
+    return () => { supabase.removeChannel(channel); if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current); };
   }, [group?.id, ownUserId, fetchMessagesAndReceipts]);
 
   useEffect(() => {
@@ -1147,7 +1154,7 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
 
           const repliedMessage = message.reply_to_id ? messages.find((m) => m.id === message.reply_to_id) || null : null;
           const isStickerOrGif = message.media_type === 'gif' || message.media_type === 'sticker';
-          const senderAvatarUrl = message.profiles?.avatar_url || null;
+          const senderAvatarUrl = message.profiles?.avatar_url || message.bot_avatar_url || null;
 
           const isHighlighted = highlightedMsgId === message.id;
           const isSelected = selectedMessages.includes(message.id);
@@ -1237,10 +1244,10 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
                           up being. */}
                       {!isOwn && (
                         <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6, paddingLeft: 2 }}>
-                          <button onClick={(e) => { e.stopPropagation(); if (!isAnonMsg && selectedMessages.length === 0) setProfileCardUserId(message.user_id); }} disabled={isAnonMsg || selectedMessages.length > 0} style={{ border: 'none', background: 'transparent', padding: 0, display: 'flex', cursor: isAnonMsg ? 'default' : 'pointer' }}>
+                          <button onClick={(e) => { e.stopPropagation(); if (!isAnonMsg && !message.is_bot && selectedMessages.length === 0) setProfileCardUserId(message.user_id); }} disabled={isAnonMsg || message.is_bot || selectedMessages.length > 0} style={{ border: 'none', background: 'transparent', padding: 0, display: 'flex', cursor: (isAnonMsg || message.is_bot) ? 'default' : 'pointer' }}>
                             <LiquidAvatar identity={{ name: message.sender_name, avatar_url: senderAvatarUrl, is_admin: isAdminMsg }} size={26} isAnon={isAnonMsg} />
                           </button>
-                          <button onClick={(e) => { e.stopPropagation(); if (!isAnonMsg && selectedMessages.length === 0) setProfileCardUserId(message.user_id); }} disabled={isAnonMsg || selectedMessages.length > 0} style={{ fontSize: 13, fontWeight: 700, color: isAdminMsg ? 'var(--admin-1)' : (isAnonMsg ? '#8B8B96' : '#F4F3F0'), display: 'flex', alignItems: 'center', gap: 4, border: 'none', background: 'transparent', padding: 0, cursor: isAnonMsg ? 'default' : 'pointer' }}>
+                          <button onClick={(e) => { e.stopPropagation(); if (!isAnonMsg && !message.is_bot && selectedMessages.length === 0) setProfileCardUserId(message.user_id); }} disabled={isAnonMsg || message.is_bot || selectedMessages.length > 0} style={{ fontSize: 13, fontWeight: 700, color: isAdminMsg ? 'var(--admin-1)' : (isAnonMsg ? '#8B8B96' : '#F4F3F0'), display: 'flex', alignItems: 'center', gap: 4, border: 'none', background: 'transparent', padding: 0, cursor: (isAnonMsg || message.is_bot) ? 'default' : 'pointer' }}>
                             {isAnonMsg ? 'Anonymous' : (isAdminMsg ? ADMIN_DISPLAY_NAME : message.sender_name)} {isAdminMsg && !isAnonMsg && Vectors.AdminShield}
                           </button>
                         </div>
@@ -1452,6 +1459,11 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
               <button onClick={() => setReplyingTo(null)} style={{ border: 'none', background: 'rgba(255,255,255,0.06)', width: 28, height: 28, borderRadius: '50%', color: '#F4F3F0', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{Vectors.Close}</button>
             </div>
 
+               {typingName && (
+                 <div style={{ position: 'absolute', top: -26, left: 16, fontSize: 12, color: '#8B8B96', fontStyle: 'italic', display: 'flex', alignItems: 'center', gap: 4 }}>
+                   {typingName} is typing…
+                 </div>
+               )}
                <form onSubmit={handleSend} autoComplete="off-nope" data-form-type="other" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px', background: '#1C1D24', borderTop: replyingTo ? 'none' : '1px solid rgba(255,255,255,0.06)', position: 'relative', zIndex: 20 }}>
               <EmojiGifPicker open={pickerOpen} onClose={() => setPickerOpen(false)} onEmoji={(char) => setText(p=>p+char)} onMedia={handleMediaPicked} />
               <button type="button" onClick={() => setAttachSheetOpen(true)} disabled={uploading || cooldownPercent > 0 || selectedMessages.length > 0} style={{ width: 36, height: 36, borderRadius: '50%', border: 'none', background: 'transparent', color: '#8B8B96', cursor: 'pointer', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{uploading ? Vectors.Spinner : Vectors.Attach}</button>
