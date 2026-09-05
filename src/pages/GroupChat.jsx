@@ -60,7 +60,8 @@ const Vectors = {
   Instagram: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="2" width="20" height="20" rx="5" ry="5" /><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z" /><line x1="17.5" y1="6.5" x2="17.51" y2="6.5" /></svg>,
   ReplyAction: <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 17 4 12 9 7" /><path d="M20 18v-2a4 4 0 0 0-4-4H4" /></svg>,
   Photo: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2" /><circle cx="8.5" cy="8.5" r="1.5" /><polyline points="21 15 16 10 5 21" /></svg>,
-  Palette: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2a10 10 0 1 0 0 20c1.1 0 2-.9 2-2 0-.5-.2-1-.5-1.4-.3-.4-.5-.9-.5-1.4 0-1.1.9-2 2-2h2.3c1.9 0 3.4-1.6 3.2-3.5C20 6.6 16.4 2 12 2z" /><circle cx="7.5" cy="11.5" r="1" fill="currentColor" stroke="none" /><circle cx="10" cy="7" r="1" fill="currentColor" stroke="none" /><circle cx="15" cy="7.5" r="1" fill="currentColor" stroke="none" /></svg>
+  Palette: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2a10 10 0 1 0 0 20c1.1 0 2-.9 2-2 0-.5-.2-1-.5-1.4-.3-.4-.5-.9-.5-1.4 0-1.1.9-2 2-2h2.3c1.9 0 3.4-1.6 3.2-3.5C20 6.6 16.4 2 12 2z" /><circle cx="7.5" cy="11.5" r="1" fill="currentColor" stroke="none" /><circle cx="10" cy="7" r="1" fill="currentColor" stroke="none" /><circle cx="15" cy="7.5" r="1" fill="currentColor" stroke="none" /></svg>,
+  PlusCircle: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" /><line x1="12" y1="8" x2="12" y2="16" /><line x1="8" y1="12" x2="16" y2="12" /></svg>
 };
 
 function isSenderAdmin(message) { return message.sender_name === ADMIN_DISPLAY_NAME || message.is_admin === true; }
@@ -470,6 +471,7 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
   const cameraInputRef = useRef(null);
   const cooldownRef = useRef(null);
   const loadMoreSentinelRef = useRef(null);
+  const composerInputRef = useRef(null);
 
   // Mirror refs for the pagination guards below, so the scroll-triggered
   // loader always reads the latest values instead of whatever was captured
@@ -746,6 +748,16 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
 
   const { pullDistance, isRefreshing, handleTouchStart, handleTouchMove, handleTouchEnd } = usePullToRefresh(fetchMessagesAndReceipts, scrollRef);
 
+  // Chat is rendered column-reverse (newest message pinned at the visual
+  // bottom), so "scroll to bottom" here means snapping the scroll container
+  // back to its top edge — see the column-reverse layout on the messages
+  // list below. Used right after any send path adds a new message.
+  const scrollToBottom = useCallback((smooth = true) => {
+    requestAnimationFrame(() => {
+      scrollRef.current?.scrollTo({ top: 0, behavior: smooth ? 'smooth' : 'auto' });
+    });
+  }, []);
+
   // Infinite scroll: watch a sentinel rendered at the end of the message
   // list (visually the top, thanks to column-reverse). When it scrolls
   // into view, fetch the next page of older messages.
@@ -871,6 +883,14 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
     setMessages((prev) => [optimisticMsg, ...prev]);
     setText(''); setReplyingTo(null); setPickerOpen(false);
     playSend(); hapticSend(); cooldownRef.current?.start();
+    scrollToBottom();
+    // Tapping the send button can steal focus from the composer, which is
+    // what closes the on-screen keyboard — restore focus right after so it
+    // stays open for the next message (paired with the send button's
+    // mousedown/touchstart guard further down that stops it grabbing focus
+    // in the first place).
+    setComposerLocked(false);
+    requestAnimationFrame(() => composerInputRef.current?.focus());
 
     setSending(true);
     try {
@@ -922,6 +942,7 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
       const { error: insertError } = await supabase.from('group_messages').insert({ group_id: group.id, user_id: session.user.id, sender_name: currentSenderName(), text: caption.trim() || null, media_url: publicUrlData.publicUrl, media_type: type, reply_to_id: replyingTo?.id ?? null, is_anon: isAnonMode });
       if (insertError) throw insertError;
       URL.revokeObjectURL(pendingFile.previewUrl); setPendingFile(null); setCaption(''); setReplyingTo(null); cooldownRef.current?.start();
+      scrollToBottom();
     } catch (err) {
       showToast(err.message === 'TIMEOUT' ? "Upload timed out — check your connection and try again." : "Couldn't send that file. Please try again.", 'error');
     } finally { clearInterval(tick); setUploading(false); }
@@ -938,6 +959,7 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
     const senderName = currentSenderName();
     setMessages((prev) => [{ id: tempId, group_id: group.id, user_id: session.user.id, sender_name: senderName, text: null, media_url: url, media_type: mediaType, reply_to_id: replyToId, mentioned_user_ids: [], is_anon: isAnonMode, is_confession: false, created_at: new Date().toISOString(), profiles: isAnonMode ? null : { avatar_url: profile?.avatar_url || null }, _pending: true }, ...prev]);
     setReplyingTo(null); playSend(); hapticSend(); cooldownRef.current?.start();
+    scrollToBottom();
 
     const { data, error } = await supabase.from('group_messages').insert({ group_id: group.id, user_id: session.user.id, sender_name: senderName, media_url: url, media_type: mediaType, reply_to_id: replyToId, is_anon: isAnonMode }).select('*, profiles(avatar_url)').single();
     if (error) {
@@ -972,6 +994,7 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
     // when there's text (nothing to render a shape around otherwise).
     const { error } = await supabase.from('group_messages').insert({ group_id: group.id, user_id: session.user.id, sender_name: senderName, text: confessionText, is_anon: anon, is_confession: true, media_url: mediaUrl, media_type: mediaType, story_style: storyStyle && confessionText ? storyStyle : null });
     if (error) showToast(friendlyDbError(), 'error');
+    else scrollToBottom();
   }
 
   async function handleInstagramSubmit(username) {
@@ -983,7 +1006,7 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
     const payload = data.fallback ? { group_id: group.id, user_id: session.user.id, sender_name: currentSenderName(), instagram_username: data.username, reply_to_id: replyingTo?.id ?? null, is_anon: isAnonMode } : { group_id: group.id, user_id: session.user.id, sender_name: currentSenderName(), instagram_username: data.username, reply_to_id: replyingTo?.id ?? null, is_anon: isAnonMode, instagram_pfp_url: data.pfp_url, instagram_full_name: data.full_name, instagram_bio: data.bio, instagram_followers: data.followers, instagram_following: data.following, instagram_posts: data.posts, instagram_is_verified: data.is_verified, instagram_is_private: data.is_private };
     const { error } = await supabase.from('group_messages').insert(payload);
     if (error) showToast(friendlyDbError(), 'error');
-    else { setReplyingTo(null); cooldownRef.current?.start(); }
+    else { setReplyingTo(null); cooldownRef.current?.start(); scrollToBottom(); }
   }
 
   function handleJumpToMention() {
@@ -1085,7 +1108,7 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
               transition: 'max-height 0.32s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.24s ease, border-color 0.24s ease',
             }}
           >
-            <div style={{ padding: '10px 16px', display: 'flex' }}>
+            <div style={{ padding: '10px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
               <button
                 onClick={() => {
                   if (confessionMessages.length === 0) return;
@@ -1095,7 +1118,7 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
                   if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); setHighlightedMsgId(confessionMessages[nextIdx].id); setTimeout(() => setHighlightedMsgId(null), 2000); }
                 }}
                 style={{
-                  display: 'flex', alignItems: 'center', gap: 8,
+                  display: 'flex', alignItems: 'center', gap: 8, minWidth: 0, flexShrink: 1,
                   background: 'linear-gradient(180deg, rgba(255,107,53,0.16), rgba(255,107,53,0.08))',
                   border: '1px solid rgba(255,107,53,0.28)',
                   color: '#F4F3F0', borderRadius: 22, padding: '7px 14px 7px 8px',
@@ -1109,12 +1132,33 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
                 <span style={{ width: 24, height: 24, borderRadius: '50%', background: 'rgba(255,107,53,0.2)', color: '#FF6B35', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                   {Vectors.Ghost}
                 </span>
-                Previous Confession
+                <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>Previous Confession</span>
                 {confessionMessages.length > 1 && (
-                  <span style={{ fontSize: 11, fontWeight: 700, color: '#8B8B96', background: 'rgba(255,255,255,0.06)', borderRadius: 10, padding: '2px 7px' }}>
+                  <span style={{ fontSize: 11, fontWeight: 700, color: '#8B8B96', background: 'rgba(255,255,255,0.06)', borderRadius: 10, padding: '2px 7px', flexShrink: 0 }}>
                     {(confessionNavIndex % confessionMessages.length) + 1}/{confessionMessages.length}
                   </span>
                 )}
+              </button>
+
+              {/* Opens the exact same ConfessionModal + handleConfessionSubmit
+                  flow as AttachmentSheet's "Confession" option below — no
+                  separate modal, just another entry point into it. */}
+              <button
+                type="button"
+                onClick={() => setConfessionModalOpen(true)}
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0,
+                  background: '#FF6B35', border: 'none', color: '#fff',
+                  borderRadius: 22, padding: '8px 14px',
+                  fontSize: 13, fontWeight: 700, cursor: 'pointer',
+                  transition: 'transform 0.12s ease-out',
+                }}
+                onMouseDown={(e) => { e.currentTarget.style.transform = 'scale(0.96)'; }}
+                onMouseUp={(e) => { e.currentTarget.style.transform = 'scale(1)'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.transform = 'scale(1)'; }}
+              >
+                {Vectors.PlusCircle}
+                Post Confession
               </button>
             </div>
           </div>
@@ -1401,7 +1445,7 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
       )}
 
       {/* COMPOSER */}
-      <div className="safe-bottom" style={{ flexShrink: 0, zIndex: 20, position: 'sticky', bottom: 0 }}>
+      <div className="safe-bottom" style={{ flexShrink: 0, zIndex: 20, position: 'sticky', bottom: 0, background: '#1C1D24' }}>
         {!session ? (
           <div style={{ padding: '16px', background: '#1C1D24', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
             <button onClick={() => setAuthOpen(true)} style={{ width: '100%', padding: '14px 0', borderRadius: 20, border: 'none', background: '#FF6B35', color: '#fff', fontWeight: 700, fontSize: 15, cursor: 'pointer', boxShadow: '0 6px 18px rgba(0,0,0,0.35)' }}>Sign in to send message</button>
@@ -1481,8 +1525,14 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
                   explicit, guaranteed send path (calling the same handleSend
                   used by the form's onSubmit/the send button) so Enter always
                   works even on keyboards that ignore enterKeyHint. */}
-              <input type="search" enterKeyHint="send" name="group-chat-message-f" autoComplete="off-nope" autoCorrect="off" autoCapitalize="off" spellCheck="false" data-lpignore="true" data-1p-ignore data-form-type="other" readOnly={composerLocked} value={text} onChange={(e) => setText(e.target.value.slice(0, MAX_TEXT_LENGTH))} maxLength={MAX_TEXT_LENGTH} onFocus={() => { setComposerLocked(false); setPickerOpen(false); }} onBlur={() => setComposerLocked(true)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); if (!uploading && selectedMessages.length === 0) handleSend(e); } }} placeholder={uploading ? 'Uploading media...' : 'Message'} disabled={uploading || selectedMessages.length > 0} style={{ flex: 1, border: '1px solid rgba(255,255,255,0.06)', outline: 'none', background: '#15161B', borderRadius: 24, padding: '12px 18px', fontSize: 15, color: '#F4F3F0', transition: 'border-color 0.2s' }} />
-              <SendButton canSend={!!text.trim()} sending={sending || uploading} cooldownPercent={cooldownPercent} />
+              <input ref={composerInputRef} type="search" enterKeyHint="send" name="group-chat-message-f" autoComplete="off-nope" autoCorrect="off" autoCapitalize="off" spellCheck="false" data-lpignore="true" data-1p-ignore data-form-type="other" readOnly={composerLocked} value={text} onChange={(e) => setText(e.target.value.slice(0, MAX_TEXT_LENGTH))} maxLength={MAX_TEXT_LENGTH} onFocus={() => { setComposerLocked(false); setPickerOpen(false); }} onBlur={() => setComposerLocked(true)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); if (!uploading && selectedMessages.length === 0) handleSend(e); } }} placeholder={uploading ? 'Uploading media...' : 'Message'} disabled={uploading || selectedMessages.length > 0} style={{ flex: 1, border: '1px solid rgba(255,255,255,0.06)', outline: 'none', background: '#15161B', borderRadius: 24, padding: '12px 18px', fontSize: 15, color: '#F4F3F0', transition: 'border-color 0.2s' }} />
+              {/* mousedown/touchstart preventDefault stops the send button
+                  from ever taking focus away from the composer input — on
+                  mobile, that focus-steal (not the send action itself) is
+                  what was dismissing the keyboard after every send. */}
+              <span onMouseDown={(e) => e.preventDefault()} onTouchStart={(e) => e.preventDefault()} style={{ display: 'flex', flexShrink: 0 }}>
+                <SendButton canSend={!!text.trim()} sending={sending || uploading} cooldownPercent={cooldownPercent} />
+              </span>
             </form>
           </>
         )}

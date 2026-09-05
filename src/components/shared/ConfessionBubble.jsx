@@ -2,25 +2,49 @@
  * CONFESSION BUBBLE — shared NGL-style confession card
  * ============================================================================
  * <ConfessionBubble
- *   confession={{ id, text, photo_url, is_anon, created_at, group }}
+ *   confession={{
+ *     id, text, photo_url, is_anon, created_at, group,
+ *     kind,          // optional: "confession" | "reply" | "question"
+ *     header_label,  // optional: overrides the header strip's label text
+ *     header_style,  // optional: { variant, from, to, angle, solid,
+ *                     //   patternId, patternColor, base, textColor, fontFamily }
+ *   }}
  *   onReply?
  *   size="inline"|"feed"|"story"
  * />
  *
  * One shared component behind three call sites:
- *   - GroupChat.jsx      (size="inline") — a confession posted into a group
- *                          thread, rendered inline among regular messages
+ *   - GroupChat.jsx      (size="inline") — a confession/reply/question
+ *                          posted into a group thread, rendered inline
+ *                          among regular messages
  *   - ConfessionsFeed.jsx (size="feed")   — the public confessions feed
  *   - StoryViewer.jsx     (size="story")  — full-screen story body
  *
  * Always horizontally centered — never left/right-aligned like a normal
  * chat bubble, regardless of size. Structure is fixed across all three
- * sizes: a gradient header strip carries the confession TEXT itself (bold
- * rounded display font, NGL-sticker style — no "Confession" label, no
- * timestamp here) sitting above a rectangular --glass-white body (20px
- * radius) with a reserved 4:5 image area (only rendered when photo_url is
- * present), then a bottom row with a reply affordance on the left and the
- * relative timestamp on the right.
+ * sizes: a header strip carries a short bold label (rounded display font,
+ * NGL-sticker style) sitting above a rectangular --glass-white body (20px
+ * radius) that carries the actual confession TEXT, a reserved 4:5 image
+ * area (only rendered when photo_url is present), then a bottom row with
+ * a reply affordance on the left and the relative timestamp on the right.
+ *
+ * Header customization — confession.kind / header_label / header_style:
+ *   - kind: "confession" | "reply" | "question" (default "confession")
+ *     picks the default label shown in the strip ("Confession" / "Reply"
+ *     / "Question") — lets this same card double as a reply/question
+ *     bubble in the group thread, not just a confession.
+ *   - header_label: a string that fully overrides that default label with
+ *     any custom text.
+ *   - header_style: { variant, textColor, fontFamily, ... } — controls the
+ *     strip's look:
+ *       variant: "gradient" (default) → { from, to, angle }
+ *       variant: "solid"               → { solid }  (one bold flat color)
+ *       variant: "pattern"             → { patternId, patternColor, base }
+ *         reuses the same pattern vocabulary as ShareStorySheet's own
+ *         Background carousel (storyStylePresets.js), just tiled larger
+ *         to fit a full-width strip instead of a small swatch.
+ *     The header TEXT itself is always rendered bold — that's fixed, not
+ *     part of header_style — only its copy, color, and font vary.
  * (Reactions were previously shown here via an embedded ReactionBar, but
  * that has been removed from this component — callers that still want a
  * reaction bar for a confession render their own ReactionBar externally,
@@ -45,6 +69,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import MediaViewer from '../../pages/MediaViewer';
 import { generateConfessionCardImage } from '../../lib/storyImageGenerator';
+import { BACKGROUND_STRUCTURES, getPresetById } from '../../lib/storyStylePresets';
 
 const SIZE_PRESETS = {
   inline: {
@@ -76,6 +101,86 @@ const SIZE_PRESETS = {
 // sans, then generic sans-serif).
 const HEADER_FONT_STACK =
   "'Fredoka', 'Baloo 2', 'Poppins', 'SF Pro Rounded', 'Segoe UI', sans-serif";
+
+// ---------------------------------------------------------------------------
+// Header strip customization (see the file banner above for the full
+// confession.kind / header_label / header_style contract).
+// ---------------------------------------------------------------------------
+const DEFAULT_HEADER_STYLE = {
+  variant: 'gradient',
+  from: '#6a5cf5',
+  to: '#3ea6f7',
+  angle: 135,
+  textColor: '#fff',
+};
+
+// Default label per bubble "kind" — falls back to "Confession" for anything
+// unrecognized so existing callers that never pass `kind` are unaffected.
+const HEADER_KIND_LABELS = {
+  confession: 'Confession',
+  reply: 'Reply',
+  question: 'Question',
+};
+
+// Same pattern vocabulary as ShareStorySheet's own structureSwatchStyle,
+// just tiled larger (this strip is a lot wider than a small carousel
+// thumbnail) and driven by whatever accent/base color header_style
+// specifies instead of one fixed neutral tone.
+function headerPatternStyle(patternId, accentColor, baseColor) {
+  const structure = getPresetById(BACKGROUND_STRUCTURES, patternId) || BACKGROUND_STRUCTURES[0];
+  const accent = accentColor || 'rgba(255,255,255,0.55)';
+  const base = baseColor || '#4b3f9e';
+  switch (structure.type) {
+    case 'solid':
+      return { background: base };
+    case 'linear':
+      return { background: `linear-gradient(135deg, ${base}, #14162e)` };
+    case 'radial':
+      return { background: `radial-gradient(circle at 30% 25%, ${accent}, ${base})` };
+    case 'dots':
+    case 'halftone':
+      return { background: base, backgroundImage: `radial-gradient(${accent} 2.5px, transparent 2.5px)`, backgroundSize: '18px 18px' };
+    case 'grid':
+    case 'pinstripe':
+      return {
+        background: base,
+        backgroundImage: `linear-gradient(${accent} 1.5px, transparent 1.5px), linear-gradient(90deg, ${accent} 1.5px, transparent 1.5px)`,
+        backgroundSize: '16px 16px',
+      };
+    case 'checker':
+      return {
+        background: base,
+        backgroundImage: `linear-gradient(45deg, ${accent} 25%, transparent 25%, transparent 75%, ${accent} 75%), linear-gradient(45deg, ${accent} 25%, transparent 25%, transparent 75%, ${accent} 75%)`,
+        backgroundSize: '20px 20px',
+        backgroundPosition: '0 0, 10px 10px',
+      };
+    case 'stripes':
+    case 'crosshatch':
+      return { background: base, backgroundImage: `repeating-linear-gradient(-22deg, ${accent} 0 5px, transparent 5px 16px)` };
+    case 'confetti':
+      return {
+        background: base,
+        backgroundImage: `radial-gradient(${accent} 2px, transparent 2px), radial-gradient(#fff 1.5px, transparent 1.5px)`,
+        backgroundSize: '20px 20px, 14px 14px',
+        backgroundPosition: '0 0, 7px 6px',
+      };
+    case 'waves':
+      return { background: base, backgroundImage: `radial-gradient(circle, ${accent} 30%, transparent 31%)`, backgroundSize: '20px 12px' };
+    case 'sunburst':
+      return { background: `conic-gradient(${accent} 0 10deg, transparent 10deg 20deg)`, backgroundColor: base };
+    default:
+      return { background: base };
+  }
+}
+
+// Resolves confession.header_style against DEFAULT_HEADER_STYLE and returns
+// the CSS background to apply to the header strip itself.
+function buildHeaderBackground(headerStyle) {
+  const resolved = { ...DEFAULT_HEADER_STYLE, ...(headerStyle || {}) };
+  if (resolved.variant === 'solid') return { background: resolved.solid || DEFAULT_HEADER_STYLE.from };
+  if (resolved.variant === 'pattern') return headerPatternStyle(resolved.patternId, resolved.patternColor, resolved.base);
+  return { background: `linear-gradient(${resolved.angle ?? 135}deg, ${resolved.from} 0%, ${resolved.to} 100%)` };
+}
 
 function relativeTime(dateString) {
   if (!dateString) return '';
@@ -167,6 +272,16 @@ export default function ConfessionBubble({ confession, onReply, onPhotoClick, si
   const authorUsername = !confession.is_anon ? (confession.profiles?.username || confession.author_username || null) : null;
   const authorAvatarUrl = !confession.is_anon ? (confession.profiles?.avatar_url || confession.author_avatar_url || null) : null;
   const showAuthorOverlay = Boolean(authorUsername || authorAvatarUrl);
+
+  // Header strip content — see the file banner above for the full
+  // kind / header_label / header_style contract. `headerLabel` decides
+  // what word shows in the strip; `resolvedHeaderStyle` / `headerBackground`
+  // decide how the strip is painted. The label text is always rendered
+  // bold regardless of what header_style specifies.
+  const headerKind = confession.kind || 'confession';
+  const headerLabel = confession.header_label || HEADER_KIND_LABELS[headerKind] || HEADER_KIND_LABELS.confession;
+  const resolvedHeaderStyle = { ...DEFAULT_HEADER_STYLE, ...(confession.header_style || {}) };
+  const headerBackground = buildHeaderBackground(confession.header_style);
 
   const mediaUrl = confession.photo_url || confession.media_url;
   const mediaType = detectMediaType(mediaUrl, confession.media_type);
@@ -369,30 +484,33 @@ export default function ConfessionBubble({ confession, onReply, onPhotoClick, si
       }}
     >
       <div style={{ width: '100%', maxWidth: preset.maxWidth }}>
-        {/* Header strip — hardcoded "Confession" label, bold rounded
-            display font, gradient sticker style. The actual confession
-            TEXT is not here — it renders in the greyish body below. */}
+        {/* Header strip — label and background are both customizable per
+            confession (headerLabel / headerBackground, derived above from
+            kind / header_label / header_style). The label text is always
+            bold, no matter what header_style specifies. The actual
+            confession TEXT is not here — it renders in the greyish body
+            below. */}
         <div
           style={{
             padding: '14px 18px',
             borderRadius: '20px 20px 0 0',
-            background: 'linear-gradient(135deg, #6a5cf5 0%, #3ea6f7 100%)',
+            ...headerBackground,
             border: '1px solid var(--glass-border)',
             borderBottom: 'none',
           }}
         >
           <div
             style={{
-              fontFamily: HEADER_FONT_STACK,
+              fontFamily: resolvedHeaderStyle.fontFamily || HEADER_FONT_STACK,
               fontSize: preset.headerFontSize,
-              fontWeight: 700,
+              fontWeight: 800, // always bold — fixed, not part of header_style
               lineHeight: 1.3,
-              color: '#fff',
+              color: resolvedHeaderStyle.textColor || '#fff',
               textAlign: 'center',
               textShadow: '0 1px 2px rgba(0,0,0,0.15)',
             }}
           >
-            Confession
+            {headerLabel}
           </div>
         </div>
 

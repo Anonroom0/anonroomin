@@ -526,7 +526,7 @@ function ShapeCarousel({ selectedId, onChange, scale }) {
 // color-wheel modal with every ACCENT_COLORS entry arranged in a circle.
 // Unchanged from v5.
 // ---------------------------------------------------------------------------
-function ColourField({ color, onOpen }) {
+function ColourField({ color, onOpen, label = 'Colour' }) {
   return (
     <button
       type="button"
@@ -535,7 +535,7 @@ function ColourField({ color, onOpen }) {
     >
       <div style={{ width: 36, height: 36, borderRadius: '50%', background: color.hex, border: '2px solid var(--glass-border)', flexShrink: 0, boxShadow: '0 0 0 2px var(--ink) inset' }} />
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', flex: 1, minWidth: 0 }}>
-        <span style={{ fontSize: 12.5, fontWeight: 800, color: 'var(--dim)' }}>Colour</span>
+        <span style={{ fontSize: 12.5, fontWeight: 800, color: 'var(--dim)' }}>{label}</span>
         <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--paper)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{color.name}</span>
       </div>
     </button>
@@ -546,7 +546,7 @@ const WHEEL_SIZE = 260;
 const WHEEL_RADIUS = 104;
 const WHEEL_SWATCH = 32;
 
-function ColorWheelModal({ selectedId, onPick, onClose }) {
+function ColorWheelModal({ selectedId, onPick, onClose, title = 'Colour' }) {
   useEffect(() => {
     hapticSheet();
     playOpen();
@@ -570,7 +570,7 @@ function ColorWheelModal({ selectedId, onPick, onClose }) {
     <div
       role="dialog"
       aria-modal="true"
-      aria-label="Colour"
+      aria-label={title}
       onClick={(e) => { if (e.target === e.currentTarget) handleClose(); }}
       style={{
         position: 'fixed',
@@ -599,7 +599,7 @@ function ColorWheelModal({ selectedId, onPick, onClose }) {
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', marginBottom: 8 }}>
-          <span style={{ fontSize: 16, fontWeight: 900, color: 'var(--paper)' }}>Colour</span>
+          <span style={{ fontSize: 16, fontWeight: 900, color: 'var(--paper)' }}>{title}</span>
           <button type="button" onClick={handleClose} style={{ border: 'none', background: 'transparent', color: 'var(--ember)', fontSize: 14, fontWeight: 800, padding: '6px 4px' }}>
             Done
           </button>
@@ -732,6 +732,36 @@ function ShareStorySheetContent({ mode, question, reply, message, customizable, 
 
   const [colorPickerOpen, setColorPickerOpen] = useState(false);
 
+  // ---------------------------------------------------------------------
+  // "Card" template — mirrors ConfessionBubble's own header-strip +
+  // glass-body look (see ConfessionBubble.jsx) instead of the realistic
+  // 'tweet' preset or the fully-custom 'basic' Background/Shape system.
+  // cardHeaderLabel defaults per share mode (Question / Reply / Confession
+  // for a confession-flagged message, or plain "Message" otherwise) but is
+  // freely editable. cardHeaderVariant picks how the header strip itself is
+  // painted — gradient / solid bold color / pattern — each starting from a
+  // random pick on open, same convention as the 'basic' fields above. The
+  // header TEXT is always rendered bold regardless of any of this — that's
+  // fixed, never exposed as a toggle here.
+  // ---------------------------------------------------------------------
+  const [cardHeaderLabel, setCardHeaderLabel] = useState(() => {
+    if (mode === 'question') return 'Question';
+    if (mode === 'reply') return 'Reply';
+    return message?.[MESSAGE_IS_CONFESSION_FIELD] === true ? 'Confession' : 'Message';
+  });
+  const [cardHeaderVariant, setCardHeaderVariant] = useState(() =>
+    randomId([{ id: 'gradient' }, { id: 'solid' }, { id: 'pattern' }])
+  );
+  const [cardHeaderFromId, setCardHeaderFromId] = useState(() => randomId(ACCENT_COLORS));
+  const [cardHeaderToId, setCardHeaderToId] = useState(() => randomId(ACCENT_COLORS, cardHeaderFromId));
+  const [cardHeaderSolidId, setCardHeaderSolidId] = useState(() => randomId(ACCENT_COLORS));
+  const [cardHeaderPatternId, setCardHeaderPatternId] = useState(() => randomId(BACKGROUND_STRUCTURES));
+  const [cardHeaderPatternColorId, setCardHeaderPatternColorId] = useState(() => randomId(ACCENT_COLORS));
+  const [cardHeaderTextColor, setCardHeaderTextColor] = useState('light'); // 'light' | 'dark'
+  // Which color field the shared ColorWheelModal is currently editing for
+  // the Card template: null | 'from' | 'to' | 'solid' | 'pattern'.
+  const [cardHeaderPickerTarget, setCardHeaderPickerTarget] = useState(null);
+
   const [previewUrl, setPreviewUrl] = useState(null);
   const [previewBlob, setPreviewBlob] = useState(null);
   const [isRendering, setIsRendering] = useState(true);
@@ -743,6 +773,10 @@ function ShareStorySheetContent({ mode, question, reply, message, customizable, 
 
   const color = getPresetById(ACCENT_COLORS, colorId);
   const scale = getPresetById(BODY_SCALES, scaleId);
+  const cardHeaderFromColor = getPresetById(ACCENT_COLORS, cardHeaderFromId);
+  const cardHeaderToColor = getPresetById(ACCENT_COLORS, cardHeaderToId);
+  const cardHeaderSolidColor = getPresetById(ACCENT_COLORS, cardHeaderSolidId);
+  const cardHeaderPatternColor = getPresetById(ACCENT_COLORS, cardHeaderPatternColorId);
 
   const questionText = question?.[QUESTION_TEXT_FIELD] || '';
   const questionType = question?.[QUESTION_TYPE_FIELD];
@@ -793,6 +827,22 @@ function ShareStorySheetContent({ mode, question, reply, message, customizable, 
       template,
       mediaUrl: messageMediaUrl,
       mediaType: messageMediaType,
+      // "Card" template only (see the state block above for what each of
+      // these controls) — generateStoryImage needs a matching
+      // drawCardSlide (or similar) branch for template === 'card' that
+      // paints a header strip using these values, then the same text body
+      // treatment as drawTweetSlide/drawMessageSlide below it. Passed
+      // through unconditionally; harmless for the other two templates,
+      // which simply won't read them.
+      cardHeaderLabel,
+      cardHeaderVariant,
+      cardHeaderFrom: cardHeaderFromColor?.hex,
+      cardHeaderTo: cardHeaderToColor?.hex,
+      cardHeaderAngle: 135,
+      cardHeaderSolid: cardHeaderSolidColor?.hex,
+      cardHeaderPatternId,
+      cardHeaderPatternColor: cardHeaderPatternColor?.hex,
+      cardHeaderTextColor: cardHeaderTextColor === 'dark' ? '#0C0D10' : '#FFFFFF',
     })
       .then((blob) => {
         if (renderTokenRef.current !== token) return;
@@ -809,7 +859,12 @@ function ShareStorySheetContent({ mode, question, reply, message, customizable, 
         showToast(friendlyDbError('Could not render the preview. Please try again.'));
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [mode, questionText, replyText, questionType, messageText, messageSenderName, messageAvatarUrl, isConfession, backgroundId, colorId, shapeId, scaleId, template, messageMediaUrl, messageMediaType]);
+  }, [
+    mode, questionText, replyText, questionType, messageText, messageSenderName, messageAvatarUrl,
+    isConfession, backgroundId, colorId, shapeId, scaleId, template, messageMediaUrl, messageMediaType,
+    cardHeaderLabel, cardHeaderVariant, cardHeaderFromId, cardHeaderToId, cardHeaderSolidId,
+    cardHeaderPatternId, cardHeaderPatternColorId, cardHeaderTextColor,
+  ]);
 
   useEffect(() => {
     return () => {
@@ -820,6 +875,15 @@ function ShareStorySheetContent({ mode, question, reply, message, customizable, 
   function handleRandomize() {
     hapticImpact();
     playTap();
+    if (template === 'card') {
+      setCardHeaderVariant((prev) => randomId([{ id: 'gradient' }, { id: 'solid' }, { id: 'pattern' }], prev));
+      setCardHeaderFromId((prev) => randomId(ACCENT_COLORS, prev));
+      setCardHeaderToId((prev) => randomId(ACCENT_COLORS, prev));
+      setCardHeaderSolidId((prev) => randomId(ACCENT_COLORS, prev));
+      setCardHeaderPatternId((prev) => randomId(BACKGROUND_STRUCTURES, prev));
+      setCardHeaderPatternColorId((prev) => randomId(ACCENT_COLORS, prev));
+      return;
+    }
     setBackgroundId((prev) => randomId(BACKGROUND_STRUCTURES, prev));
     setColorId((prev) => randomId(ACCENT_COLORS, prev));
     setShapeId((prev) => randomId(BODY_SHAPES, prev));
@@ -867,7 +931,7 @@ function ShareStorySheetContent({ mode, question, reply, message, customizable, 
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div style={{ fontSize: 20, fontWeight: 900, color: 'var(--paper)' }}>Share to Story</div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          {customizable && template === 'basic' && (
+          {customizable && (template === 'basic' || template === 'card') && (
             <button
               type="button"
               onClick={handleRandomize}
@@ -888,11 +952,13 @@ function ShareStorySheetContent({ mode, question, reply, message, customizable, 
         </div>
       </div>
 
-      {/* Basic (fully customizable) vs Tweet (single fixed, professional
-          realistic-post preset) — applies to all three share modes. Hidden
-          entirely when customizable=false: the template is already pinned
-          (to whichever style the item was created with, or Standard if it
-          wasn't customized), so there's nothing to switch between. */}
+      {/* Standard (fixed realistic-post preset) vs Card (header-strip +
+          glass-body, mirrors ConfessionBubble) vs Customization (fully
+          custom Background/Shape/Colour/Size) — applies to all three share
+          modes. Hidden entirely when customizable=false: the template is
+          already pinned (to whichever style the item was created with, or
+          Standard if it wasn't customized), so there's nothing to switch
+          between. */}
       {customizable && (
         <div
           role="tablist"
@@ -901,6 +967,7 @@ function ShareStorySheetContent({ mode, question, reply, message, customizable, 
         >
           {[
             { id: 'tweet', label: 'Standard' },
+            { id: 'card', label: 'Card' },
             { id: 'basic', label: 'Customization' },
           ].map((opt) => {
             const active = template === opt.id;
@@ -958,8 +1025,8 @@ function ShareStorySheetContent({ mode, question, reply, message, customizable, 
               small + centered, matching the real (also shrunk) LINK_ZONE
               the export leaves empty. The Standard/tweet template sits on a
               light backdrop, so this flips to a dark guide there instead of
-              the white one made for the dark Customization backgrounds —
-              otherwise it's invisible against the light card. */}
+              the white one made for the dark Customization/Card
+              backgrounds — otherwise it's invisible against the light card. */}
           <div
             aria-hidden="true"
             style={{
@@ -1017,25 +1084,136 @@ function ShareStorySheetContent({ mode, question, reply, message, customizable, 
       {/* Selection strips sit directly below the preview — both are
           centre-locked scroll wheels now: the highlight window is fixed,
           the strip scrolls under it. Only shown for the 'basic' template —
-          'tweet' is a single fixed preset with nothing to customize. Hidden
+          'tweet' is a single fixed preset with nothing to customize, and
+          'card' gets its own header-focused panel just below. Hidden
           entirely when customizable=false — the style is already fixed
           (either the item's own saved style, or Standard), so there's
           nothing here to show or change. */}
-      {customizable && (
-        template === 'basic' ? (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 14, flexShrink: 0 }}>
-            <BackgroundCarousel selectedId={backgroundId} onChange={setBackgroundId} />
-            <ShapeCarousel selectedId={shapeId} onChange={setShapeId} scale={scale} />
-            <div style={{ display: 'flex', gap: 10 }}>
-              <ColourField color={color} onOpen={() => { hapticTap(); setColorPickerOpen(true); }} />
-              <SizeField scaleId={scaleId} onChange={setScaleId} />
-            </div>
+      {customizable && template === 'basic' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14, flexShrink: 0 }}>
+          <BackgroundCarousel selectedId={backgroundId} onChange={setBackgroundId} />
+          <ShapeCarousel selectedId={shapeId} onChange={setShapeId} scale={scale} />
+          <div style={{ display: 'flex', gap: 10 }}>
+            <ColourField color={color} onOpen={() => { hapticTap(); setColorPickerOpen(true); }} />
+            <SizeField scaleId={scaleId} onChange={setScaleId} />
           </div>
-        ) : (
-          <p style={{ margin: 0, fontSize: 12.5, color: 'var(--dim)', textAlign: 'center', lineHeight: 1.4, flexShrink: 0 }}>
-            A fixed, professional realistic-post style — nothing to customize here.
+        </div>
+      )}
+
+      {customizable && template === 'tweet' && (
+        <p style={{ margin: 0, fontSize: 12.5, color: 'var(--dim)', textAlign: 'center', lineHeight: 1.4, flexShrink: 0 }}>
+          A fixed, professional realistic-post style — nothing to customize here.
+        </p>
+      )}
+
+      {/* Card template's own customization panel — header label text plus
+          a gradient / bold solid color / pattern background picker for the
+          header strip. The header text is always bold no matter what's
+          picked here (see the note at the bottom of this panel). */}
+      {customizable && template === 'card' && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14, flexShrink: 0 }}>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+            <span style={{ fontSize: 13, fontWeight: 800, color: 'var(--dim)' }}>Header label</span>
+            <input
+              type="text"
+              value={cardHeaderLabel}
+              onChange={(e) => setCardHeaderLabel(e.target.value.slice(0, 24))}
+              placeholder="Confession"
+              maxLength={24}
+              style={{
+                padding: '12px 14px',
+                borderRadius: 14,
+                border: '1px solid var(--glass-border)',
+                background: 'var(--glass-white)',
+                color: 'var(--paper)',
+                fontSize: 14,
+                fontWeight: 800,
+              }}
+            />
+          </div>
+
+          <div
+            role="tablist"
+            aria-label="Header background style"
+            style={{ display: 'flex', gap: 4, padding: 4, borderRadius: 16, background: 'var(--glass-white)', border: '1px solid var(--glass-border)' }}
+          >
+            {[
+              { id: 'gradient', label: 'Gradient' },
+              { id: 'solid', label: 'Bold color' },
+              { id: 'pattern', label: 'Pattern' },
+            ].map((opt) => {
+              const active = cardHeaderVariant === opt.id;
+              return (
+                <button
+                  key={opt.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={active}
+                  onClick={() => { if (!active) { hapticSelect(); playTap(); setCardHeaderVariant(opt.id); } }}
+                  style={{
+                    flex: 1,
+                    padding: '9px 0',
+                    borderRadius: 12,
+                    border: 'none',
+                    background: active ? 'var(--ember)' : 'transparent',
+                    color: active ? 'var(--ink)' : 'var(--dim)',
+                    fontSize: 12.5,
+                    fontWeight: 800,
+                  }}
+                >
+                  {opt.label}
+                </button>
+              );
+            })}
+          </div>
+
+          {cardHeaderVariant === 'gradient' && (
+            <div style={{ display: 'flex', gap: 10 }}>
+              <ColourField label="From" color={cardHeaderFromColor} onOpen={() => { hapticTap(); setCardHeaderPickerTarget('from'); }} />
+              <ColourField label="To" color={cardHeaderToColor} onOpen={() => { hapticTap(); setCardHeaderPickerTarget('to'); }} />
+            </div>
+          )}
+
+          {cardHeaderVariant === 'solid' && (
+            <ColourField label="Colour" color={cardHeaderSolidColor} onOpen={() => { hapticTap(); setCardHeaderPickerTarget('solid'); }} />
+          )}
+
+          {cardHeaderVariant === 'pattern' && (
+            <>
+              <BackgroundCarousel selectedId={cardHeaderPatternId} onChange={setCardHeaderPatternId} />
+              <ColourField label="Accent" color={cardHeaderPatternColor} onOpen={() => { hapticTap(); setCardHeaderPickerTarget('pattern'); }} />
+            </>
+          )}
+
+          <div style={{ display: 'flex', gap: 10 }}>
+            {[{ id: 'light', label: 'White text' }, { id: 'dark', label: 'Dark text' }].map((opt) => {
+              const active = cardHeaderTextColor === opt.id;
+              return (
+                <button
+                  key={opt.id}
+                  type="button"
+                  onClick={() => { if (!active) { hapticSelect(); playTap(); setCardHeaderTextColor(opt.id); } }}
+                  style={{
+                    flex: 1,
+                    padding: '11px 0',
+                    borderRadius: 14,
+                    border: '1px solid var(--glass-border)',
+                    background: active ? 'var(--ember)' : 'var(--glass-white)',
+                    color: active ? 'var(--ink)' : 'var(--paper)',
+                    fontSize: 13,
+                    fontWeight: 800,
+                  }}
+                >
+                  {opt.label}
+                </button>
+              );
+            })}
+          </div>
+
+          <p style={{ margin: 0, fontSize: 11.5, color: 'var(--dim)', textAlign: 'center' }}>
+            Header text is always bold.
           </p>
-        )
+        </div>
       )}
 
       <div style={{ flexShrink: 0 }}>
@@ -1071,6 +1249,30 @@ function ShareStorySheetContent({ mode, question, reply, message, customizable, 
 
       {colorPickerOpen && (
         <ColorWheelModal selectedId={colorId} onPick={(id) => setColorId(id)} onClose={() => setColorPickerOpen(false)} />
+      )}
+
+      {cardHeaderPickerTarget && (
+        <ColorWheelModal
+          title={
+            cardHeaderPickerTarget === 'from' ? 'From colour'
+            : cardHeaderPickerTarget === 'to' ? 'To colour'
+            : cardHeaderPickerTarget === 'solid' ? 'Header colour'
+            : 'Accent colour'
+          }
+          selectedId={
+            cardHeaderPickerTarget === 'from' ? cardHeaderFromId
+            : cardHeaderPickerTarget === 'to' ? cardHeaderToId
+            : cardHeaderPickerTarget === 'solid' ? cardHeaderSolidId
+            : cardHeaderPatternColorId
+          }
+          onPick={(id) => {
+            if (cardHeaderPickerTarget === 'from') setCardHeaderFromId(id);
+            else if (cardHeaderPickerTarget === 'to') setCardHeaderToId(id);
+            else if (cardHeaderPickerTarget === 'solid') setCardHeaderSolidId(id);
+            else setCardHeaderPatternColorId(id);
+          }}
+          onClose={() => setCardHeaderPickerTarget(null)}
+        />
       )}
 
       <StoryTutorial open={tutorialOpen} onClose={() => setTutorialOpen(false)} />
