@@ -25,7 +25,7 @@ jobs:
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
 
       - name: Install Capacitor CLI + Android platform
-        run: npm install @capacitor/cli @capacitor/android
+        run: npm install @capacitor/cli@^6.2.0 @capacitor/android@^6.2.0
 
       - name: Init Capacitor config
         run: npx cap init "Anonroom" "in.anonroom.app" --web-dir=dist
