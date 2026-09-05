@@ -55,13 +55,12 @@ jobs:
       - name: Set app icon and splash screen
         run: |
           sudo apt-get update -y && sudo apt-get install -y imagemagick
-          npm install -g cordova-res
           mkdir -p resources
-          cp public/android-chrome-512x512.png resources/icon.png
-          convert -size 1920x1920 xc:"#0C0D10" \
+          convert public/android-chrome-512x512.png -resize 1024x1024 resources/icon.png
+          convert -size 2732x2732 xc:"#0C0D10" \
             public/android-chrome-512x512.png -gravity center -composite \
             resources/splash.png
-          cordova-res android --skip-config --copy
+          npx @capacitor/assets generate --android
 
       - name: Copy web build into Android project
         run: npx cap copy android
