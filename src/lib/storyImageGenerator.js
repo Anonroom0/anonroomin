@@ -1,5 +1,5 @@
 /** ===========================================================================
- * STORY IMAGE GENERATOR (v3)
+ * STORY IMAGE GENERATOR (v3.1)
  * ============================================================================
  * Renders a shareable 1080x1920 (IG/NGL story) PNG using an offscreen
  * <canvas>, for two content shapes ("kinds"):
@@ -38,6 +38,16 @@
  *     fake engagement row — just the card and the shared footer logo.
  *   - standardStyle: 'tweet' — the original fixed realistic-post preset
  *     (drawTweetSlide), unchanged.
+ *
+ * v3.1 restyles drawNormalSlide's card + header to match the reference
+ * "Confessions"-style card:
+ *   - NORMAL_CARD_RADIUS bumped 40 -> 56 for smoother, more pronounced
+ *     rounded corners on the whole card.
+ *   - The header's tag label now renders as bold sticker-text (white fill +
+ *     black outline) instead of a flat fill with a soft drop shadow, giving
+ *     it the same punchy "bubble" weight as the body copy below it. Colors
+ *     (the header gradient stops) are untouched — only how the label text
+ *     itself is painted changed.
  *
  * Every visual choice for the Basic template is looked up/derived from
  * storyStylePresets.js by id — a Background structure + an accent Colour
@@ -1468,13 +1478,19 @@ function drawTweetSlide(ctx, { kind, questionText, questionType, replyText, mess
 }
 
 // ---------------------------------------------------------------------------
-// Layout — `standardStyle === 'normal'` (NEW default Standard look) — a
+// Layout — `standardStyle === 'normal'` (default Standard look) — a
 // confession-bubble-style card: a coloured tag header (Question / Reply /
 // Confession / Message each get their own gradient — see
 // NORMAL_TAG_DEFAULTS/defaultTagInfo, which mirror ShareStorySheet.jsx's
 // own getTagInfo so the sheet's preview chip and this export can never
 // disagree) sitting above a solid grey body, with the shared text rendered
 // white-fill/black-outline (sticker-text) so it reads over anything.
+//
+// v3.1: NORMAL_CARD_RADIUS bumped up for smoother, more rounded corners,
+// and the header's tag label is now painted the same bold sticker-text way
+// (white fill + black stroke) as the body copy below it, instead of a flat
+// fill + soft drop shadow — matching the reference "Confessions"-card look.
+// Gradient header colors are unchanged either way.
 //
 // Uses the same fitTextBlock/roundedRectPath/centeredCardY machinery every
 // other layout in this file uses; no CTA pill, no engagement row — just the
@@ -1498,7 +1514,9 @@ function defaultTagInfo(kind, isConfession) {
 }
 
 const NORMAL_CARD_X = 80;
-const NORMAL_CARD_RADIUS = 40;
+// v3.1: 40 -> 56 — smoother, more pronounced rounded corners on the whole
+// card, matching the reference screenshot's soft rounded-square shape.
+const NORMAL_CARD_RADIUS = 56;
 const NORMAL_HEADER_HEIGHT = 140;
 const NORMAL_CARD_PADDING = 64;
 const NORMAL_BODY_FILL = '#2A2B33'; // solid grey card body, per spec
@@ -1565,15 +1583,26 @@ function drawNormalSlide(ctx, { kind, questionText, replyText, messageText, tagL
   ctx.strokeStyle = 'rgba(255,255,255,0.10)';
   ctx.stroke();
 
-  // --- tag label, centered in the header ---
+  // --- tag label, centered in the header — v3.1: bold sticker-text
+  // (white fill + black outline) instead of a flat fill + soft drop
+  // shadow, so the label reads with the same punchy "bubble" weight as
+  // the reference screenshot's header text and the body copy below it.
+  // Header gradient colors themselves are untouched. ---
   ctx.save();
-  ctx.font = `800 44px ${font}`;
-  ctx.fillStyle = '#FFFFFF';
+  const tagFontPx = 46;
+  ctx.font = `900 ${tagFontPx}px ${font}`;
   ctx.textAlign = 'center';
   ctx.textBaseline = 'middle';
-  ctx.shadowColor = 'rgba(0,0,0,0.25)';
-  ctx.shadowBlur = 6;
-  ctx.fillText((tagLabel || '').toUpperCase(), cardX + cardWidth / 2, cardY + NORMAL_HEADER_HEIGHT / 2);
+  ctx.lineJoin = 'round';
+  ctx.miterLimit = 2;
+  const tagCenterX = cardX + cardWidth / 2;
+  const tagCenterY = cardY + NORMAL_HEADER_HEIGHT / 2;
+  const tagStrokeWidth = Math.max(5, Math.round(tagFontPx * 0.16));
+  ctx.lineWidth = tagStrokeWidth;
+  ctx.strokeStyle = '#000000';
+  ctx.strokeText((tagLabel || '').toUpperCase(), tagCenterX, tagCenterY);
+  ctx.fillStyle = '#FFFFFF';
+  ctx.fillText((tagLabel || '').toUpperCase(), tagCenterX, tagCenterY);
   ctx.restore();
 
   // --- body text: white fill, black outline (sticker-text), centered ---
@@ -1773,9 +1802,9 @@ export async function generateStoryImage({
   // ("Standard" — a single fixed-layout card; see standardStyle below for
   // which look it uses).
   template = 'basic',
-  // Only meaningful when template === 'tweet': 'normal' (NEW, default) is
-  // the confession-card look (drawNormalSlide); 'tweet' is the original
-  // fixed realistic-post preset (drawTweetSlide), unchanged.
+  // Only meaningful when template === 'tweet': 'normal' (default) is the
+  // confession-card look (drawNormalSlide); 'tweet' is the original fixed
+  // realistic-post preset (drawTweetSlide), unchanged.
   standardStyle = 'normal',
   // Tag identity for the 'normal' Standard style. ShareStorySheet.jsx's own
   // getTagInfo is the source of truth for these, so the sheet's live
@@ -1839,7 +1868,7 @@ export async function generateStoryImage({
 
   // Tweet-classic sits on a light backdrop, so the footer wordmark needs a
   // dark fill instead of the light one every dark background (Basic, and
-  // the new Normal Standard style) expects (see drawFooterLogo).
+  // the Normal Standard style) expects (see drawFooterLogo).
   await drawFooterLogo(ctx, tokens, template === 'tweet' && standardStyle === 'tweet' ? { textColor: TWEET_TEXT_PRIMARY } : undefined);
 
   return new Promise((resolve, reject) => {
