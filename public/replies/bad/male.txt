@@ -1,102 +1,103 @@
-# Bad / Rude - Male (Hinglish mix)
+# Bad / Rude - Male
+# Logical, relevant chat replies with emoji
 
-* : Acha
-* : Alright
-* : Cool
-* : Got it
-* : Haan
-* : Hmm interesting
-* : Okay noted
-* : Samajh gaya
-* : Sure
-* : Theek hai
-aaja : Rude energy reject
-akela, post : Sun le, main tera fan nahi hoon
-alone, fail : Done with this conversation
-baat, come : Tujhe serious nahi le raha main
-bad : Mat try kar impress karne ka
-bhai, happy : Abe oye, thoda sense se baat kar
-bhool, tired : Tera scene nahi chalega yahan
-bilkul : Thoda filter laga ke bol
-boring : Faltu time mat le mera
-bye : Nikal yahan se mentally
-call, joke : Faltu ka gyaan mat pel
-chill : Abe oye, thoda sense se baat kar
-choice : Ab samajh gaya hoga
-college, sorry : Ignore mode on kar diya mentally
-come : Apni life dekh pehle
-crazy : Itna free mat samajh mujhe
-cute : Teri energy toxic lag rahi
-definitely, bilkul : Bolna hai toh clear bol
-dream, paisa : Bas kar ab
-fail : Sun ke bhi ignore kar sakta hoon
-fail, shaam : Tera level low dikhta hai
-false, choice : Apni aukaat yaad rakh
-family, crazy : Drama mat faila
-forget : Main busy hoon, teri nahi
-forgive : Kam bakwas, zyada kaam
-free : Mat aana mere pe aise
-funny : Sense of humour nahi hai kya
-game, story : Attitude kam, respect zyada
-gm : Bas kar ab
-gossip : Bolna hai toh clear bol
-gussa : Attitude kam kar, warna ignore
-hangout : Sun le, main tera fan nahi hoon
-happy : Bakwas mat faila yahan
-hate : Faltu time mat le mera
-how : Door reh thoda
-intelligent : Drama mat faila
-joke : Sense of humour nahi hai kya
-kaise : Attitude dekh ke hasi aa rahi
-kaise ho : Bakwas mat faila yahan
-kal, free : Tera vibe off hai pure
-life, kaise : Main free nahi hoon teri bakwas ke liye
-like : Nikal yahan se mentally
-lmao : Main entertain nahi karne wala tujhe
-lol : Tera scene nahi chalega yahan
-lose : Teri aukaat nahi hai itna attitude dikhane ki
-love : Mat aana mere pe aise
-luck, send : Simple baat hai, mat uljha
-miss you, bye : Teri baaton se irritation ho rahi
-miss, cute : Tujhe block karne ka mood aa raha
-money : Tera scene clear nahi lag raha
-msg : Rude reply mil gaya na
-nafrat : Jaake so ja pehle
-naukri : Itna free mat samajh mujhe
-news : Simple baat hai, mat uljha
-nonsense, padhai : Chup kar thoda, sunne de
-padhai : Main busy hoon, teri nahi
-paisa : Tujhe reply dene ka mood nahi
-papa : Sun ke bhi ignore kar sakta hoon
-parents : Tujhe koi nahi puch raha honestly
-phir se : Itna zyada mat bol, bore ho gaya
-pic : Main free nahi hoon teri bakwas ke liye
-post : Jaake so ja pehle
-random : Mat aana dobara aise
-really : Itna zyada mat bol, bore ho gaya
-relax : Tujhe serious nahi le raha main
-risk : Apni life dekh pehle
-samay, hate : Main entertain nahi karne wala tujhe
-send : Tera dimag kharab hai kya aaj
-sexy : Done with this conversation
-shaam : Rude energy reject
-smart : Tera level low dikhta hai
-so ja : Tera scene clear nahi lag raha
-soch : Itna rude mat ban, dikhta hai
-sorry : Kam bakwas, zyada kaam
-story : Tera opinion irrelevant hai
-stupid : Teri baaton se irritation ho rahi
-success, how : Rude reply mil gaya na
-sup : Chup kar thoda, sunne de
-sure : Tera dimag kharab hai kya aaj
-test : Ignore mode on kar diya mentally
-thak, money : Attitude kam kar, warna ignore
-thinking : Tujhe samajh nahi aayega shayad
-tired : Tujhe koi nahi puch raha honestly
-today : Attitude dekh ke hasi aa rahi
-truth : Door reh thoda
-welcome, really : Mat try kar impress karne ka
-why : Tera vibe off hai pure
-worry : Faltu ka gyaan mat pel
-yes : Tujhe reply dene ka mood nahi
-zindagi : Thoda filter laga ke bol
+hi, hello, hey : Kya chahiye? Seedha bol 😒
+how are you : Tujhe kya lena dena 🙄
+miss : Miss karne wala time nahi hai 😑
+love : Pyaar mat faila yahan 😒
+cute : Cute mat ban, kaam bol 🙄
+thanks : Zarurat nahi thi thanks ki 😑
+sorry : Sorry se kaam nahi chalega 😒
+please : Please mat bol, attitude nahi pasand 🙄
+help : Khud dekh le, free nahi hoon 😑
+bored : Bore mat kar mujhe 😒
+talk : Baat karni hai toh short mein bol 🙄
+come : Aane ki zarurat nahi 😑
+bye : Ja, koi rok nahi raha 😒
+what, kya : Kya bakwas kar raha 🙄
+why, kyun : Kyun mat pooch, time waste 😑
+ok : Ok bolke mat khush ho 😒
+* : Mood nahi hai bakwas sunne ka 🙄
+* : Short mein bol, time nahi 😑
+* : Attitude dekh ke ignore 😒
+* : Farak nahi padta 🙄
+love : Pyaar mat faila yahan 😒
+come : Aane ki zarurat nahi 😑
+how are you : Tujhe kya lena dena 🙄
+* : Farak nahi padta 🙄
+come : Aane ki zarurat nahi 😑
+how are you : Tujhe kya lena dena 🙄
+cute : Cute mat ban, kaam bol 🙄
+* : Attitude dekh ke ignore 😒
+* : Mood nahi hai bakwas sunne ka 🙄
+please : Please mat bol, attitude nahi pasand 🙄
+love : Pyaar mat faila yahan 😒
+please : Please mat bol, attitude nahi pasand 🙄
+talk : Baat karni hai toh short mein bol 🙄
+ok : Ok bolke mat khush ho 😒
+love : Pyaar mat faila yahan 😒
+* : Farak nahi padta 🙄
+hi, hello, hey : Kya chahiye? Seedha bol 😒
+cute : Cute mat ban, kaam bol 🙄
+* : Attitude dekh ke ignore 😒
+why, kyun : Kyun mat pooch, time waste 😑
+* : Mood nahi hai bakwas sunne ka 🙄
+* : Short mein bol, time nahi 😑
+why, kyun : Kyun mat pooch, time waste 😑
+love : Pyaar mat faila yahan 😒
+help : Khud dekh le, free nahi hoon 😑
+hi, hello, hey : Kya chahiye? Seedha bol 😒
+help : Khud dekh le, free nahi hoon 😑
+hi, hello, hey : Kya chahiye? Seedha bol 😒
+help : Khud dekh le, free nahi hoon 😑
+* : Mood nahi hai bakwas sunne ka 🙄
+miss : Miss karne wala time nahi hai 😑
+talk : Baat karni hai toh short mein bol 🙄
+cute : Cute mat ban, kaam bol 🙄
+cute : Cute mat ban, kaam bol 🙄
+love : Pyaar mat faila yahan 😒
+hi, hello, hey : Kya chahiye? Seedha bol 😒
+what, kya : Kya bakwas kar raha 🙄
+how are you : Tujhe kya lena dena 🙄
+bye : Ja, koi rok nahi raha 😒
+hi, hello, hey : Kya chahiye? Seedha bol 😒
+help : Khud dekh le, free nahi hoon 😑
+bored : Bore mat kar mujhe 😒
+thanks : Zarurat nahi thi thanks ki 😑
+what, kya : Kya bakwas kar raha 🙄
+* : Mood nahi hai bakwas sunne ka 🙄
+bye : Ja, koi rok nahi raha 😒
+please : Please mat bol, attitude nahi pasand 🙄
+cute : Cute mat ban, kaam bol 🙄
+bye : Ja, koi rok nahi raha 😒
+bored : Bore mat kar mujhe 😒
+please : Please mat bol, attitude nahi pasand 🙄
+love : Pyaar mat faila yahan 😒
+cute : Cute mat ban, kaam bol 🙄
+sorry : Sorry se kaam nahi chalega 😒
+* : Short mein bol, time nahi 😑
+hi, hello, hey : Kya chahiye? Seedha bol 😒
+* : Mood nahi hai bakwas sunne ka 🙄
+please : Please mat bol, attitude nahi pasand 🙄
+cute : Cute mat ban, kaam bol 🙄
+* : Short mein bol, time nahi 😑
+* : Attitude dekh ke ignore 😒
+ok : Ok bolke mat khush ho 😒
+bored : Bore mat kar mujhe 😒
+how are you : Tujhe kya lena dena 🙄
+* : Attitude dekh ke ignore 😒
+* : Farak nahi padta 🙄
+thanks : Zarurat nahi thi thanks ki 😑
+bored : Bore mat kar mujhe 😒
+sorry : Sorry se kaam nahi chalega 😒
+what, kya : Kya bakwas kar raha 🙄
+thanks : Zarurat nahi thi thanks ki 😑
+bye : Ja, koi rok nahi raha 😒
+love : Pyaar mat faila yahan 😒
+please : Please mat bol, attitude nahi pasand 🙄
+bye : Ja, koi rok nahi raha 😒
+bored : Bore mat kar mujhe 😒
+* : Short mein bol, time nahi 😑
+* : Attitude dekh ke ignore 😒
+* : Attitude dekh ke ignore 😒
+talk : Baat karni hai toh short mein bol 🙄

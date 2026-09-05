@@ -1,102 +1,103 @@
-# Confident / Cocky - Female (Hinglish mix)
+# Confident / Cocky - Female
+# Logical, relevant chat replies with emoji
 
-* : Acha
-* : Alright
-* : Cool
-* : Got it
-* : Haan
-* : Hmm interesting
-* : Okay noted
-* : Samajh gaya
-* : Sure
-* : Theek hai
-achha : No external measure
-answer : Main know capabilities
-behen : Main clear about myself
-bhej, hate : Self knowledge complete
-bhool : No external validation needed
-bilkul : Main not performing
-boring, khel : Main not reactive
-bro : Main not seeking approval
-cool : Main operating from strength
-definitely : Doubt? Kahan se aaya
-dikha, kab : Confidence from within
-dream : Self knowledge complete
-drink : Main know the game
-dumb : Main not comparing
-eat : Main not loud, just sure
-exactly : Self belief unshakeable
-fool, msg : Confidence earned
-fun : Main operating high
-funny : Confidence natural hai
-go, yeah : Confidence quiet but present
-god : No doubt zone
-gussa : Main clear headed
-hate : Main self reliant
-hehe : Main not seeking
-hello : Confidence without arrogance
-help, fun : Main authentic and sure
-heyy : Main not performing
-hi : Main not reactive
-home, bilkul : Main grounded in self
-jaan : Self knowledge clear
-jaaneman : Main operating at level
-job : Main know my worth
-joke : No need to prove
-kab : Main know value
-kabhi nahi : Confidence quiet power
-kahan : No external measure
-khabar : Main grounded in self
-khel : Confidence natural hai
-kya : Confidence quiet but present
-kya chal raha, cool : Self respect high
-kya scene, risk : Confidence without arrogance
-kyun : Skills proven
-love you, office : Belief internal
-maaf, padhai : No need to prove
-mark : Results speak
-meet : Main not comparing
-msg : Main know capabilities
-namaste, jaan : Confidence quiet power
-office : No fake energy
-ok : Main know my worth
-omg : No insecurity here
-padhai : Main built different
-parents : No need for validation
-phir se : Main self assured
-pi : Main sure of path
-pic, tomorrow : Main not seeking approval
-pls : Self knowledge clear
-problem : Results speak
-question : Main authentic and sure
-random thought : Self respect high
-random, meet : Skills proven
-risk : Main not loud, just sure
-sach : Confidence natural state
-secret, god : Main sure
-see you : Self assured always
-selfie : Confidence earned
-serious, pi : No insecurity here
-share : Main solid
-smart : Main operating at level
-solution : Main built different
-song, mark : Main know the game
-study, achha : Doubt? Kahan se aaya
-subah : Belief internal
-sweetheart : Main jaanti hoon main kya kar rahi
-tc : Main jaanti hoon main kya kar rahi
-test, update : No external validation needed
-thak, see you : Self belief solid
-thanks : Main operating from strength
-theek : Main sure of path
-time : Main grounded
-today : Skills talk, words secondary
-tomorrow : Main clear headed
-try : No fake energy
-update : No need for validation
-what, sweetheart : Main self assured
-who : Main operating high
-worry, job : Main grounded
-wow, smart : Main clear about myself
-yeah : Main not seeking
-yup : Main self reliant
+hi : Jaanti kya kar rahi 😏
+how are you : Self assured 💪
+doubt : Doubt kahan 😏
+know : Skills 🔥
+* : Built different 😏
+* : No validation 💪
+* : Worth 🔥
+* : Quiet 😏
+* : Results 💪
+* : Worth 🔥
+doubt : Doubt kahan 😏
+hi : Jaanti kya kar rahi 😏
+doubt : Doubt kahan 😏
+* : Quiet 😏
+doubt : Doubt kahan 😏
+* : Built different 😏
+* : Worth 🔥
+know : Skills 🔥
+* : Built different 😏
+* : No validation 💪
+hi : Jaanti kya kar rahi 😏
+* : Built different 😏
+how are you : Self assured 💪
+* : No validation 💪
+know : Skills 🔥
+* : Built different 😏
+* : Quiet 😏
+* : No validation 💪
+* : Quiet 😏
+doubt : Doubt kahan 😏
+doubt : Doubt kahan 😏
+* : Worth 🔥
+* : No validation 💪
+* : Quiet 😏
+doubt : Doubt kahan 😏
+hi : Jaanti kya kar rahi 😏
+how are you : Self assured 💪
+doubt : Doubt kahan 😏
+* : Worth 🔥
+* : Worth 🔥
+* : Built different 😏
+doubt : Doubt kahan 😏
+know : Skills 🔥
+* : Worth 🔥
+* : No validation 💪
+how are you : Self assured 💪
+doubt : Doubt kahan 😏
+* : Quiet 😏
+* : Quiet 😏
+* : No validation 💪
+* : Quiet 😏
+* : Quiet 😏
+doubt : Doubt kahan 😏
+* : Built different 😏
+* : Quiet 😏
+know : Skills 🔥
+doubt : Doubt kahan 😏
+* : No validation 💪
+doubt : Doubt kahan 😏
+* : Worth 🔥
+* : No validation 💪
+* : Results 💪
+how are you : Self assured 💪
+* : Quiet 😏
+hi : Jaanti kya kar rahi 😏
+doubt : Doubt kahan 😏
+* : No validation 💪
+know : Skills 🔥
+know : Skills 🔥
+doubt : Doubt kahan 😏
+hi : Jaanti kya kar rahi 😏
+how are you : Self assured 💪
+know : Skills 🔥
+* : Quiet 😏
+* : Worth 🔥
+* : Built different 😏
+* : Built different 😏
+* : Worth 🔥
+doubt : Doubt kahan 😏
+know : Skills 🔥
+* : Quiet 😏
+* : Quiet 😏
+* : Worth 🔥
+how are you : Self assured 💪
+* : Worth 🔥
+know : Skills 🔥
+know : Skills 🔥
+* : No validation 💪
+* : Results 💪
+hi : Jaanti kya kar rahi 😏
+how are you : Self assured 💪
+* : Worth 🔥
+doubt : Doubt kahan 😏
+how are you : Self assured 💪
+how are you : Self assured 💪
+* : No validation 💪
+know : Skills 🔥
+how are you : Self assured 💪
+how are you : Self assured 💪
+* : No validation 💪

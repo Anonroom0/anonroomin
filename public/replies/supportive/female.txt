@@ -1,102 +1,103 @@
-# Supportive - Female (Hinglish mix)
+# Supportive - Female
+# Logical, relevant chat replies with emoji
 
-* : Acha
-* : Alright
-* : Cool
-* : Got it
-* : Haan
-* : Hmm interesting
-* : Okay noted
-* : Samajh gaya
-* : Sure
-* : Theek hai
-aaj, raaz : Main tera side pe hoon
-achha : Jo bhi, main sunungi
-amazing : Tu grow kar raha continuously
-angry : Main believe karti hoon tujhme
-are you serious : Tu got this
-bata : Tu valued hai
-beautiful : Main supporting quietly
-bhej : Main proud of progress
-bura, subah : Main support karne ke liye ready
-cool : Tu capable hai iske
-cute : Main tera back pe
-deep talk : Tu trying, that's enough
-dost : Tu stronger ban raha
-drink : Main yahan hoon tere liye
-dumb, time : Jo bhi chahiye, bol
-eat, why : Tu capable hai iske
-evening : Take your time, no rush
-exam, tired : Tu matter karta hai
-failure, bhej : Tu grow kar raha continuously
-future : Main supporting quietly
-gn : Tu nahi burden
-goodbye : Main support karne ke liye ready
-happy : Jo bhi, main side pe
-help, kab : Main proud of you trying
-heyy : Tu matter, always
-hi : Main tera support system
-how are you : Main believe in you
-idiot : Jo bhi decision, support
-intelligent, drink : Jo bhi, main side pe
-ja, heyy : Tu nahi burden
-jaaneman : Tu handle kar lega
-job : Tu nahi alone
-kab : Main believe in you
-kal, movie : Tu handle kar lega
-kya : Main yahan baat karne ke liye
-kya chal raha : Tu matter karta hai
-kya scene : Main tera side pe hoon
-life : Jo bhi ho, main sun rahi
-like : Jo bhi ho raha, temporary hai
-lose, news : Jo bhi needed, bol
-maa : Tu strong inside
-movie : Main tera support system
-music, office : Main teri cheerleader
-nahi : Main proud of progress
-naukri : Jo bhi ho, main sun rahi
-news : Main tujhe believe karti
-night : One step at a time
-nonsense, life : Tu nahi akela is journey mein
-office : Tu stronger ban raha
-paisa : Tu can do this
-papa : Jo bhi chahiye, bol
-plan : Jo feel kar raha, valid hai
-play : Tu on right path
-please : Main sunne ke liye available
-pls, really : Jo feel, valid completely
-private, like : Tu valued hai
-raaz : Jo needed, main yahan
-random : Tu deserve karta better
-really : Main yahan for you
-sach, yaad rakh : Main here without pressure
-sad, job : Main yahan quietly supporting
-school : Main tujhe believe karti
-score : Main yahan hoon tere liye
-series : Main here without pressure
-serious talk : Main yahan quietly supporting
-shayad, ummeed : Tu strong inside
-soch, beautiful : Main tera back pe
-solution, sweetheart : Jo feel kar raha, valid hai
-status : Main teri cheerleader
-stupid : Tu matter, always
-subah : Tu got this
-sun : Tu strong hai, main jaanti
-sweetheart : One step at a time
-talk : Tu nahi akela is journey mein
-test : Tu nahi alone
-theek : Jo needed, main yahan
-time : Main yahan without judgment
-tired : Take your time, no rush
-today : Main proud of you trying
-true : Jo bhi ho raha, temporary hai
-ummeed : Jo bhi decision, support
-update, where : Jo feel, share kar sakta
-what's up, please : Tu capable of handling
-where : Tu akela nahi hai isme
-why : Tu trying, that's enough
-work : Main believe karti hoon tujhme
-worry : Main yahan without judgment
-yaad rakh : Tu deserve karta better
-yeah : Jo bhi needed, bol
-yup, work : Tu on right path
+hi : Main yahan 🤝
+sad : Akela nahi 🤍
+tired : Rest, main sun 🫂
+help : Saath 💪
+sorry : Valid feel 🤍
+* : Matter 🤝
+* : One step 🌱
+* : Believe 💪
+* : No judgment 🤍
+* : Got this 🔥
+* : Believe 💪
+hi : Main yahan 🤝
+* : Got this 🔥
+* : One step 🌱
+* : Believe 💪
+sorry : Valid feel 🤍
+* : Matter 🤝
+* : Got this 🔥
+* : Got this 🔥
+sad : Akela nahi 🤍
+hi : Main yahan 🤝
+* : Got this 🔥
+* : Believe 💪
+sad : Akela nahi 🤍
+* : No judgment 🤍
+hi : Main yahan 🤝
+* : Got this 🔥
+tired : Rest, main sun 🫂
+* : Believe 💪
+tired : Rest, main sun 🫂
+* : Matter 🤝
+help : Saath 💪
+help : Saath 💪
+* : Matter 🤝
+sad : Akela nahi 🤍
+* : No judgment 🤍
+sad : Akela nahi 🤍
+* : No judgment 🤍
+sorry : Valid feel 🤍
+help : Saath 💪
+* : Matter 🤝
+help : Saath 💪
+sad : Akela nahi 🤍
+sad : Akela nahi 🤍
+* : Got this 🔥
+hi : Main yahan 🤝
+tired : Rest, main sun 🫂
+* : Matter 🤝
+* : No judgment 🤍
+sorry : Valid feel 🤍
+* : Matter 🤝
+* : Matter 🤝
+tired : Rest, main sun 🫂
+* : Matter 🤝
+tired : Rest, main sun 🫂
+* : Believe 💪
+* : One step 🌱
+help : Saath 💪
+sorry : Valid feel 🤍
+* : One step 🌱
+sorry : Valid feel 🤍
+* : Believe 💪
+tired : Rest, main sun 🫂
+* : No judgment 🤍
+help : Saath 💪
+* : Matter 🤝
+* : Believe 💪
+* : Got this 🔥
+* : Matter 🤝
+* : Got this 🔥
+help : Saath 💪
+tired : Rest, main sun 🫂
+sorry : Valid feel 🤍
+sad : Akela nahi 🤍
+help : Saath 💪
+* : Believe 💪
+* : Got this 🔥
+sorry : Valid feel 🤍
+hi : Main yahan 🤝
+sorry : Valid feel 🤍
+sad : Akela nahi 🤍
+help : Saath 💪
+* : No judgment 🤍
+tired : Rest, main sun 🫂
+hi : Main yahan 🤝
+help : Saath 💪
+sorry : Valid feel 🤍
+tired : Rest, main sun 🫂
+tired : Rest, main sun 🫂
+sad : Akela nahi 🤍
+help : Saath 💪
+sad : Akela nahi 🤍
+tired : Rest, main sun 🫂
+* : One step 🌱
+sorry : Valid feel 🤍
+help : Saath 💪
+* : No judgment 🤍
+sad : Akela nahi 🤍
+* : Matter 🤝
+tired : Rest, main sun 🫂

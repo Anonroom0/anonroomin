@@ -1,102 +1,103 @@
-# Chill - Female (Hinglish mix)
+# Chill - Female
+# Logical, relevant chat replies with emoji
 
-* : Acha
-* : Alright
-* : Cool
-* : Got it
-* : Haan
-* : Hmm interesting
-* : Okay noted
-* : Samajh gaya
-* : Sure
-* : Theek hai
-aaja, pagal : Easy energy only
-akela : Sab sort ho jayega
-alone : Main floating through
-baby : Main vibing
-bata : Main floating
-behen, haha : Main low pressure pe
-bestie : Relax mode permanent
-bhagwan, really : No pressure zone
-bhai : Peace first
-bilkul : No rush, no worry
-bored : Peace maintained
-bro : No tension allowed
-bye : Sab sorted eventually
-chat : Peace mode on
-cool, what : Peace over everything
-danger, madad : Relax and breathe
-darling : Main calm waters
-deep talk : No pressure zone
-dikha : Chill accepted
-doubt : Peace over everything
-dumb : Sab sort ho jayega
-fail, pasand : Chill accepted
-failure : Relax, nothing urgent
-faith : Main smooth
-fun : Easy vibes
-future : Chill forever
-game : Main calm waters
-gm : Peace first
-great : No tension allowed
-haha : Main floating free
-hamesha : Relax mode permanent
-handsome : Sab theek
-hangout : No overthink
-happy, hangout : Main easy energy
-hate : Chill is the way
-hi : Main vibing quietly
-how are you, truth : Main smooth sailing
-how, omg : Main no pressure
-ja : Main vibing quietly
-kabhi kabhi : Easy vibes
-kabhi nahi : No overthink
-kahan : Main floating free
-kaise : Main calm
-kaun : Take it easy
-lie, game : Sab under control
-life, fun : Peace maintained
-like : Main chill mode mein
-lmao, bestie : Main floating through
-lol, hi : Sab temporary hai
-love, when : No tension, flow with it
-maaf : No stress zone
-madad : Sab theek ho jayega
-meet : Main smooth
-nahi, time : Main chill mode mein
-nice : Easy does it
-okay : Main low pressure pe
-omg : No stress
-option : Peace mode on
-pagal : No overthinking today
-parivar, phir se : No rush ever
-party : No rush ever
-pasand : Peace over chaos
-phir se : Main calm
-photo, akela : Main vibing
-pls : No drama needed
-post, great : Easy does it
-pretty, faith : Take it easy
-pyaar, question : Main easy going
-question : Sab sorted eventually
-really : No stress zone
-school, bhai : Main no worry
-secret : Main easy going
-serious talk : Easy energy only
-sexy : No overthinking today
-shaam : Main easy energy
-share : Sab temporary hai
-sis : No rush, no worry
-sure : Sab under control
-tc, option : Chill forever
-thank you : Main calm energy
-time : Main calm energy
-topper : Peace over chaos
-truth : Main low key
-what : Chill is the way
-what's up : Main smooth sailing
-when : Sab theek hai bhai, relax
-work, bilkul : Kuch bhi ho, peace
-wtf : Main low key
-yaad : Main no worry
-zaroor : Kuch bhi ho, peace
+hi : Relax 😎
+how are you : Chill 🌿
+sad : Flow with it 😎
+busy : No rush 🌿
+* : Peace ✌️
+* : Low pressure 😎
+* : Sort 🌿
+* : Vibing 😌
+* : Easy 😎
+sad : Flow with it 😎
+busy : No rush 🌿
+* : Easy 😎
+hi : Relax 😎
+busy : No rush 🌿
+hi : Relax 😎
+* : Peace ✌️
+* : Sort 🌿
+* : Peace ✌️
+sad : Flow with it 😎
+* : Easy 😎
+* : Low pressure 😎
+how are you : Chill 🌿
+sad : Flow with it 😎
+hi : Relax 😎
+busy : No rush 🌿
+* : Peace ✌️
+* : Peace ✌️
+how are you : Chill 🌿
+* : Easy 😎
+* : Sort 🌿
+* : Peace ✌️
+how are you : Chill 🌿
+how are you : Chill 🌿
+sad : Flow with it 😎
+busy : No rush 🌿
+* : Vibing 😌
+hi : Relax 😎
+* : Easy 😎
+* : Low pressure 😎
+* : Peace ✌️
+* : Easy 😎
+* : Vibing 😌
+* : Peace ✌️
+* : Vibing 😌
+* : Sort 🌿
+busy : No rush 🌿
+* : Sort 🌿
+sad : Flow with it 😎
+sad : Flow with it 😎
+busy : No rush 🌿
+* : Vibing 😌
+how are you : Chill 🌿
+* : Sort 🌿
+* : Easy 😎
+* : Vibing 😌
+busy : No rush 🌿
+* : Vibing 😌
+* : Easy 😎
+* : Sort 🌿
+* : Low pressure 😎
+hi : Relax 😎
+* : Easy 😎
+hi : Relax 😎
+* : Low pressure 😎
+* : Sort 🌿
+how are you : Chill 🌿
+* : Sort 🌿
+* : Vibing 😌
+busy : No rush 🌿
+* : Easy 😎
+* : Sort 🌿
+how are you : Chill 🌿
+sad : Flow with it 😎
+* : Easy 😎
+sad : Flow with it 😎
+* : Vibing 😌
+hi : Relax 😎
+sad : Flow with it 😎
+how are you : Chill 🌿
+* : Sort 🌿
+* : Easy 😎
+* : Peace ✌️
+how are you : Chill 🌿
+sad : Flow with it 😎
+busy : No rush 🌿
+how are you : Chill 🌿
+* : Easy 😎
+* : Easy 😎
+* : Peace ✌️
+busy : No rush 🌿
+busy : No rush 🌿
+hi : Relax 😎
+hi : Relax 😎
+* : Easy 😎
+* : Low pressure 😎
+* : Peace ✌️
+* : Peace ✌️
+* : Low pressure 😎
+sad : Flow with it 😎
+busy : No rush 🌿

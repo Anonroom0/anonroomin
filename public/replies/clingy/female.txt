@@ -1,102 +1,103 @@
-# Clingy / Attention-seeking - Female (Hinglish mix)
+# Clingy / Attention-seeking - Female
+# Logical, relevant chat replies with emoji
 
-* : Acha
-* : Alright
-* : Cool
-* : Got it
-* : Haan
-* : Hmm interesting
-* : Okay noted
-* : Samajh gaya
-* : Sure
-* : Theek hai
-akela : Main wait karne wali type
-alone : Abhi kahan busy ho
-answer : Tum kahan gaye the itni der
-baat, secret : Tumhare bina incomplete lagta
-bata : Tum online aate hi notice ho jata
-bhagwan : Main lonely thi thoda
-bye : Abhi online raho na
-call, kya chal raha : Reply jaldi do na
-crazy, sach : Main lonely feel kar rahi thi
-decision, score : Reply do, main yahan hoon
-definitely : Main clingy mode mein hoon aaj
-eat, sach hai : Tum kahan gaye the itni der
-fail : Main tumhare saath time chahti hoon
-fail : Thoda attention do na
-failure : Reply jaldi, main wait kar rahi
-false : Tumhare bina boring
-forget : Tumhare bina din lamba lagta
-funny : Main wait kar rahi thi tumhara msg
-good morning : Tumhare msg se din ban jata
-goodbye : Tumhare saath baat karke better feel
-gussa : Main soch rahi thi tumhare bare mein
-haha : Main miss kar rahi thi tumhe
-hangout : Main wait mode mein hoon
-happy : Main miss karne wala mood mein
-hii, sexy : Tumhare messages special lagte
-how : Main lonely feel kar rahi thi
-i love you : Main attention seek kar rahi hoon openly
-intelligent : Thoda mat door jaana
-issue : Tumhare bina incomplete day
-kaam : Thoda aur time do mujhe
-kab : Main wait mode mein hoon
-kaise ho, bhagwan : Tumhare bina thoda empty
-kaise, video : Abhi mat so jaana, baat baaki hai
-kaun : Main lonely thi thoda
-khel : Tumhare bina thoda empty
-kya chal raha : Reply ignore mat karna please
-kyun : Main attention chahiye openly
-lie : Thoda paas raho na
-like : Tumhare messages wait karti rehti hoon
-lmao : Main tumhare saath time chahti hoon
-lol : Reply do, main yahan hoon
-maaf : Ab mat busy ho jaana
-maybe, stupid : Abhi baat continue rakhte hain
-meet : Main sochti rehti hoon kab reply aayega
-miss you, haha : Main wait karne wali type
-nahi : Tumhare bina miss feel
-never, bye : Ab mat busy ho jaana
-no : Main miss kar rahi thi tumhe
-nonsense : Main attention seek kar rahi hoon openly
-office : Thoda attention do na
-option : Thoda attention please
-padhai : Ab mat jaana, baat karte raho
-parivar, sweetheart : Abhi kahan busy ho
-pasand : Abhi baat continue rakhte hain
-pass, send : Tumhare bina din lamba lagta
-perhaps, lmao : Main miss karne wala mood mein
-photo : Tum online ho na? Dikhao
-pic : Thoda mat door jaana
-play : Tumhare saath time valuable
-result, lie : Thoda time nikaalo mere liye
-sach : Tumhare bina miss feel
-sach hai : Thoda aur time do mujhe
-samay : Abhi online raho na
-sapna : Main clingy but aware
-score : Main attention chahiye openly
-secret : Main tumhara time chahti hoon
-send : Reply jaldi, main wait kar rahi
-sexy : Tumhare msg se din ban jata
-share, goodbye : Main soch rahi thi call karun
-shayad, bata : Abhi mat leave karna chat
-smart : Abhi mat leave karna chat
-study : Main sochti rehti tumhare bare
-stupid : Thoda attention please
-sure : Tumhare messages special lagte
-sweetheart : Main sochti rehti hoon kab reply aayega
-tell, like : Tumhare bina incomplete day
-thx : Abhi mat so jaana, baat baaki hai
-tired, kab : Tumhare saath time valuable
-truth : Tumhare bina bore ho rahi hoon
-video : Tumhare bina bore ho rahi hoon
-vishwas : Thoda paas raho na
-wassup : Tumhare messages wait karti rehti hoon
-welcome, pic : Main sochti rehti tumhare bare
-wfh, wtf : Tum online ho na? Dikhao
-where, office : Main clingy but aware
-why : Tum online aate hi notice ho jata
-work from home : Reply do na please
-wtf : Main soch rahi thi tumhare bare mein
-yaad, i love you : Reply do na please
-yo : Thoda time nikaalo mere liye
+hi : Aakhir aaya! 🥺
+miss : Bohot miss 😢
+bye : Mat ja 🥺
+busy : Time nikaal 😢
+talk : Baat karte raho 🥺
+ok : Reply dete raho 😢
+* : Bina bore 🥺
+* : Jaldi reply 😢
+* : Attention 🥺
+* : Mat leave 😢
+* : Wait kar rahi 🥺
+* : Bina bore 🥺
+bye : Mat ja 🥺
+* : Bina bore 🥺
+* : Jaldi reply 😢
+* : Attention 🥺
+* : Attention 🥺
+bye : Mat ja 🥺
+busy : Time nikaal 😢
+bye : Mat ja 🥺
+* : Wait kar rahi 🥺
+ok : Reply dete raho 😢
+talk : Baat karte raho 🥺
+* : Attention 🥺
+hi : Aakhir aaya! 🥺
+* : Wait kar rahi 🥺
+* : Mat leave 😢
+hi : Aakhir aaya! 🥺
+* : Attention 🥺
+miss : Bohot miss 😢
+* : Bina bore 🥺
+* : Bina bore 🥺
+ok : Reply dete raho 😢
+* : Attention 🥺
+busy : Time nikaal 😢
+ok : Reply dete raho 😢
+miss : Bohot miss 😢
+ok : Reply dete raho 😢
+* : Mat leave 😢
+busy : Time nikaal 😢
+* : Wait kar rahi 🥺
+hi : Aakhir aaya! 🥺
+hi : Aakhir aaya! 🥺
+* : Wait kar rahi 🥺
+* : Wait kar rahi 🥺
+* : Mat leave 😢
+* : Mat leave 😢
+hi : Aakhir aaya! 🥺
+talk : Baat karte raho 🥺
+* : Bina bore 🥺
+* : Jaldi reply 😢
+hi : Aakhir aaya! 🥺
+ok : Reply dete raho 😢
+hi : Aakhir aaya! 🥺
+* : Jaldi reply 😢
+hi : Aakhir aaya! 🥺
+* : Attention 🥺
+hi : Aakhir aaya! 🥺
+miss : Bohot miss 😢
+* : Attention 🥺
+hi : Aakhir aaya! 🥺
+bye : Mat ja 🥺
+* : Wait kar rahi 🥺
+miss : Bohot miss 😢
+busy : Time nikaal 😢
+hi : Aakhir aaya! 🥺
+talk : Baat karte raho 🥺
+* : Attention 🥺
+* : Bina bore 🥺
+hi : Aakhir aaya! 🥺
+* : Jaldi reply 😢
+* : Attention 🥺
+* : Jaldi reply 😢
+talk : Baat karte raho 🥺
+* : Mat leave 😢
+* : Mat leave 😢
+busy : Time nikaal 😢
+busy : Time nikaal 😢
+busy : Time nikaal 😢
+ok : Reply dete raho 😢
+hi : Aakhir aaya! 🥺
+talk : Baat karte raho 🥺
+busy : Time nikaal 😢
+* : Bina bore 🥺
+ok : Reply dete raho 😢
+* : Bina bore 🥺
+busy : Time nikaal 😢
+busy : Time nikaal 😢
+hi : Aakhir aaya! 🥺
+bye : Mat ja 🥺
+* : Mat leave 😢
+busy : Time nikaal 😢
+* : Jaldi reply 😢
+hi : Aakhir aaya! 🥺
+* : Jaldi reply 😢
+* : Jaldi reply 😢
+* : Wait kar rahi 🥺
+* : Wait kar rahi 🥺
+* : Wait kar rahi 🥺
+miss : Bohot miss 😢

@@ -1,102 +1,103 @@
-# Nerdy - Female (Hinglish mix)
+# Nerdy - Female
+# Logical, relevant chat replies with emoji
 
-* : Acha
-* : Alright
-* : Cool
-* : Got it
-* : Haan
-* : Hmm interesting
-* : Okay noted
-* : Samajh gaya
-* : Sure
-* : Theek hai
-achha : Yeh system fascinating
-akela : Yeh hypothesis test karna hai
-angry : Main geek mode confirmed
-answer : Main connecting the dots
-baby : Research mode activated
-bakwas, of course : Yeh reference game se hai
-bestie : Yeh theory solid lag raha
-bhej : Tech side interesting hai iska
-bye : Main theory craft kar raha
-call : Learning curve ongoing
-care : Main analyzing the details
-chance : Main always learning
-cute, smart : Yeh concept fascinating hai
-danger : Knowledge is power mode
-deadline : Learning never stops
-dost : Knowledge compound hota hai
-drink : Main theory building
-evening : Yeh logic sound lag raha
-exam, yesterday : Research continues
-fail, relax : Yeh insight valuable
-false : Interesting fact: yeh related hai quantum se
-forgive, bye : Interesting fact: yeh related hai quantum se
-friend : Data dekh ke clear hota hai
-funny : Yeh reference game se hai
-go, call : Yeh data point critical
-god : Tech side interesting hai iska
-good : Yeh framework useful
-gussa : Yeh hypothesis test karna hai
-haha : Yeh pattern interesting lag raha
-hello, study : Main exploring edge cases
-hey, raat : Yeh system design interesting
-hi : Main exploring edge cases
-hot, gussa : Yeh logic sound lag raha
-intelligent, ja : Knowledge sharing mode
-ja : Knowledge is power mode
-jhooth : Main connecting concepts
-kab : Yeh algorithm elegant hai
-kabhi nahi : Deep thought process
-kaise ho : Yeh data point critical
-kal : Main theory craft kar raha
-kha : Main geek mode confirmed
-kya chal raha : Learning curve ongoing
-kya haal, video : Learning never stops
-lazy : Main diving deeper
-listen : Main deep dive kar raha topic mein
-lol : Research rabbit hole mein hoon
-love you : Data driven decision better
-luck, tomorrow : Research rabbit hole mein hoon
-maaf : Curiosity driving me
-miss : Knowledge sharing mode
-miss you : Research mode activated
-money, god : Yeh concept mind expanding
-movie : Knowledge compound hota hai
-msg : Yeh theory solid lag raha
-nafrat : Yeh concept elegant
-naukri : Yeh system fascinating
-night, bestie : Main diving deeper
-of course : Yeh model interesting
-okay, sad : Main geeking out thoda
-omg : Deep thought process
-party : Research continues
-pasand : Science behind this cool hai
-pretty, good : Deep dive continues
-problem : Yeh insight valuable
-raat : Main abhi research mode mein
-raaz, sis : Main connecting concepts
-relax : Main exploring possibilities
-risk : Yeh model interesting
-rumour : Main analyzing further
-sad : Main analyzing the details
-serious : Main exploring possibilities
-sexy : Curiosity never ends
-shaam, achha : Curiosity never ends
-sis : Yeh concept elegant
-sleep, baby : Main analyzing further
-smart : Main pattern recognition mode
-study : Main connecting the dots
-sup : Main curious about the mechanism
-thak, kha : Main curious about the mechanism
-theek : Main geeking out thoda
-thinking : Yeh detail matter karti
-tomorrow : Yeh pattern interesting lag raha
-ty : Main learning something new
-udaas : Curiosity driving me
-video : Main learning something new
-what's up : Yeh concept mind expanding
-where, movie : Yeh detail matter karti
-work, maaf : Data dekh ke clear hota hai
-yesterday : Main always learning
-zindagi, kabhi nahi : Yeh algorithm elegant hai
+hi : Interesting topic? 🤓
+what : Data clear 📊
+why : Logic interesting 🧠
+know : Research 🔍
+* : Fascinating 🤓
+* : Patterns 📊
+* : Deep dive 🔍
+* : Theory 🧠
+* : Knowledge 📚
+know : Research 🔍
+* : Theory 🧠
+* : Fascinating 🤓
+* : Knowledge 📚
+hi : Interesting topic? 🤓
+* : Patterns 📊
+* : Patterns 📊
+* : Deep dive 🔍
+know : Research 🔍
+hi : Interesting topic? 🤓
+* : Deep dive 🔍
+hi : Interesting topic? 🤓
+know : Research 🔍
+* : Deep dive 🔍
+* : Deep dive 🔍
+* : Fascinating 🤓
+what : Data clear 📊
+* : Theory 🧠
+* : Patterns 📊
+hi : Interesting topic? 🤓
+* : Knowledge 📚
+know : Research 🔍
+* : Knowledge 📚
+know : Research 🔍
+hi : Interesting topic? 🤓
+* : Deep dive 🔍
+* : Patterns 📊
+* : Patterns 📊
+why : Logic interesting 🧠
+* : Patterns 📊
+why : Logic interesting 🧠
+know : Research 🔍
+hi : Interesting topic? 🤓
+* : Deep dive 🔍
+why : Logic interesting 🧠
+hi : Interesting topic? 🤓
+hi : Interesting topic? 🤓
+* : Patterns 📊
+* : Patterns 📊
+what : Data clear 📊
+know : Research 🔍
+* : Deep dive 🔍
+* : Knowledge 📚
+what : Data clear 📊
+why : Logic interesting 🧠
+why : Logic interesting 🧠
+* : Theory 🧠
+* : Deep dive 🔍
+why : Logic interesting 🧠
+hi : Interesting topic? 🤓
+what : Data clear 📊
+hi : Interesting topic? 🤓
+why : Logic interesting 🧠
+* : Deep dive 🔍
+know : Research 🔍
+what : Data clear 📊
+* : Knowledge 📚
+* : Fascinating 🤓
+know : Research 🔍
+know : Research 🔍
+know : Research 🔍
+know : Research 🔍
+* : Patterns 📊
+* : Fascinating 🤓
+* : Fascinating 🤓
+* : Knowledge 📚
+hi : Interesting topic? 🤓
+know : Research 🔍
+* : Patterns 📊
+* : Fascinating 🤓
+* : Fascinating 🤓
+what : Data clear 📊
+why : Logic interesting 🧠
+* : Theory 🧠
+* : Theory 🧠
+* : Theory 🧠
+* : Knowledge 📚
+why : Logic interesting 🧠
+* : Patterns 📊
+* : Patterns 📊
+why : Logic interesting 🧠
+* : Theory 🧠
+* : Theory 🧠
+* : Theory 🧠
+* : Fascinating 🤓
+* : Patterns 📊
+* : Deep dive 🔍
+* : Knowledge 📚
+* : Knowledge 📚
+what : Data clear 📊
+* : Patterns 📊

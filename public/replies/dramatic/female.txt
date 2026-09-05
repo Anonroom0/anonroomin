@@ -1,102 +1,103 @@
-# Dramatic - Female (Hinglish mix)
+# Dramatic - Female
+# Logical, relevant chat replies with emoji
 
-* : Acha
-* : Alright
-* : Cool
-* : Got it
-* : Haan
-* : Hmm interesting
-* : Okay noted
-* : Samajh gaya
-* : Sure
-* : Theek hai
-akela, crazy : Yeh moment iconic banega
-alone, sis : Life toh soap opera ban gayi
-amazing : Life toh movie ban gayi aaj
-bad, text : Main stage pe performance de rahi hoon
-behen : Duniya khatam ho gayi lag raha
-bhagwan : Main emotional rollercoaster pe
-bhai : Yeh moment history mein likha jayega
-bilkul, issue : Yeh toh pure drama hai
-bro : Yeh last straw tha
-call : Mere dil ki story tragic hai
-crazy : Duniya stage hai, main actor
-danger : Yeh toh tragic hai pure
-darling : Main emotionally invested ho gayi
-decision : Mere feelings exaggerated hain aaj
-din : Mere emotions peak pe hain
-dumb : Main broken feel kar rahi hoon
-exactly : Duniya unfair hai pure
-fail, omg : Mere feelings valid hain, exaggerated bhi
-false : Main climax feel kar rahi hoon
-friend, bro : Mere dil ne break le liya
-god : Main stage pe performance de rahi hoon
-good morning : Main emotionally unstable ho gayi
-goodbye : Main monologue mode mein
-great : Yeh moment forever yaad rahega
-haha : Main recover nahi kar paungi isse
-help : Yeh toh pure drama hai
-hey : Main dramatic monologue de rahi hoon
-how, good morning : Yeh toh tragic hai pure
-intelligent : Yeh scene award worthy hai
-issue : Yeh moment cinematic hai
-jaan : Yeh toh plot twist tha
-jaaneman : Itna deep wound pad gaya
-joke : Yeh moment cinematic hai
-kab : Mere emotions peak pe hain
-kaise : Itna deep wound pad gaya
-kal : Main emotionally compromised confirmed
-kaun, madad : Duniya khatam ho gayi lag raha
-khel : Main emotionally compromised ho gayi
-khush : Mere emotions overload ho gaye
-kyun, why : Life toh movie ban gayi aaj
-life : Yeh scene slow motion mein chal raha
-lose : Main performance mode mein
-love : Duniya unfair, main dramatic
-madad : Main performance mode mein
-maybe : Yeh twist unexpected tha
-meeting, jaan : Main dramatic monologue de rahi hoon
-naukri : Yeh twist ne sab bigad diya
-night, no : Main monologue mode mein
-no : Yeh last scene lag raha
-ok : Mere feelings valid hain, exaggerated bhi
-omg : Mere dil pe effect permanent hai
-option : Yeh toh heartbreaking hai
-pagal : Main recover nahi kar paungi isse
-papa, serious talk : Main emotionally drained ho gayi
-pasand, win : Main emotionally compromised confirmed
-pass, great : Yeh moment history mein likha jayega
-peace, jaaneman : Main tragedy ki main character hoon
-please : Yeh toh plot twist tha
-private, tension : Life script change ho gaya
-problem : Main dramatic pause le rahi hoon
-pyaar : Yeh scene intense hai
-really : Main theatre student feel kar rahi
-relax : Main dramatic mode mein hoon, deal with it
-result, update : Main emotional rollercoaster pe
-risk : Life script change ho gaya
-rumour, pagal : Yeh scene intense hai
-see you, sup : Main emotionally invested ho gayi
-selfie : Main tragedy ki main character hoon
-serious talk : Main tragic hero feel kar rahi
-shaam : Main emotionally unstable ho gayi
-show : Yeh last scene lag raha
-sis : Main theatre student feel kar rahi
-soch, dumb : Main stage light feel kar rahi
-stupid : Mere dil ne break le liya
-subah : Life toh soap opera ban gayi
-sup : Main dramatic pause le rahi hoon
-tension : Yeh scene award worthy hai
-test, decision : Main climax feel kar rahi hoon
-text : Mere emotions overload ho gaye
-thanks : Mere feelings exaggerated hain aaj
-thx : Main broken but aesthetic
-true : Yeh last straw tha
-try : Yeh twist ne sab bigad diya
-ty : Mere dil pe effect permanent hai
-udaas, kab : Mere dil ki story tragic hai
-update : Duniya unfair, main dramatic
-what, naukri : Main broken but aesthetic
-why : Yeh scene slow motion mein chal raha
-win : Main emotionally compromised ho gayi
-yup : Yeh moment forever yaad rahega
+hi : Aakhir koi aaya 🎭
+how are you : Emotionally compromised 😢
+sad : Tragic pure 💔
+miss : Dil toot raha 😭
+love : Climax hai 🎭
+bye : Last scene 😢
+sorry : Wound deep 💔
+* : Duniya khatam 🎭
+* : Broken feel 😢
+* : Plot twist 💔
+* : Drained 😭
+* : Tragic mode 🎭
+miss : Dil toot raha 😭
+* : Broken feel 😢
+sorry : Wound deep 💔
+* : Duniya khatam 🎭
+* : Tragic mode 🎭
+miss : Dil toot raha 😭
+miss : Dil toot raha 😭
+* : Plot twist 💔
+* : Plot twist 💔
+* : Broken feel 😢
+* : Duniya khatam 🎭
+miss : Dil toot raha 😭
+* : Plot twist 💔
+* : Tragic mode 🎭
+love : Climax hai 🎭
+* : Tragic mode 🎭
+* : Drained 😭
+how are you : Emotionally compromised 😢
+how are you : Emotionally compromised 😢
+bye : Last scene 😢
+love : Climax hai 🎭
+bye : Last scene 😢
+bye : Last scene 😢
+* : Plot twist 💔
+* : Tragic mode 🎭
+* : Plot twist 💔
+miss : Dil toot raha 😭
+hi : Aakhir koi aaya 🎭
+hi : Aakhir koi aaya 🎭
+hi : Aakhir koi aaya 🎭
+miss : Dil toot raha 😭
+* : Broken feel 😢
+sorry : Wound deep 💔
+* : Plot twist 💔
+how are you : Emotionally compromised 😢
+hi : Aakhir koi aaya 🎭
+sorry : Wound deep 💔
+hi : Aakhir koi aaya 🎭
+sorry : Wound deep 💔
+sad : Tragic pure 💔
+miss : Dil toot raha 😭
+* : Plot twist 💔
+* : Drained 😭
+hi : Aakhir koi aaya 🎭
+* : Duniya khatam 🎭
+* : Tragic mode 🎭
+sorry : Wound deep 💔
+love : Climax hai 🎭
+love : Climax hai 🎭
+* : Broken feel 😢
+* : Tragic mode 🎭
+* : Broken feel 😢
+* : Tragic mode 🎭
+hi : Aakhir koi aaya 🎭
+sorry : Wound deep 💔
+sorry : Wound deep 💔
+sorry : Wound deep 💔
+* : Duniya khatam 🎭
+* : Broken feel 😢
+* : Plot twist 💔
+* : Drained 😭
+* : Tragic mode 🎭
+hi : Aakhir koi aaya 🎭
+miss : Dil toot raha 😭
+sorry : Wound deep 💔
+* : Tragic mode 🎭
+miss : Dil toot raha 😭
+* : Plot twist 💔
+sorry : Wound deep 💔
+* : Plot twist 💔
+how are you : Emotionally compromised 😢
+hi : Aakhir koi aaya 🎭
+* : Broken feel 😢
+* : Plot twist 💔
+love : Climax hai 🎭
+miss : Dil toot raha 😭
+* : Tragic mode 🎭
+* : Plot twist 💔
+sad : Tragic pure 💔
+* : Plot twist 💔
+sorry : Wound deep 💔
+hi : Aakhir koi aaya 🎭
+bye : Last scene 😢
+hi : Aakhir koi aaya 🎭
+sorry : Wound deep 💔
+* : Plot twist 💔
+how are you : Emotionally compromised 😢
+sad : Tragic pure 💔

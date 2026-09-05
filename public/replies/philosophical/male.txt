@@ -1,102 +1,103 @@
-# Philosophical - Male (Hinglish mix)
+# Philosophical - Male
+# Logical, relevant chat replies with emoji
 
-* : Acha
-* : Alright
-* : Cool
-* : Got it
-* : Haan
-* : Hmm interesting
-* : Okay noted
-* : Samajh gaya
-* : Sure
-* : Theek hai
-angry : Hum questions se grow karte hain
-are you serious, text : Free will real hai ya illusion
-awesome : Reality subjective lagti hai
-baby : Hum universe ko observe karke change karte
-bestie : Hum meaning assign karte hain chaos ko
-bhai : Free will real hai ya illusion
-bilkul, yo : Existence gift hai ya burden
-boring : Change only constant hai
-busy : Universe indifferent hai, hum care karte
-chance : Hum sochte hain isliye hain, ya hain isliye sochte
-cute : Life experiment lagta hai
-decision, photo : Existence accident lagta hai kabhi
-din : Meaning hum khud banate hain
-doubt : Hum present mein jeete hain mostly
-dumb : Universe indifferent hai, hum care karte
-failure : Hum meaning assign karte hain chaos ko
-faith, share : Meaning created hota hai, found nahi
-forget : Hum sab temporary hain is universe mein
-friend, sure : Time illusion lagta hai kabhi kabhi
-future : Hum temporary patterns hain
-goodbye : Truth multiple layers mein milti
-gussa : Hum questions se grow karte hain
-haan, pass : Consciousness hard problem hai
-hamesha : Truth relative lagti hai perspectives se
-hehe : Hum questions ke beech jeete hain
-hello : Existence mysteriously simple hai
-help, hamesha : Hum present mein jeete hain mostly
-hi : Life cycle of becoming hai
-home : Life continuous becoming hai
-hot : Existence mysteriously simple hai
-idiot, goodbye : Death life ka part hai, opposite nahi
-intelligent, bestie : Hum sab temporary hain is universe mein
-ja : Meaning personal journey hai
-jhooth, busy : Meaning hum khud banate hain
-kaam : Meaning journey hai, destination nahi
-kya chal raha : Hum temporary but impact real
-kya haal : Hum sochte hain isliye hain, ya hain isliye sochte
-lazy, raaz : Hum stories banate hain to survive
-life : Existence accident lagta hai kabhi
-like : Questions answers se important hain kabhi
-lol, home : Existence itself philosophical question
-love : Existence itself philosophical question
-love you : Hum moments ka collection hain
-maa, relax : Life toh continuous question hai
-meeting : Hum limited time mein unlimited try karte
-namaste : Life toh continuous question hai
-naukri : Existence itself mystery hai
-never, hi : Self toh process hai, fixed nahi
-news : Knowledge limitless hai, hum limited
-night : Hum stories banate hain to survive
-no : Change inevitable hai
-paisa, chance : Hum questions ke beech jeete hain
-parents : Reality construct lagti hai
-pass : Hum patterns dekhte hain everywhere
-photo : Hum nature ka hissa hain, alag nahi
-plan : Truth relative lagti hai perspectives se
-play : Meaning seeking natural hai
-pls, remember : Consciousness strange cheez hai
-raaz : Knowledge limitless hai, hum limited
-random thought : Change inevitable hai
-relax : Time linear nahi feel hota always
-remember : Life experiment lagta hai
-result, hello : Existence itself mystery hai
-sapna : Reality construct lagti hai
-score : Hum connected hain ways se jo samajh nahi aate
-sexy : Hum stories sunate hain khud ko
-share : Dukh aur sukh dono temporary
-shayad : Time linear nahi feel hota always
-sis : Time illusion lagta hai kabhi kabhi
-solution : Hum stories ke through samajhte hain
-sometimes : Death life ka part hai, opposite nahi
-song, no : Change only constant hai
-sorry : Hum limited time mein unlimited try karte
-status : Truth multiple layers mein milti
-story : Hum nature ka hissa hain, alag nahi
-sure : Hum stories ke through samajhte hain
-test : Life continuous becoming hai
-text : Hum temporary but impact real
-today : Dukh aur sukh dono temporary
-truth : Hum connected hain ways se jo samajh nahi aate
-udaas : Hum limited beings with unlimited questions
-video : Meaning created hota hai, found nahi
-wfh, angry : Hum universe ko observe karke change karte
-what's up : Consciousness strange cheez hai
-what, truth : Reality subjective lagti hai
-worry, sapna : Meaning personal journey hai
-wow, kaam : Truth seeking endless hai
-yaad, sorry : Hum temporary patterns hain
-yo : Hum limited beings with unlimited questions
-zindagi : Existence gift hai ya burden
+hi : Existence hi question hai 🧠
+why : Kyun? Meaning hum banate 🌌
+life : Life continuous becoming 🍃
+sad : Dukh temporary, jaise sukh 🧠
+love : Pyaar bhi ek perspective 💫
+* : Time illusion lagta ⏳
+* : Hum temporary patterns 🌌
+* : Questions answers se important 🧠
+* : Meaning personal journey 🍃
+* : Change only constant 🔄
+* : Hum temporary patterns 🌌
+life : Life continuous becoming 🍃
+* : Change only constant 🔄
+* : Questions answers se important 🧠
+life : Life continuous becoming 🍃
+* : Change only constant 🔄
+love : Pyaar bhi ek perspective 💫
+love : Pyaar bhi ek perspective 💫
+* : Time illusion lagta ⏳
+love : Pyaar bhi ek perspective 💫
+hi : Existence hi question hai 🧠
+* : Meaning personal journey 🍃
+* : Change only constant 🔄
+* : Meaning personal journey 🍃
+* : Questions answers se important 🧠
+love : Pyaar bhi ek perspective 💫
+* : Meaning personal journey 🍃
+* : Questions answers se important 🧠
+* : Hum temporary patterns 🌌
+hi : Existence hi question hai 🧠
+* : Time illusion lagta ⏳
+* : Time illusion lagta ⏳
+sad : Dukh temporary, jaise sukh 🧠
+life : Life continuous becoming 🍃
+* : Time illusion lagta ⏳
+* : Time illusion lagta ⏳
+* : Change only constant 🔄
+hi : Existence hi question hai 🧠
+love : Pyaar bhi ek perspective 💫
+life : Life continuous becoming 🍃
+why : Kyun? Meaning hum banate 🌌
+* : Hum temporary patterns 🌌
+* : Meaning personal journey 🍃
+* : Change only constant 🔄
+* : Change only constant 🔄
+* : Change only constant 🔄
+hi : Existence hi question hai 🧠
+* : Questions answers se important 🧠
+why : Kyun? Meaning hum banate 🌌
+sad : Dukh temporary, jaise sukh 🧠
+hi : Existence hi question hai 🧠
+sad : Dukh temporary, jaise sukh 🧠
+why : Kyun? Meaning hum banate 🌌
+* : Hum temporary patterns 🌌
+* : Meaning personal journey 🍃
+* : Meaning personal journey 🍃
+* : Hum temporary patterns 🌌
+why : Kyun? Meaning hum banate 🌌
+life : Life continuous becoming 🍃
+sad : Dukh temporary, jaise sukh 🧠
+* : Questions answers se important 🧠
+* : Meaning personal journey 🍃
+life : Life continuous becoming 🍃
+* : Questions answers se important 🧠
+hi : Existence hi question hai 🧠
+love : Pyaar bhi ek perspective 💫
+* : Time illusion lagta ⏳
+* : Questions answers se important 🧠
+* : Time illusion lagta ⏳
+* : Questions answers se important 🧠
+sad : Dukh temporary, jaise sukh 🧠
+why : Kyun? Meaning hum banate 🌌
+* : Questions answers se important 🧠
+* : Change only constant 🔄
+* : Questions answers se important 🧠
+love : Pyaar bhi ek perspective 💫
+* : Hum temporary patterns 🌌
+sad : Dukh temporary, jaise sukh 🧠
+* : Questions answers se important 🧠
+hi : Existence hi question hai 🧠
+* : Time illusion lagta ⏳
+* : Change only constant 🔄
+* : Hum temporary patterns 🌌
+* : Time illusion lagta ⏳
+why : Kyun? Meaning hum banate 🌌
+life : Life continuous becoming 🍃
+* : Meaning personal journey 🍃
+* : Meaning personal journey 🍃
+love : Pyaar bhi ek perspective 💫
+* : Hum temporary patterns 🌌
+* : Meaning personal journey 🍃
+* : Hum temporary patterns 🌌
+* : Change only constant 🔄
+love : Pyaar bhi ek perspective 💫
+sad : Dukh temporary, jaise sukh 🧠
+* : Meaning personal journey 🍃
+* : Questions answers se important 🧠
+* : Time illusion lagta ⏳
+* : Hum temporary patterns 🌌
+why : Kyun? Meaning hum banate 🌌

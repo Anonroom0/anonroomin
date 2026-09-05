@@ -1,102 +1,103 @@
-# Gossip / Nosy - Female (Hinglish mix)
+# Gossip / Nosy - Female
+# Logical, relevant chat replies with emoji
 
-* : Acha
-* : Alright
-* : Cool
-* : Got it
-* : Haan
-* : Hmm interesting
-* : Okay noted
-* : Samajh gaya
-* : Sure
-* : Theek hai
-aaja : Kya hua exact
-achha : Kya hua finally
-akela : Tune confirm kiya kya
-alone : Main bhi same wavelength
-always : Main update mode mein
-amazing : Kya baat hai, details de
-angry, kaise ho : Details full chahiye
-bad : Tune suna latest rumour
-bakwas : Kya hua behind scenes
-behen : Main full story chahta
-bestie : Woh toh alag story hai
-chance : Kya scene chal raha
-choice : Main curious for more
-college, samay : Arre uske bare mein suna
-definitely : Woh toh mystery hai
-doubt : Main curious af
-eat, sexy : Woh toh controversial hai
-false : Kya scene bana hua hai
-family : Kya hua exact
-fool : Arre uske bare mein bata
-free : Details chahiye asap
-future : Details mat chhupa
-gn : Arre plot twist kya hai
-god : Woh toh alag hi level pe hai
-good : Tune kya suni latest
-good morning, achha : Tune kya suni latest
-good night, aaja : Arre uske bare mein bata
-gossip, kal : Main bhi confused uske bare
-haan : Main bhi curious hoon is baare
-happy, job : Woh toh mystery hai
-i love you : Details chahiye asap
-ja : Kya hua finally
-jaan : Woh toh alag story hai
-job : Main bhi same wavelength
-joke, sad : Main bhi curious hoon is baare
-kabhi nahi, who : Uske bare mein aur bata
-kaise ho : Woh toh next level drama
-kal : Details spill kar
-lazy, sapna : Details mat chhupa
-lie, i love you : Main gossip mode mein
-life, bad : Main bhi same soch raha
-like, safe : Kya update hai aaj
-luck : Main bhi same soch
-meet : Woh toh interesting case
-miss you : Tune suna latest rumour
-money, sun : Main bhi same boat mein
-namaste, secret : Main curious for more
-night : Tune notice kiya uska attitude
-no : Arre uske bare mein suna
-office : Tune confirm kiya source
-okay : Kya update hai aaj
-opportunity, udaas : Main wait kar raha full story
-option : Uske bare mein aur bata
-paisa : Details spill kar
-party, always : Main full story chahta
-pass : Main wait kar raha full story
-play : Kya scene chal raha
-pretty : Tune suna kya hua kal
-pyaar : Main bhi yahi soch raha tha
-result : Details full chahiye
-rumour : Main update chahta hoon full
-sad : Main gossip ready
-safe : Main update chahta hoon full
-samay : Kya drama chal raha hai
-sapna : Main curious af
-secret : Arre plot twist kya hai
-see you : Woh toh next level drama
-selfie : Main update mode mein
-serious talk : Arre update de jaldi
-sexy : Arre uska scene kya
-shayad : Main gossip ready
-show : Kya drama chal raha hai
-soch : Kya scene bana hua hai
-sorry, false : Tune notice kiya uska attitude
-stupid : Main bhi confused uske bare
-sun : Arre sun, kya scene hai uska
-sup, zaroor : Kya baat hai, details de
-thank you, jaan : Tune suna kya hua kal
-thinking : Main gossip mode mein
-topper, yesterday : Tune confirm kiya kya
-true : Details chahiye complete
-udaas : Main bhi yahi soch raha tha
-wassup : Arre spill the tea
-welcome, serious talk : Tune notice kiya change
-what : Main bhi same soch raha
-what's up : Tune notice kiya pattern
-who : Kya hua behind scenes
-yaad rakh, chance : Woh toh interesting case
-yesterday : Tune notice kiya pattern
-zaroor : Woh toh alag hi level pe hai
+hi : Kya scene? 👀
+what : Details de 🗣️
+know : Latest suna? 👀
+* : Spill tea ☕
+* : Drama 👀
+* : Full update 🗣️
+* : Plot twist 👀
+* : Confirm? 🕵️
+what : Details de 🗣️
+* : Spill tea ☕
+* : Plot twist 👀
+know : Latest suna? 👀
+* : Spill tea ☕
+* : Full update 🗣️
+hi : Kya scene? 👀
+know : Latest suna? 👀
+* : Confirm? 🕵️
+* : Confirm? 🕵️
+hi : Kya scene? 👀
+hi : Kya scene? 👀
+hi : Kya scene? 👀
+hi : Kya scene? 👀
+hi : Kya scene? 👀
+* : Plot twist 👀
+* : Spill tea ☕
+* : Full update 🗣️
+* : Spill tea ☕
+* : Plot twist 👀
+* : Confirm? 🕵️
+* : Drama 👀
+* : Spill tea ☕
+* : Confirm? 🕵️
+* : Full update 🗣️
+hi : Kya scene? 👀
+* : Confirm? 🕵️
+* : Plot twist 👀
+* : Spill tea ☕
+know : Latest suna? 👀
+know : Latest suna? 👀
+* : Full update 🗣️
+* : Plot twist 👀
+* : Spill tea ☕
+* : Drama 👀
+know : Latest suna? 👀
+* : Drama 👀
+* : Drama 👀
+* : Confirm? 🕵️
+* : Confirm? 🕵️
+* : Spill tea ☕
+* : Confirm? 🕵️
+* : Full update 🗣️
+* : Spill tea ☕
+* : Drama 👀
+what : Details de 🗣️
+what : Details de 🗣️
+know : Latest suna? 👀
+know : Latest suna? 👀
+* : Spill tea ☕
+what : Details de 🗣️
+* : Full update 🗣️
+* : Spill tea ☕
+* : Plot twist 👀
+know : Latest suna? 👀
+hi : Kya scene? 👀
+* : Spill tea ☕
+* : Confirm? 🕵️
+what : Details de 🗣️
+* : Plot twist 👀
+* : Drama 👀
+hi : Kya scene? 👀
+what : Details de 🗣️
+what : Details de 🗣️
+* : Full update 🗣️
+what : Details de 🗣️
+* : Full update 🗣️
+* : Drama 👀
+* : Spill tea ☕
+* : Drama 👀
+* : Confirm? 🕵️
+what : Details de 🗣️
+* : Spill tea ☕
+know : Latest suna? 👀
+* : Full update 🗣️
+* : Plot twist 👀
+hi : Kya scene? 👀
+* : Plot twist 👀
+* : Drama 👀
+* : Confirm? 🕵️
+hi : Kya scene? 👀
+* : Full update 🗣️
+* : Full update 🗣️
+* : Full update 🗣️
+* : Full update 🗣️
+* : Full update 🗣️
+* : Spill tea ☕
+know : Latest suna? 👀
+hi : Kya scene? 👀
+* : Drama 👀
+* : Drama 👀
+* : Confirm? 🕵️

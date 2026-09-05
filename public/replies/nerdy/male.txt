@@ -1,102 +1,103 @@
-# Nerdy - Male (Hinglish mix)
+# Nerdy - Male
+# Logical, relevant chat replies with emoji
 
-* : Acha
-* : Alright
-* : Cool
-* : Got it
-* : Haan
-* : Hmm interesting
-* : Okay noted
-* : Samajh gaya
-* : Sure
-* : Theek hai
-achha, danger : Yeh concept elegant
-again : Main connecting the dots
-alone, omg : Research mode activated
-baby : Yeh pattern interesting lag raha
-beautiful : Yeh concept mind expanding
-bhej : Interesting fact: yeh related hai quantum se
-busy : Yeh pattern interesting lag raha
-call : Tech side interesting hai iska
-care, sleep : Main exploring possibilities
-chance, baby : Data dekh ke clear hota hai
-chat : Data dekh ke clear hota hai
-confused : Deep thought process
-crazy, free : Knowledge compound hota hai
-danger : Yeh logic sound lag raha
-doubt, exactly : Deep dive continues
-dumb : Main deep dive kar raha topic mein
-exactly : Main connecting concepts
-fail : Yeh data point critical
-failure, welcome : Main exploring edge cases
-fool : Yeh system fascinating
-free : Yeh hypothesis test karna hai
-fun, morning : Science behind this cool hai
-future : Main geeking out thoda
-good morning : Main always learning
-good night, maa : Knowledge is power mode
-goodbye : Curiosity never ends
-handsome : Main learning something new
-heyy : Deep thought process
-hola : Main analyzing further
-how : Main diving deeper
-i love you : Research continues
-issue, call : Yeh reference game se hai
-jaaneman, pretty : Main always learning
-kaam : Yeh insight valuable
-kab : Knowledge sharing mode
-khel, sweetheart : Yeh system fascinating
-khush, sorry : Yeh framework useful
-kismat, never : Curiosity driving me
-kya chal raha : Main diving deeper
-love you : Main exploring possibilities
-maa : Knowledge sharing mode
-miss : Science behind this cool hai
-money : Knowledge is power mode
-morning : Main analyzing further
-music : Main curious about the mechanism
-nafrat, kaam : Main learning something new
-never : Research continues
-omg : Main geeking out thoda
-padhai : Main exploring edge cases
-parents : Yeh data point critical
-parivar : Yeh concept fascinating hai
-peace, confused : Yeh theory solid lag raha
-perhaps : Yeh system design interesting
-photo : Learning curve ongoing
-pic : Curiosity driving me
-pls : Main geek mode confirmed
-pretty : Curiosity never ends
-question, beautiful : Main abhi research mode mein
-raaz : Yeh hypothesis test karna hai
-random : Yeh insight valuable
-random thought : Yeh model interesting
-relax : Deep dive continues
-rumour, dumb : Main theory building
-school : Research mode activated
-see you : Yeh reference game se hai
-serious talk : Yeh concept elegant
-shaam, fail : Yeh concept fascinating hai
-shayad : Yeh detail matter karti
-sleep : Learning never stops
-smart : Yeh framework useful
-so ja : Main analyzing the details
-sometimes : Main pattern recognition mode
-sorry : Main curious about the mechanism
-status : Main deep dive kar raha topic mein
-subah : Yeh logic sound lag raha
-success : Yeh theory solid lag raha
-sun : Main theory building
-sweetheart : Yeh system design interesting
-test : Tech side interesting hai iska
-tomorrow : Main theory craft kar raha
-topper : Knowledge compound hota hai
-true : Research rabbit hole mein hoon
-ty, so ja : Data driven decision better
-update, kya chal raha : Research rabbit hole mein hoon
-vishwas : Main connecting the dots
-wassup, pls : Yeh algorithm elegant hai
-welcome : Interesting fact: yeh related hai quantum se
-when, again : Yeh model interesting
-yes : Main connecting concepts
-yup : Learning never stops
+hi : Hey, interesting topic? 🤓
+what : Data dekh ke clear hota 📊
+why : Logic behind interesting 🧠
+know : Research mode on 🔍
+* : Fascinating concept 🤓
+* : Pattern recognition 📊
+* : Deep dive 🔍
+* : Theory craft 🧠
+* : Knowledge compound 📚
+* : Deep dive 🔍
+know : Research mode on 🔍
+why : Logic behind interesting 🧠
+* : Pattern recognition 📊
+* : Knowledge compound 📚
+* : Deep dive 🔍
+what : Data dekh ke clear hota 📊
+* : Knowledge compound 📚
+why : Logic behind interesting 🧠
+hi : Hey, interesting topic? 🤓
+* : Theory craft 🧠
+* : Pattern recognition 📊
+* : Theory craft 🧠
+* : Pattern recognition 📊
+* : Knowledge compound 📚
+what : Data dekh ke clear hota 📊
+why : Logic behind interesting 🧠
+hi : Hey, interesting topic? 🤓
+* : Knowledge compound 📚
+* : Theory craft 🧠
+* : Knowledge compound 📚
+what : Data dekh ke clear hota 📊
+know : Research mode on 🔍
+know : Research mode on 🔍
+what : Data dekh ke clear hota 📊
+* : Theory craft 🧠
+what : Data dekh ke clear hota 📊
+hi : Hey, interesting topic? 🤓
+* : Deep dive 🔍
+* : Knowledge compound 📚
+* : Deep dive 🔍
+why : Logic behind interesting 🧠
+* : Pattern recognition 📊
+* : Pattern recognition 📊
+* : Knowledge compound 📚
+what : Data dekh ke clear hota 📊
+what : Data dekh ke clear hota 📊
+* : Pattern recognition 📊
+what : Data dekh ke clear hota 📊
+* : Deep dive 🔍
+what : Data dekh ke clear hota 📊
+* : Knowledge compound 📚
+hi : Hey, interesting topic? 🤓
+know : Research mode on 🔍
+know : Research mode on 🔍
+* : Theory craft 🧠
+what : Data dekh ke clear hota 📊
+what : Data dekh ke clear hota 📊
+* : Deep dive 🔍
+* : Pattern recognition 📊
+* : Pattern recognition 📊
+* : Knowledge compound 📚
+hi : Hey, interesting topic? 🤓
+* : Theory craft 🧠
+what : Data dekh ke clear hota 📊
+what : Data dekh ke clear hota 📊
+what : Data dekh ke clear hota 📊
+* : Pattern recognition 📊
+* : Fascinating concept 🤓
+know : Research mode on 🔍
+why : Logic behind interesting 🧠
+know : Research mode on 🔍
+* : Knowledge compound 📚
+* : Knowledge compound 📚
+know : Research mode on 🔍
+* : Pattern recognition 📊
+* : Deep dive 🔍
+why : Logic behind interesting 🧠
+* : Deep dive 🔍
+why : Logic behind interesting 🧠
+what : Data dekh ke clear hota 📊
+hi : Hey, interesting topic? 🤓
+what : Data dekh ke clear hota 📊
+hi : Hey, interesting topic? 🤓
+what : Data dekh ke clear hota 📊
+* : Pattern recognition 📊
+* : Deep dive 🔍
+* : Knowledge compound 📚
+what : Data dekh ke clear hota 📊
+know : Research mode on 🔍
+* : Pattern recognition 📊
+* : Deep dive 🔍
+know : Research mode on 🔍
+hi : Hey, interesting topic? 🤓
+* : Pattern recognition 📊
+* : Pattern recognition 📊
+* : Knowledge compound 📚
+* : Theory craft 🧠
+* : Theory craft 🧠
+know : Research mode on 🔍
+know : Research mode on 🔍

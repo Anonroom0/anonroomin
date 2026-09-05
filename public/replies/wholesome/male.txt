@@ -1,102 +1,103 @@
-# Wholesome - Male (Hinglish mix)
+# Wholesome - Male
+# Logical, relevant chat replies with emoji
 
-* : Acha
-* : Alright
-* : Cool
-* : Got it
-* : Haan
-* : Hmm interesting
-* : Okay noted
-* : Samajh gaya
-* : Sure
-* : Theek hai
-aaj : Tumhari care felt hai
-akela : Itna genuine lagte ho tum
-awesome : Tumhare saath baat karke light feel hota hai
-baat, safe : Tumhari care dikhti hai actions mein
-beautiful, bye : You matter more than you know
-bhai, tomorrow : Aaj gratitude feel kar raha hoon tumhare liye
-bilkul : Tum accha kar rahe ho is duniya ke liye
-bye : Tumhari energy pure hai
-call : Duniya mein kitne acche log hain, jaise tum
-come : Kabhi kabhi bas yeh chhoti baatein matter karti hain
-cool : Tumhare liye soft spot hai
-cute : Aaj better mood mein hoon tumhari wajah se
-darling : Kabhi kabhi bas yeh chhoti baatein matter karti hain
-deadline : Tumhare saath time meaningful lagta hai
-definitely : Tumhari kindness yaad rahegi
-din : Keep shining quietly
-dost : Tumhare saath baat karke light feel hota hai
-evening, yesterday : Tum important ho, kabhi mat bhoolna
-family : Keep being the light
-free : Tumhari baaton se healing milti hai
-funny : Keep the good energy flowing
-future, call : You are enough, always
-gn : Aaj ka din better ban gaya tumse
-god, come : Tumhari positive impact dikhta hai
-good night : Small moments like this precious hain
-good, awesome : Tumhare messages wait karne layak hain
-great : Tum safe feel karate ho
-hehe : Tum safe feel karate ho
-hey : Duniya mein kitne acche log hain, jaise tum
-how, who : Tumhare saath safe feel hota hai
-ja, sis : Keep being you, duniya better place banegi
-jaaneman : Tum acche insaan ho, yaad rakhna
-jhooth, hehe : Small moments like this precious hain
-job, movie : Tumhari smile screenshot worthy hai
-kaam : Itna thoughtful ho tum, rare hai
-kahan : Tumhari presence appreciated hai
-khel : Keep being you, duniya better place banegi
-kya haal : Tumhari existence itself gift hai
-kyun : Tumhari words healing hain
-like : Aaj ka din better ban gaya tumse
-lmao : Duniya better hai tumhare hone se
-lol : Itna pure heart rare hai
-love : Dil soft ho gaya thoda
-love you, update : Tum acche insaan ho, yaad rakhna
-maybe : Aaj gratitude list mein tum ho
-movie : Tumhari smile contagious hai
-msg : Tumhari words healing hain
-music, pyaar : Itna pure heart rare hai
-naukri : Tumhare messages wait karne layak hain
-news : Tumhare saath safe feel hota hai
-omg, zindagi : Aaj better human banne ka motivation mila
-pagal, kaam : Tumhari baat sunke dil khush ho gaya
-papa : Tumhari energy pure hai
-pass, gn : Tumhari positive vibe absorb kar raha hoon
-pi : Aaj better human banne ka motivation mila
-pic : Duniya soft hai tumhare around
-plan : Tumhari smile screenshot worthy hai
-post : Tumhari baaton se healing milti hai
-pyaar : Tumhare liye soft spot hai
-risk : You matter more than you know
-safe : Tumhari existence itself gift hai
-sapna : Tumhari positive vibe absorb kar raha hoon
-series : Tumhari presence appreciated hai
-shayad : Keep being soft in hard world
-sis : Keep being the light
-sleep, free : Keep shining quietly
-smart : Tumhari positive impact dikhta hai
-status : Keep being soft in hard world
-story : Tumhari smile contagious hai
-stupid : Aaj gratitude feel kar raha hoon tumhare liye
-sweetheart : Small acts of kindness matter, tum karte ho
-tc : Tumhari presence se room bright ho jata hai
-test, deadline : Aaj gratitude list mein tum ho
-thanks : Tumhare saath time meaningful lagta hai
-today, shayad : Tum accha kar rahe ho is duniya ke liye
-tomorrow : Tumhari kindness yaad rahegi
-truth : Tumhari care dikhti hai actions mein
-try : You are enough, always
-udaas : Tumhari baat se peace mila
-update : Duniya soft hai tumhare around
-wassup : Tumhari presence se room bright ho jata hai
-welcome, tc : Tumhari care felt hai
-when, akela : Aaj hope feel hua tumse
-where, series : Duniya better hai tumhare hone se
-who : Aaj better mood mein hoon tumhari wajah se
-wow : Itna positive energy chahiye duniya ko
-yaad, msg : Tumhari baat se peace mila
-yeah : Keep spreading light
-yesterday : Tumhare words se hope milta hai
-zindagi : Itna positive energy chahiye duniya ko
+hi, hello : Hey, accha laga sunke 🌸
+how are you : Main theek, tum bhi acche raho 😊
+sad : Sab theek ho jayega, main yahan 🤍
+tired : Rest le, tu matter karta 🫂
+thanks : Dil se, always 💖
+love : Pyaar failate raho, duniya soft 🌸
+miss : Miss karna normal hai, care dikhti 😊
+happy : Khush reh, energy positive 🌟
+sorry : Koi baat nahi, seekhte hain 🤍
+help : Bata, saath dete hain 🤝
+bye : Take care, milte hain 🌸
+* : Tumhari baat se dil khush 😊
+* : Positive energy chahiye aisi 🌸
+* : Tu accha insaan hai 🤍
+* : Small kindness matter 💖
+happy : Khush reh, energy positive 🌟
+* : Small kindness matter 💖
+how are you : Main theek, tum bhi acche raho 😊
+bye : Take care, milte hain 🌸
+happy : Khush reh, energy positive 🌟
+bye : Take care, milte hain 🌸
+love : Pyaar failate raho, duniya soft 🌸
+how are you : Main theek, tum bhi acche raho 😊
+happy : Khush reh, energy positive 🌟
+love : Pyaar failate raho, duniya soft 🌸
+hi, hello : Hey, accha laga sunke 🌸
+how are you : Main theek, tum bhi acche raho 😊
+happy : Khush reh, energy positive 🌟
+how are you : Main theek, tum bhi acche raho 😊
+miss : Miss karna normal hai, care dikhti 😊
+help : Bata, saath dete hain 🤝
+bye : Take care, milte hain 🌸
+tired : Rest le, tu matter karta 🫂
+miss : Miss karna normal hai, care dikhti 😊
+sad : Sab theek ho jayega, main yahan 🤍
+bye : Take care, milte hain 🌸
+* : Positive energy chahiye aisi 🌸
+thanks : Dil se, always 💖
+* : Small kindness matter 💖
+sorry : Koi baat nahi, seekhte hain 🤍
+how are you : Main theek, tum bhi acche raho 😊
+* : Tumhari baat se dil khush 😊
+sad : Sab theek ho jayega, main yahan 🤍
+how are you : Main theek, tum bhi acche raho 😊
+sad : Sab theek ho jayega, main yahan 🤍
+miss : Miss karna normal hai, care dikhti 😊
+* : Tumhari baat se dil khush 😊
+* : Tumhari baat se dil khush 😊
+thanks : Dil se, always 💖
+tired : Rest le, tu matter karta 🫂
+tired : Rest le, tu matter karta 🫂
+* : Tu accha insaan hai 🤍
+happy : Khush reh, energy positive 🌟
+thanks : Dil se, always 💖
+happy : Khush reh, energy positive 🌟
+* : Tumhari baat se dil khush 😊
+love : Pyaar failate raho, duniya soft 🌸
+how are you : Main theek, tum bhi acche raho 😊
+* : Positive energy chahiye aisi 🌸
+hi, hello : Hey, accha laga sunke 🌸
+bye : Take care, milte hain 🌸
+* : Tu accha insaan hai 🤍
+thanks : Dil se, always 💖
+tired : Rest le, tu matter karta 🫂
+how are you : Main theek, tum bhi acche raho 😊
+bye : Take care, milte hain 🌸
+sorry : Koi baat nahi, seekhte hain 🤍
+miss : Miss karna normal hai, care dikhti 😊
+how are you : Main theek, tum bhi acche raho 😊
+* : Tumhari baat se dil khush 😊
+tired : Rest le, tu matter karta 🫂
+tired : Rest le, tu matter karta 🫂
+tired : Rest le, tu matter karta 🫂
+* : Positive energy chahiye aisi 🌸
+* : Tu accha insaan hai 🤍
+sad : Sab theek ho jayega, main yahan 🤍
+sorry : Koi baat nahi, seekhte hain 🤍
+help : Bata, saath dete hain 🤝
+* : Positive energy chahiye aisi 🌸
+miss : Miss karna normal hai, care dikhti 😊
+help : Bata, saath dete hain 🤝
+love : Pyaar failate raho, duniya soft 🌸
+love : Pyaar failate raho, duniya soft 🌸
+sad : Sab theek ho jayega, main yahan 🤍
+love : Pyaar failate raho, duniya soft 🌸
+* : Small kindness matter 💖
+happy : Khush reh, energy positive 🌟
+love : Pyaar failate raho, duniya soft 🌸
+thanks : Dil se, always 💖
+tired : Rest le, tu matter karta 🫂
+* : Small kindness matter 💖
+miss : Miss karna normal hai, care dikhti 😊
+miss : Miss karna normal hai, care dikhti 😊
+* : Positive energy chahiye aisi 🌸
+love : Pyaar failate raho, duniya soft 🌸
+thanks : Dil se, always 💖
+miss : Miss karna normal hai, care dikhti 😊
+* : Positive energy chahiye aisi 🌸
+sorry : Koi baat nahi, seekhte hain 🤍
+help : Bata, saath dete hain 🤝

@@ -1,102 +1,103 @@
-# Sarcastic - Male (Hinglish mix)
+# Sarcastic - Male
+# Logical, relevant chat replies with emoji
 
-* : Acha
-* : Alright
-* : Cool
-* : Got it
-* : Haan
-* : Hmm interesting
-* : Okay noted
-* : Samajh gaya
-* : Sure
-* : Theek hai
-achha : Haan, duniya tere around hi ghumti hai
-achha : Haan, teri baat 100% right hai always
-always : Haan, main bhi wahi soch raha tha (nahi)
-angry : Haan, main agree karta hoon completely (sarcasm)
-baat : Kya insight hai, mind blown (fake)
-bhool : Obviously, main kyun nahi socha
-bura : Main impressed nahi hoon, just saying
-care : Main shocked hoon, positively nahi
-chance, solution : Haan haan, tu hi sab jaanta hai
-chill, relax : Oh please, continue, main sun raha hoon (nahi)
-come : Oh the wisdom, overflowing
-confused : Amazing discovery, Einstein jealous
-danger, happy : Sure, main note kar raha hoon (delete later)
-definitely : Haan, duniya badal dega tu
-dream, evening : Haan bilkul, main bhi wahi feel kar raha
-evening : Sure, jo tu bole wohi final
-exactly : Tu toh next level pe hai (downward)
-family : Haan, main bhi soch raha tha same (nahi)
-forget, msg : Main wait kar raha tha isi gyaan ke liye
-funny, score : Haan bilkul, tu hi genius hai yahan
-future : Kya baat, award deserving
-hangout : Haan haan, tu hi sab jaanta hai
-happy : Haan, duniya badal dega tu
-hello : Amazing logic, fail everywhere else
-hii, how are you : Tu toh philosopher ban gaya aaj
-hola, home : Kya profound baat kari hai tune
-home : Main notes le raha hoon, important nahi
-hope : Main impressed hoon, bilkul nahi
-how are you : Interesting... not really
-ja : Continue, comedy show chal raha hai
-jhooth : Main clap kar raha hoon slowly
-kaam : Kya baat, award deserving
-kabhi nahi : Interesting perspective, trash nevertheless
-khabar : Wow, original thought finally
-kismat : Great, ab main enlightened ho gaya
-kya chal raha, khabar : Tu toh next level pe hai (downward)
-kya haal : Continue please, entertainment chahiye
-kya, meet : Continue please, entertainment chahiye
-listen : Haan, tu hi expert hai isme
-lmao : Tu toh genius confirmed
-maa : Haan, main bhi wahi soch raha tha (nahi)
-madad, lmao : Oh the wisdom, overflowing
-masti : Kya baat, Nobel prize ready hai kya
-meet : Interesting perspective, trash nevertheless
-morning : Haan, tu hi last hope hai humanity ka
-msg : Bilkul, main agree karta hoon (sarcastically)
-never : Haan, main agree karta hoon completely (sarcasm)
-night : Wah, itna knowledge kahan se aaya
-nonsense : Sure sure, jo bol raha hai wohi sahi
-okay, when : Haan, tu hi expert hai isme
-omg : Kya profound baat kari hai tune
-opportunity : Wow, itna deep thought, clap clap
-pasand : Tu toh motivational speaker ban ja
-pretty : Kya insight hai, mind blown (fake)
-private : Sure, main note kar raha hoon (delete later)
-public : Main notes le raha hoon, important nahi
-random thought, kaam : Wow level of confidence, zero backup
-rank : Wow, original thought finally
-relax : Tu toh detective ban gaya
-remember, maa : Obviously, main kyun nahi socha
-sad : Haan, duniya tere around hi ghumti hai
-samay : Oh please, continue, main sun raha hoon (nahi)
-score : Main shocked hoon, positively nahi
-send : Main impressed nahi hoon, just saying
-serious : Tu toh genius confirmed
-sexy : Sure, jo tu bole wohi final
-shaam : Wow level of confidence, zero backup
-sis : Great advice, bilkul follow karunga (nahi)
-sleep, send : Main impressed hoon, bilkul nahi
-solution : Tu toh motivational speaker ban ja
-sometimes : Great advice, bilkul follow karunga (nahi)
-song : Haan bilkul, tu hi genius hai yahan
-subah : Kya baat, Nobel prize ready hai kya
-sup : Bilkul logical lag raha hai (sarcasm)
-sure, sad : Great, ab main enlightened ho gaya
-sweetheart : Tu toh detective ban gaya
-thank you, family : Sure, main seriously le raha hoon (nahi)
-today : Amazing logic, fail everywhere else
-ty, never : Haan, teri baat 100% right hai always
-ummeed, baat : Continue, comedy show chal raha hai
-update, hello : Haan, tu hi last hope hai humanity ka
-video : Oh really? First time sun raha hoon aaj
-wassup, sometimes : Amazing discovery, Einstein jealous
-welcome : Haan, teri opinion matter karti hai (nahi)
-when : Haan, teri opinion matter karti hai (nahi)
-work : Sure sure, jo bol raha hai wohi sahi
-yeah, masti : Main clap kar raha hoon slowly
-yo : Haan bilkul, main bhi wahi feel kar raha
-yup, work : Wah kya baat hai, pehle kabhi suna nahi yeh
-zaroor : Wah kya baat hai, pehle kabhi suna nahi yeh
+hi, hello : Wow, koi toh yaad kiya 🙄
+how are you : Main toh bilkul perfect, tu bata 😏
+smart, intelligent : Haan tu hi genius hai yahan 👏
+right, sahi : Bilkul, tu hamesha right 🙄
+know, jaanta : Wah, kitna knowledge 😏
+sorry : Sorry se sab theek? Accha 🙄
+help : Main toh free hi baitha help ke liye 😏
+love : Pyaar bhi sarcasm mein 🙄
+miss : Miss karne layak hoon main? Wow 😏
+thanks : Thanks ke paise nahi milte 🙄
+bye : Ja raha? Kya loss 😏
+ok : Ok bol diya, life set 🙄
+what : Kya hua ab? Drama? 😏
+why : Kyun? Kyunki duniya tere around 🙄
+* : Interesting... not really 😏
+* : Haan bilkul, tu hi sahi 🙄
+* : Main impress ho gaya (nahi) 😏
+* : Continue, comedy chal rahi 🙄
+miss : Miss karne layak hoon main? Wow 😏
+why : Kyun? Kyunki duniya tere around 🙄
+what : Kya hua ab? Drama? 😏
+love : Pyaar bhi sarcasm mein 🙄
+right, sahi : Bilkul, tu hamesha right 🙄
+ok : Ok bol diya, life set 🙄
+what : Kya hua ab? Drama? 😏
+smart, intelligent : Haan tu hi genius hai yahan 👏
+right, sahi : Bilkul, tu hamesha right 🙄
+smart, intelligent : Haan tu hi genius hai yahan 👏
+miss : Miss karne layak hoon main? Wow 😏
+thanks : Thanks ke paise nahi milte 🙄
+what : Kya hua ab? Drama? 😏
+* : Continue, comedy chal rahi 🙄
+why : Kyun? Kyunki duniya tere around 🙄
+know, jaanta : Wah, kitna knowledge 😏
+thanks : Thanks ke paise nahi milte 🙄
+miss : Miss karne layak hoon main? Wow 😏
+miss : Miss karne layak hoon main? Wow 😏
+* : Interesting... not really 😏
+know, jaanta : Wah, kitna knowledge 😏
+bye : Ja raha? Kya loss 😏
+help : Main toh free hi baitha help ke liye 😏
+smart, intelligent : Haan tu hi genius hai yahan 👏
+know, jaanta : Wah, kitna knowledge 😏
+how are you : Main toh bilkul perfect, tu bata 😏
+miss : Miss karne layak hoon main? Wow 😏
+love : Pyaar bhi sarcasm mein 🙄
+why : Kyun? Kyunki duniya tere around 🙄
+what : Kya hua ab? Drama? 😏
+thanks : Thanks ke paise nahi milte 🙄
+miss : Miss karne layak hoon main? Wow 😏
+bye : Ja raha? Kya loss 😏
+* : Main impress ho gaya (nahi) 😏
+help : Main toh free hi baitha help ke liye 😏
+bye : Ja raha? Kya loss 😏
+miss : Miss karne layak hoon main? Wow 😏
+know, jaanta : Wah, kitna knowledge 😏
+ok : Ok bol diya, life set 🙄
+know, jaanta : Wah, kitna knowledge 😏
+* : Main impress ho gaya (nahi) 😏
+help : Main toh free hi baitha help ke liye 😏
+sorry : Sorry se sab theek? Accha 🙄
+* : Continue, comedy chal rahi 🙄
+ok : Ok bol diya, life set 🙄
+ok : Ok bol diya, life set 🙄
+why : Kyun? Kyunki duniya tere around 🙄
+why : Kyun? Kyunki duniya tere around 🙄
+sorry : Sorry se sab theek? Accha 🙄
+* : Haan bilkul, tu hi sahi 🙄
+* : Main impress ho gaya (nahi) 😏
+thanks : Thanks ke paise nahi milte 🙄
+help : Main toh free hi baitha help ke liye 😏
+thanks : Thanks ke paise nahi milte 🙄
+why : Kyun? Kyunki duniya tere around 🙄
+how are you : Main toh bilkul perfect, tu bata 😏
+what : Kya hua ab? Drama? 😏
+* : Haan bilkul, tu hi sahi 🙄
+* : Interesting... not really 😏
+smart, intelligent : Haan tu hi genius hai yahan 👏
+why : Kyun? Kyunki duniya tere around 🙄
+* : Haan bilkul, tu hi sahi 🙄
+what : Kya hua ab? Drama? 😏
+love : Pyaar bhi sarcasm mein 🙄
+hi, hello : Wow, koi toh yaad kiya 🙄
+sorry : Sorry se sab theek? Accha 🙄
+* : Interesting... not really 😏
+right, sahi : Bilkul, tu hamesha right 🙄
+help : Main toh free hi baitha help ke liye 😏
+right, sahi : Bilkul, tu hamesha right 🙄
+sorry : Sorry se sab theek? Accha 🙄
+how are you : Main toh bilkul perfect, tu bata 😏
+sorry : Sorry se sab theek? Accha 🙄
+* : Interesting... not really 😏
+love : Pyaar bhi sarcasm mein 🙄
+bye : Ja raha? Kya loss 😏
+* : Haan bilkul, tu hi sahi 🙄
+thanks : Thanks ke paise nahi milte 🙄
+love : Pyaar bhi sarcasm mein 🙄
+thanks : Thanks ke paise nahi milte 🙄
+bye : Ja raha? Kya loss 😏
+what : Kya hua ab? Drama? 😏

@@ -1,102 +1,103 @@
-# Motivational - Female (Hinglish mix)
+# Motivational - Female
+# Logical, relevant chat replies with emoji
 
-* : Acha
-* : Alright
-* : Cool
-* : Got it
-* : Haan
-* : Hmm interesting
-* : Okay noted
-* : Samajh gaya
-* : Sure
-* : Theek hai
-akela : Tu already started, continue
-alone : Tu on the right path hai
-amazing : Keep the momentum
-angry : Tu apni story ka hero hai
-answer : Tu apni limits push kar sakta hai
-behen : Small wins celebrate kar
-bhai, funny : Keep moving forward
-bored : Progress > perfection
-bura : Believe in the process
-care : Tu building something real
-choice, music : Tu resilient hai
-cool, issue : Tu can rewrite your story
-danger : Tu grow kar raha hai even if slow
-deep talk : Tu already started, continue
-doubt : Tu on your way hai
-fail : Believe in yourself more
-family : Believe in yourself more
-free : Tu not alone in this
-funny : Keep showing up
-gm : Keep going, I'm rooting for you
-gn : Tu try kar raha hai, woh enough hai
-go : Every effort counts
-gussa : Keep the momentum
-haha : Failure toh part of process hai
-hangout : Tu resilient hai
-happy, udaas : Progress > perfection
-hehe : Tu try kar raha hai, woh enough hai
-hii : Tu enough hai already
-how, where : Tu on your way hai
-i love you : Doubt mat kar, action le
-issue : Tu kar sakta hai, bas try karte reh
-jaan : Tu capable of more than you know
-jaaneman, what's up : Tu grow kar raha hai even if slow
-kaam : Tu already brave hai for trying
-kab : Tu closer hai than you feel
-kabhi nahi : Tu capable of change
-kaise : Tu capable hai, doubt mat kar
-kismat : Hard work compound hota hai
-lazy, masti : Keep going, progress slow but real hai
-lie : Growth uncomfortable hota hai
-lose, theek : Aaj ka effort future banayega
-love you, gn : Trust the timing
-masti : Har din naya chance hai
-meet : Tu stronger hai than you think
-meeting : Patience ke saath power aati hai
-meme : Patience ke saath power aati hai
-morning : One day at a time
-music : Today is a good day to start
-namaste : Hard days temporary hain
-never, sure : Every setback setup for comeback
-ok, family : Keep the faith
-omg, thak : Tu capable of change
-option, bura : Tu can handle this
-paisa : Small steps bhi matter karte hain
-pasand, alone : Doubt mat kar, action le
-peace : Today is a good day to start
-pic, amazing : Keep going, I'm rooting for you
-private, angry : Tu stronger ban raha hai
-problem : Tu making progress even now
-public : Aaj ka effort future banayega
-really : Tu on the right path hai
-result : Small steps bhi matter karte hain
-sach, morning : Tu capable of more than you know
-samay, deep talk : Every effort counts
-selfie : Your future self thank karega
-send : Tu capable hai of greatness
-serious : Keep trying, results aayenge
-story : Hard work compound hota hai
-stupid, video : Tu enough hai already
-subah : Tu apni story ka hero hai
-sup : Har din naya chance hai
-sure : Tu deserve karta hai better
-tc, paisa : Keep trying, results aayenge
-tension : One day at a time
-thak : Tu capable hai, doubt mat kar
-thanks, meme : Tu building something real
-theek : Failure toh part of process hai
-thinking : Tu stronger ban raha hai
-ty : Keep the faith
-udaas : Hard days temporary hain
-update : Believe in the process
-video : Tu making progress even now
-wfh : Trust the timing
-what : Tu closer hai than you feel
-what's up : Tu stronger hai than you think
-where : Growth uncomfortable hota hai
-who, kismat : Tu apni limits push kar sakta hai
-why : Keep going, progress slow but real hai
-yaad rakh, kab : Tu capable hai of greatness
-yup : Tu can handle this
+hi : Aaj jeetne wala din 💪
+sad, down : Uth ja, process hai 🔥
+tired : Rest, phir stronger 💪
+help : Tu kar sakti 🌟
+why : Tu capable 💪
+ok : Action le 🔥
+* : Stronger than think 💪
+* : Small steps 🌱
+* : Keep going 🔥
+* : Enough hai 🌟
+* : Progress 💪
+* : One day ☀️
+tired : Rest, phir stronger 💪
+* : Keep going 🔥
+sad, down : Uth ja, process hai 🔥
+help : Tu kar sakti 🌟
+tired : Rest, phir stronger 💪
+why : Tu capable 💪
+* : Small steps 🌱
+* : Stronger than think 💪
+* : Enough hai 🌟
+* : Enough hai 🌟
+ok : Action le 🔥
+* : Small steps 🌱
+tired : Rest, phir stronger 💪
+* : Enough hai 🌟
+hi : Aaj jeetne wala din 💪
+why : Tu capable 💪
+why : Tu capable 💪
+why : Tu capable 💪
+* : Progress 💪
+* : Progress 💪
+* : Stronger than think 💪
+* : Small steps 🌱
+* : Enough hai 🌟
+* : Small steps 🌱
+* : Progress 💪
+hi : Aaj jeetne wala din 💪
+help : Tu kar sakti 🌟
+* : Enough hai 🌟
+why : Tu capable 💪
+ok : Action le 🔥
+* : Stronger than think 💪
+help : Tu kar sakti 🌟
+help : Tu kar sakti 🌟
+* : One day ☀️
+* : One day ☀️
+* : Enough hai 🌟
+help : Tu kar sakti 🌟
+why : Tu capable 💪
+* : One day ☀️
+ok : Action le 🔥
+hi : Aaj jeetne wala din 💪
+hi : Aaj jeetne wala din 💪
+* : Stronger than think 💪
+* : Stronger than think 💪
+why : Tu capable 💪
+* : Enough hai 🌟
+* : Small steps 🌱
+* : Small steps 🌱
+* : Enough hai 🌟
+* : Enough hai 🌟
+ok : Action le 🔥
+* : One day ☀️
+ok : Action le 🔥
+* : One day ☀️
+* : Progress 💪
+* : Keep going 🔥
+hi : Aaj jeetne wala din 💪
+* : Progress 💪
+* : Progress 💪
+help : Tu kar sakti 🌟
+* : Keep going 🔥
+* : Enough hai 🌟
+sad, down : Uth ja, process hai 🔥
+* : One day ☀️
+* : Enough hai 🌟
+* : Enough hai 🌟
+ok : Action le 🔥
+* : Enough hai 🌟
+ok : Action le 🔥
+* : Stronger than think 💪
+* : Stronger than think 💪
+why : Tu capable 💪
+tired : Rest, phir stronger 💪
+* : One day ☀️
+* : Keep going 🔥
+hi : Aaj jeetne wala din 💪
+sad, down : Uth ja, process hai 🔥
+* : Progress 💪
+sad, down : Uth ja, process hai 🔥
+sad, down : Uth ja, process hai 🔥
+* : Small steps 🌱
+sad, down : Uth ja, process hai 🔥
+ok : Action le 🔥
+why : Tu capable 💪
+hi : Aaj jeetne wala din 💪
+help : Tu kar sakti 🌟
+ok : Action le 🔥
+* : Enough hai 🌟

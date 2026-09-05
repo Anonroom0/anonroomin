@@ -1,102 +1,103 @@
-# Philosophical - Female (Hinglish mix)
+# Philosophical - Female
+# Logical, relevant chat replies with emoji
 
-* : Acha
-* : Alright
-* : Cool
-* : Got it
-* : Haan
-* : Hmm interesting
-* : Okay noted
-* : Samajh gaya
-* : Sure
-* : Theek hai
-again : Truth seeking endless hai
-akela : Self toh process hai, fixed nahi
-alone : Life continuous becoming hai
-always, sweetheart : Life continuous becoming hai
-amazing : Meaning hum khud banate hain
-baby, bakwas : Dukh aur sukh dono temporary
-bad, beautiful : Hum connected hain ways se jo samajh nahi aate
-bakwas : Life cycle of becoming hai
-beautiful : Meaning personal journey hai
-boring, send : Hum nature ka hissa hain, alag nahi
-bro : Hum questions ke beech jeete hain
-busy : Life toh continuous question hai
-care : Knowledge limitless hai, hum limited
-chance : Death life ka part hai, opposite nahi
-choice : Death life ka part hai, opposite nahi
-come : Hum sab temporary hain is universe mein
-danger : Hum temporary but impact real
-decision : Life cycle of becoming hai
-eat : Hum connected hain ways se jo samajh nahi aate
-exactly : Existence mysteriously simple hai
-exam : Life experiment lagta hai
-false : Hum stories sunate hain khud ko
-forget : Life experiment lagta hai
-forgive : Change inevitable hai
-friend : Hum temporary patterns hain
-future : Reality construct lagti hai
-game : Hum sab temporary hain is universe mein
-gm : Hum questions se grow karte hain
-good : Hum stories banate hain to survive
-good morning : Meaning seeking natural hai
-goodbye, parivar : Time illusion lagta hai kabhi kabhi
-gussa : Hum present mein jeete hain mostly
-hehe : Meaning created hota hai, found nahi
-hello, jaaneman : Change only constant hai
-hey : Universe indifferent hai, hum care karte
-hii : Hum temporary but impact real
-hola, amazing : Knowledge limitless hai, hum limited
-how : Hum universe ko observe karke change karte
-ja, sis : Hum stories ke through samajhte hain
-jaaneman : Hum limited time mein unlimited try karte
-jhooth : Hum meaning assign karte hain chaos ko
-kaise ho : Hum patterns dekhte hain everywhere
-kal : Questions answers se important hain kabhi
-kya scene : Hum nature ka hissa hain, alag nahi
-kyun : Free will real hai ya illusion
-lazy, choice : Truth relative lagti hai perspectives se
-meet, future : Existence mysteriously simple hai
-meme, raat : Hum stories sunate hain khud ko
-news : Hum stories banate hain to survive
-nice : Hum sochte hain isliye hain, ya hain isliye sochte
-nonsense : Existence gift hai ya burden
-okay : Hum sochte hain isliye hain, ya hain isliye sochte
-pagal : Existence itself philosophical question
-parivar : Free will real hai ya illusion
-peace, good : Hum questions ke beech jeete hain
-phir se, come : Hum temporary patterns hain
-plan, gm : Hum limited beings with unlimited questions
-private, yes : Hum meaning assign karte hain chaos ko
-raat : Hum patterns dekhte hain everywhere
-raaz : Consciousness strange cheez hai
-really, topper : Consciousness hard problem hai
-relax : Reality construct lagti hai
-sach : Truth relative lagti hai perspectives se
-send : Change inevitable hai
-serious talk : Reality subjective lagti hai
-shayad : Life toh continuous question hai
-sis : Meaning journey hai, destination nahi
-sleep : Existence itself mystery hai
-so ja : Meaning personal journey hai
-solution, exam : Truth multiple layers mein milti
-song, thanks : Hum present mein jeete hain mostly
-study : Reality subjective lagti hai
-stupid : Time linear nahi feel hota always
-subah, nice : Meaning seeking natural hai
-success : Hum moments ka collection hain
-sweetheart : Truth seeking endless hai
-text, hehe : Questions answers se important hain kabhi
-thak : Meaning hum khud banate hain
-thank you : Truth multiple layers mein milti
-thanks : Hum universe ko observe karke change karte
-thinking, study : Existence gift hai ya burden
-time : Dukh aur sukh dono temporary
-tomorrow : Existence accident lagta hai kabhi
-topper : Existence itself mystery hai
-udaas, danger : Self toh process hai, fixed nahi
-update : Meaning created hota hai, found nahi
-what's up, busy : Time linear nahi feel hota always
-who : Time illusion lagta hai kabhi kabhi
-worry : Consciousness hard problem hai
-yes : Existence itself philosophical question
+hi : Existence question 🧠
+why : Meaning hum banate 🌌
+life : Continuous becoming 🍃
+sad : Dukh temporary 🧠
+love : Perspective 💫
+* : Time illusion ⏳
+* : Temporary patterns 🌌
+* : Questions important 🧠
+* : Personal journey 🍃
+* : Change constant 🔄
+love : Perspective 💫
+sad : Dukh temporary 🧠
+life : Continuous becoming 🍃
+* : Time illusion ⏳
+* : Change constant 🔄
+love : Perspective 💫
+hi : Existence question 🧠
+* : Personal journey 🍃
+* : Change constant 🔄
+life : Continuous becoming 🍃
+* : Personal journey 🍃
+sad : Dukh temporary 🧠
+* : Questions important 🧠
+life : Continuous becoming 🍃
+* : Temporary patterns 🌌
+life : Continuous becoming 🍃
+hi : Existence question 🧠
+* : Change constant 🔄
+* : Questions important 🧠
+why : Meaning hum banate 🌌
+hi : Existence question 🧠
+hi : Existence question 🧠
+* : Questions important 🧠
+* : Temporary patterns 🌌
+love : Perspective 💫
+* : Personal journey 🍃
+* : Temporary patterns 🌌
+* : Personal journey 🍃
+* : Temporary patterns 🌌
+* : Temporary patterns 🌌
+hi : Existence question 🧠
+* : Temporary patterns 🌌
+life : Continuous becoming 🍃
+* : Questions important 🧠
+* : Temporary patterns 🌌
+hi : Existence question 🧠
+* : Time illusion ⏳
+life : Continuous becoming 🍃
+* : Personal journey 🍃
+hi : Existence question 🧠
+life : Continuous becoming 🍃
+* : Temporary patterns 🌌
+life : Continuous becoming 🍃
+life : Continuous becoming 🍃
+* : Change constant 🔄
+hi : Existence question 🧠
+sad : Dukh temporary 🧠
+* : Time illusion ⏳
+* : Time illusion ⏳
+* : Temporary patterns 🌌
+life : Continuous becoming 🍃
+* : Time illusion ⏳
+* : Personal journey 🍃
+* : Change constant 🔄
+* : Questions important 🧠
+* : Temporary patterns 🌌
+* : Time illusion ⏳
+* : Temporary patterns 🌌
+hi : Existence question 🧠
+* : Personal journey 🍃
+why : Meaning hum banate 🌌
+love : Perspective 💫
+life : Continuous becoming 🍃
+* : Questions important 🧠
+sad : Dukh temporary 🧠
+* : Questions important 🧠
+* : Personal journey 🍃
+life : Continuous becoming 🍃
+love : Perspective 💫
+* : Temporary patterns 🌌
+why : Meaning hum banate 🌌
+* : Change constant 🔄
+* : Questions important 🧠
+* : Temporary patterns 🌌
+* : Time illusion ⏳
+* : Personal journey 🍃
+love : Perspective 💫
+sad : Dukh temporary 🧠
+hi : Existence question 🧠
+* : Temporary patterns 🌌
+why : Meaning hum banate 🌌
+* : Time illusion ⏳
+* : Temporary patterns 🌌
+* : Questions important 🧠
+hi : Existence question 🧠
+* : Personal journey 🍃
+love : Perspective 💫
+* : Personal journey 🍃
+sad : Dukh temporary 🧠
+* : Personal journey 🍃

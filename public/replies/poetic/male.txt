@@ -1,102 +1,103 @@
-# Poetic - Male (Hinglish mix)
+# Poetic - Male
+# Logical, relevant chat replies with emoji
 
-* : Acha
-* : Alright
-* : Cool
-* : Got it
-* : Haan
-* : Hmm interesting
-* : Okay noted
-* : Samajh gaya
-* : Sure
-* : Theek hai
-are you serious : Hawa ke jhonke mein alfaaz
-baby, wow : Dil ke aaine mein dhundhli si yaad
-bad : Waqt ke dariya ka kinara dhoondte
-behen : Dil ke kone mein chhupi dhun
-bhagwan : Khayalon ke sheher ki galliyan
-bhej : Raat ke andheron mein bhi ek roshni hoti hai
-bye : Dil ke kone mein baji si sargam
-care : Dil ke kagaz pe likhi si yaadein
-chance : Raat ke andhere mein bhi ummeed
-chat : Raat ke andhere mein bhi ummeed
-choice : Dil ke aaine mein tasveer
-college : Raat ke sitare bhi sunte hain
-come, chance : Dil ke samundar mein leher
-cool : Dil ke aaine mein dikhti si tasveer
-crazy : Khayal ke aasmaan mein rang
-dikha, share : Khayalon ke jharne ki awaaz
-dream : Chandni raat mein bhi adhoori si baat
-dumb, option : Dil ke kone mein chhupi si baatein
-false : Khayalon ke jungle mein khoe hue hum
-family : Khayal ke jungle ki khamoshi
-fool : Hawa mein tairte hue alfaaz
-forgive : Dil ke aaine mein dikhti si tasveer
-gm : Khayal ke deepak se roshan si raat
-gn : Dil ke aaine mein dhundhli si yaad
-good : Khayalon ke jungle mein khoe hue hum
-gossip : Dil ke kagaz pe geeli si syahi
-great : Waqt ke dariya mein milte hue kinare
-hamesha, risk : Waqt ke dariya ka kinara
-hangout : Hawa ke saath udte hue sapne
-happy : Hawa mein tairte hue alfaaz
-hate : Dil ke geeton mein chhupi si dastan
-heyy : Dil ke samundar mein leher
-hope, great : Dil ke kone mein baji si sargam
-how are you : Dil ke geeton ki sargam
-issue, tired : Waqt ke pannon pe likhi si kahani
-jaaneman : Waqt ke pannon pe adhoori si baat
-kab : Hawa ke jhonke mein alfaaz
-kabhi nahi : Khayal ke jungle mein khojana
-kal : Waqt ki ret pe likhte hue naam
-kha, kab : Khayal ke jungle ki khamoshi
-kismat : Hawa ke jhonke mein gum si muskaan
-lie, sad : Waqt ki ret mein chhupte hue raaz
-life : Waqt ki ret pe likhte hue naam
-listen, yo : Raat ke sitaron se baat karti si aankhein
-lmao : Khayalon ke aasmaan mein udaan
-love you : Waqt ki ret pe nishaan
-namaste : Dil ke kagaz pe geeli si syahi
-news, gossip : Dil ke samundar mein doobti si baatein
-nice, yes : Khayal ke jungle mein khojana
-omg, behen : Khayal ke deepak se roshan si raat
-option : Raat ki khamoshi mein bhi ek geet
-post, good : Raat ke andheron mein bhi geet
-pretty : Raat ke andheron mein bhi geet
-raat : Waqt ki ret mein chhodte hue nishaan
-risk : Dil ke samundar ki leher
-sad : Khayalon ke jharne se nikalti si awaaz
-samay, raat : Raat ke sitare bhi sunte hain
-school : Khayalon ke sheher mein gum
-selfie : Dil ke kone mein chhupi dhun
-shaam : Khayalon ke sheher ki galliyan
-share : Khayalon ke aasmaan mein udaan
-so ja : Raat ke sitaron se baat karti si aankhein
-soch : Khayal ke aasman mein udte hue sapne
-solution, kal : Dil ke kagaz pe likhi si yaadein
-sorry : Waqt ki ret mein chhodte hue nishaan
-stupid : Hawa mein tairte sapne
-sun : Waqt ke dariya ka kinara dhoondte
-test : Raat ke andheron mein bhi ek roshni hoti hai
-thak : Waqt ke dariya mein behte hue hum
-thank you : Hawa mein tairta hua geet
-thinking : Dil ke samundar mein doobti si baatein
-thx : Waqt ke dariya mein milte hue kinare
-tired : Waqt ke pannon ko palatte hue
-today, love you : Khayal ke deepak ki roshni
-truth, shaam : Hawa ke saath udte hue sapne
-udaas : Dil ke samundar ki leher
-ummeed : Waqt ke pannon pe likhi si kahani
-vishwas, bhej : Khayalon ke sheher mein gum
-what's up : Waqt ke dariya ka kinara
-when, cool : Dil ke aaine mein tasveer
-who : Khayalon ke jharne ki awaaz
-why, bad : Hawa mein tairte sapne
-work from home : Waqt ke pannon pe likhi kahani
-work, yaad : Waqt ke dariya mein behte hue hum
-wow : Waqt ke pannon pe likhi kahani
-yaad : Hawa mein tairta hua geet
-yaad rakh, happy : Dil ke geeton ki sargam
-yes : Hawa ke jhonke mein gum si muskaan
-yo : Waqt ke pannon pe adhoori si baat
-yup : Waqt ke pannon ko palatte hue
+hi : Raat ke andheron mein bhi ek awaaz 🍂
+miss : Yaadein hawa ke jhonke si 🍃
+love : Dil ke kagaz pe likhi si baat 📝
+sad : Khamoshi mein bhi ek geet 🌙
+* : Waqt ke dariya mein behtay 🌊
+* : Khayalon ke aasmaan ☁️
+* : Dil ke samundar ki leher 💫
+* : Chandni si muskaan 🌕
+* : Waqt ke dariya mein behtay 🌊
+sad : Khamoshi mein bhi ek geet 🌙
+love : Dil ke kagaz pe likhi si baat 📝
+love : Dil ke kagaz pe likhi si baat 📝
+* : Dil ke samundar ki leher 💫
+hi : Raat ke andheron mein bhi ek awaaz 🍂
+* : Khayalon ke aasmaan ☁️
+sad : Khamoshi mein bhi ek geet 🌙
+love : Dil ke kagaz pe likhi si baat 📝
+love : Dil ke kagaz pe likhi si baat 📝
+miss : Yaadein hawa ke jhonke si 🍃
+* : Khayalon ke aasmaan ☁️
+hi : Raat ke andheron mein bhi ek awaaz 🍂
+* : Khayalon ke aasmaan ☁️
+miss : Yaadein hawa ke jhonke si 🍃
+* : Chandni si muskaan 🌕
+* : Khayalon ke aasmaan ☁️
+* : Khayalon ke aasmaan ☁️
+sad : Khamoshi mein bhi ek geet 🌙
+love : Dil ke kagaz pe likhi si baat 📝
+* : Chandni si muskaan 🌕
+sad : Khamoshi mein bhi ek geet 🌙
+hi : Raat ke andheron mein bhi ek awaaz 🍂
+love : Dil ke kagaz pe likhi si baat 📝
+love : Dil ke kagaz pe likhi si baat 📝
+miss : Yaadein hawa ke jhonke si 🍃
+* : Khayalon ke aasmaan ☁️
+miss : Yaadein hawa ke jhonke si 🍃
+* : Khayalon ke aasmaan ☁️
+* : Dil ke samundar ki leher 💫
+* : Waqt ke dariya mein behtay 🌊
+miss : Yaadein hawa ke jhonke si 🍃
+* : Khayalon ke aasmaan ☁️
+hi : Raat ke andheron mein bhi ek awaaz 🍂
+hi : Raat ke andheron mein bhi ek awaaz 🍂
+hi : Raat ke andheron mein bhi ek awaaz 🍂
+* : Waqt ke dariya mein behtay 🌊
+* : Chandni si muskaan 🌕
+* : Khayalon ke aasmaan ☁️
+love : Dil ke kagaz pe likhi si baat 📝
+love : Dil ke kagaz pe likhi si baat 📝
+* : Khayalon ke aasmaan ☁️
+* : Dil ke samundar ki leher 💫
+love : Dil ke kagaz pe likhi si baat 📝
+miss : Yaadein hawa ke jhonke si 🍃
+hi : Raat ke andheron mein bhi ek awaaz 🍂
+miss : Yaadein hawa ke jhonke si 🍃
+* : Khayalon ke aasmaan ☁️
+sad : Khamoshi mein bhi ek geet 🌙
+* : Dil ke samundar ki leher 💫
+miss : Yaadein hawa ke jhonke si 🍃
+* : Chandni si muskaan 🌕
+* : Chandni si muskaan 🌕
+miss : Yaadein hawa ke jhonke si 🍃
+miss : Yaadein hawa ke jhonke si 🍃
+hi : Raat ke andheron mein bhi ek awaaz 🍂
+* : Khayalon ke aasmaan ☁️
+sad : Khamoshi mein bhi ek geet 🌙
+* : Waqt ke dariya mein behtay 🌊
+love : Dil ke kagaz pe likhi si baat 📝
+* : Chandni si muskaan 🌕
+miss : Yaadein hawa ke jhonke si 🍃
+* : Chandni si muskaan 🌕
+* : Khayalon ke aasmaan ☁️
+* : Chandni si muskaan 🌕
+* : Chandni si muskaan 🌕
+* : Dil ke samundar ki leher 💫
+* : Khayalon ke aasmaan ☁️
+hi : Raat ke andheron mein bhi ek awaaz 🍂
+hi : Raat ke andheron mein bhi ek awaaz 🍂
+miss : Yaadein hawa ke jhonke si 🍃
+* : Dil ke samundar ki leher 💫
+* : Waqt ke dariya mein behtay 🌊
+* : Chandni si muskaan 🌕
+* : Khayalon ke aasmaan ☁️
+* : Khayalon ke aasmaan ☁️
+* : Chandni si muskaan 🌕
+* : Khayalon ke aasmaan ☁️
+* : Chandni si muskaan 🌕
+* : Dil ke samundar ki leher 💫
+hi : Raat ke andheron mein bhi ek awaaz 🍂
+sad : Khamoshi mein bhi ek geet 🌙
+miss : Yaadein hawa ke jhonke si 🍃
+* : Dil ke samundar ki leher 💫
+miss : Yaadein hawa ke jhonke si 🍃
+hi : Raat ke andheron mein bhi ek awaaz 🍂
+sad : Khamoshi mein bhi ek geet 🌙
+love : Dil ke kagaz pe likhi si baat 📝
+sad : Khamoshi mein bhi ek geet 🌙
+* : Dil ke samundar ki leher 💫
+love : Dil ke kagaz pe likhi si baat 📝
+miss : Yaadein hawa ke jhonke si 🍃

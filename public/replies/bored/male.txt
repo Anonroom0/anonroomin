@@ -1,102 +1,103 @@
-# Bored - Male (Hinglish mix)
+# Bored - Male
+# Logical, relevant chat replies with emoji
 
-* : Acha
-* : Alright
-* : Cool
-* : Got it
-* : Haan
-* : Hmm interesting
-* : Okay noted
-* : Samajh gaya
-* : Sure
-* : Theek hai
-aaja : Main empty mode
-again : Aaj no plans no energy
-alone : Aaj zero stimulation
-always, alone : Kuch bhi nahi happening
-angry, bye : Main waiting for something
-are you serious : Main waiting for something to happen
-awesome : Kuch bhi exciting nahi
-bad : Aaj ka plan: nothing
-bata : Main empty schedule
-bhej : Din slow
-bilkul : Din slow
-bro : Main scrolling without purpose
-bye : Din endless lag raha
-choice : Main zombie mode
-come : Time pass nahi ho raha
-confused : Kuch bhi nahi chal raha
-crazy, pi : Kuch bhi try nahi kar raha
-din : Main nothing to do
-dumb : Main waiting for night
-false : Din endless loop
-family, please : Boredom is my current state
-fool : Aaj bilkul bore ho raha
-game : Din endless lag raha
-gm : Time not passing
-gn : Time wasting expert
-good morning, are you serious : Main low stimulation
-great : Main nothing mode mein
-hola : Main waiting for something
-hope : Din dragging
-idiot : Aaj zero stimulation
-intelligent : Time crawling
-jhooth : Main just existing
-job : Main empty mode
-kab, again : Aaj no excitement
-kaise : Aaj nothing interesting
-kaun, ty : Boredom accepted
-kismat : Aaj blank day
-kya chal raha, awesome : Kuch interesting nahi mil raha
-kya scene : Kuch bhi try nahi kar raha
-lie : Kuch bhi nahi happening
-life, fool : Kuch bhi try karne ka mood nahi
-lmao : Time wasting expert
-lol, confused : Din endless loop
-maa : Kuch bhi exciting nahi
-madad, great : Main passive observer
-mark, raaz : Main blank stare mode mein
-meet, bhej : Boredom peak pe
-movie : Main passive observer
-nonsense : Boredom is loud today
-okay : Time slow motion mein
-omg : Kuch bhi nahi feel
-padhai, aaja : Kuch bhi nahi feel
-pagal, random : Din dragging
-papa : Kuch bhi nahi chal
-parivar : Boredom confirmed
-party : Boredom peak
-pasand, lmao : Time slow motion mein
-pi : Main scrolling without purpose
-play, kaise : Boredom peak
-please : Main waiting for night
-pyaar, study : Main staring at wall mentally
-question : Main nothing to do
-raaz : Boredom level high
-random : Aaj ka plan: nothing
-rank, welcome : Boredom confirmed
-result, time : Time crawling
-sach, text : Main zombie mode
-safe, din : Main just existing
-see you : Din repeat feel
-share : Kuch bhi nahi interesting
-sometimes : Aaj no plans no energy
-study : Aaj no spark
-sup : Main empty schedule
-tc : Aaj no spark
-text : Time not passing
-thank you : Main passive mode
-time : Boredom is loud today
-tomorrow : Main empty brain
-true : Kuch interesting nahi mil raha
-truth : Boredom is my current state
-try : Kuch bhi nahi chal raha
-ty : Kuch bhi nahi interesting
-ummeed : Main staring at wall mentally
-vishwas : Boredom peak pe
-welcome : Time pass nahi ho raha
-wfh : Boredom accepted
-win : Main nothing mode mein
-yeah : Aaj no excitement
-yup : Aaj nothing interesting
-zindagi, bata : Kuch bhi nahi chal
+hi : Hey... kuch nahi chal raha 😴
+how are you : Bore pure 😑
+what : Kuch nahi... blank 😴
+talk : Baat? Time pass 😑
+* : Din endless 😴
+* : Nothing interesting 😑
+* : Scrolling without purpose 😴
+* : Zombie mode 😑
+* : Time slow 😴
+* : Scrolling without purpose 😴
+* : Nothing interesting 😑
+how are you : Bore pure 😑
+* : Din endless 😴
+* : Time slow 😴
+* : Zombie mode 😑
+what : Kuch nahi... blank 😴
+how are you : Bore pure 😑
+* : Time slow 😴
+how are you : Bore pure 😑
+talk : Baat? Time pass 😑
+* : Scrolling without purpose 😴
+* : Din endless 😴
+how are you : Bore pure 😑
+hi : Hey... kuch nahi chal raha 😴
+how are you : Bore pure 😑
+* : Zombie mode 😑
+what : Kuch nahi... blank 😴
+* : Time slow 😴
+how are you : Bore pure 😑
+talk : Baat? Time pass 😑
+hi : Hey... kuch nahi chal raha 😴
+what : Kuch nahi... blank 😴
+what : Kuch nahi... blank 😴
+* : Nothing interesting 😑
+* : Din endless 😴
+* : Zombie mode 😑
+* : Zombie mode 😑
+* : Din endless 😴
+* : Nothing interesting 😑
+hi : Hey... kuch nahi chal raha 😴
+* : Time slow 😴
+* : Din endless 😴
+* : Zombie mode 😑
+* : Time slow 😴
+hi : Hey... kuch nahi chal raha 😴
+* : Zombie mode 😑
+* : Din endless 😴
+* : Zombie mode 😑
+* : Zombie mode 😑
+talk : Baat? Time pass 😑
+* : Scrolling without purpose 😴
+* : Scrolling without purpose 😴
+what : Kuch nahi... blank 😴
+* : Din endless 😴
+talk : Baat? Time pass 😑
+* : Time slow 😴
+* : Din endless 😴
+* : Scrolling without purpose 😴
+* : Nothing interesting 😑
+* : Din endless 😴
+* : Time slow 😴
+hi : Hey... kuch nahi chal raha 😴
+talk : Baat? Time pass 😑
+* : Time slow 😴
+hi : Hey... kuch nahi chal raha 😴
+* : Zombie mode 😑
+* : Nothing interesting 😑
+what : Kuch nahi... blank 😴
+* : Scrolling without purpose 😴
+* : Scrolling without purpose 😴
+* : Din endless 😴
+hi : Hey... kuch nahi chal raha 😴
+* : Scrolling without purpose 😴
+* : Scrolling without purpose 😴
+* : Scrolling without purpose 😴
+* : Din endless 😴
+talk : Baat? Time pass 😑
+hi : Hey... kuch nahi chal raha 😴
+* : Zombie mode 😑
+hi : Hey... kuch nahi chal raha 😴
+* : Din endless 😴
+what : Kuch nahi... blank 😴
+how are you : Bore pure 😑
+* : Nothing interesting 😑
+* : Scrolling without purpose 😴
+how are you : Bore pure 😑
+* : Time slow 😴
+hi : Hey... kuch nahi chal raha 😴
+hi : Hey... kuch nahi chal raha 😴
+* : Din endless 😴
+hi : Hey... kuch nahi chal raha 😴
+talk : Baat? Time pass 😑
+how are you : Bore pure 😑
+how are you : Bore pure 😑
+* : Nothing interesting 😑
+* : Zombie mode 😑
+* : Zombie mode 😑
+* : Zombie mode 😑
+how are you : Bore pure 😑
+how are you : Bore pure 😑

@@ -1,102 +1,103 @@
-# Motivational - Male (Hinglish mix)
+# Motivational - Male
+# Logical, relevant chat replies with emoji
 
-* : Acha
-* : Alright
-* : Cool
-* : Got it
-* : Haan
-* : Hmm interesting
-* : Okay noted
-* : Samajh gaya
-* : Sure
-* : Theek hai
-aaja : Keep moving forward
-achha : Tu on the right path hai
-amazing : Tu stronger hai than you think
-are you serious : Tu making progress even now
-bata : Small wins celebrate kar
-beautiful : Keep going, progress slow but real hai
-bestie, theek : Doubt mat kar, action le
-bhai, achha : Tu can rewrite your story
-bhej : Tu already brave hai for trying
-bhool : Tu already brave hai for trying
-bored : Growth uncomfortable hota hai
-bro : Tu can handle this
-confused : Tu apni limits push kar sakta hai
-deadline : Keep moving forward
-dost : Failure toh part of process hai
-dream : Aaj ka effort future banayega
-dumb : Keep showing up
-exactly : Tu capable of change
-exam : Keep the momentum
-fail : Your future self thank karega
-failure : Tu apni story ka hero hai
-false : Tu not alone in this
-forget, wassup : Hard work compound hota hai
-free : Believe in yourself more
-future, deadline : Failure toh part of process hai
-game : Tu try kar raha hai, woh enough hai
-god : Tu on your way hai
-goodbye : Keep going, I'm rooting for you
-great, listen : Small wins celebrate kar
-gussa : Tu enough hai already
-hamesha, are you serious : Tu already started, continue
-hello, goodbye : Tu stronger hai than you think
-hey : Tu apni limits push kar sakta hai
-heyy, yaad : Hard days temporary hain
-hii, wtf : Today is a good day to start
-i love you : Tu capable hai, doubt mat kar
-joke, kab : Believe in yourself more
-kaam : Patience ke saath power aati hai
-kab : Tu stronger ban raha hai
-kismat : Keep the faith
-kya : Believe in the process
-lazy : Trust the timing
-lie : Tu capable hai of greatness
-like : Hard days temporary hain
-listen : Trust the timing
-meme : Aaj ka effort future banayega
-music, score : Keep the faith
-nahi, bro : Tu deserve karta hai better
-namaste : Keep going, progress slow but real hai
-night, omg : Tu capable hai of greatness
-office : Every effort counts
-omg : Har din naya chance hai
-opportunity : Small steps bhi matter karte hain
-option, bored : Tu on your way hai
-padhai, so ja : Every setback setup for comeback
-pasand : Har din naya chance hai
-perhaps : Tu enough hai already
-phir se : Tu capable of more than you know
-photo : Hard work compound hota hai
-pi, send : Keep trying, results aayenge
-problem : Keep going, I'm rooting for you
-public, bhej : Tu closer hai than you feel
-random, safe : Tu capable of more than you know
-relax, perhaps : Tu try kar raha hai, woh enough hai
-sach hai, beautiful : Tu capable hai, doubt mat kar
-safe : Small steps bhi matter karte hain
-sapna, meme : Every effort counts
-score : Patience ke saath power aati hai
-send : Tu not alone in this
-share, when : Keep the momentum
-so ja : Progress > perfection
-solution : Tu on the right path hai
-stupid, confused : Believe in the process
-sun : Tu making progress even now
-sup : Growth uncomfortable hota hai
-talk : Tu resilient hai
-theek : Tu grow kar raha hai even if slow
-tired : Tu stronger ban raha hai
-video : Tu can handle this
-wassup : Tu resilient hai
-welcome : Keep trying, results aayenge
-what : Tu can rewrite your story
-when : Keep showing up
-where : One day at a time
-work : Tu closer hai than you feel
-worry : Tu building something real
-wtf : Tu kar sakta hai, bas try karte reh
-yaad : One day at a time
-yaad rakh : Tu deserve karta hai better
-yes : Tu already started, continue
+hi : Hey, aaj ka din jeetne wala 💪
+sad, down, fail : Failure part of process, uth ja 🔥
+tired : Rest le, phir wapas aaja stronger 💪
+help : Tu kar sakta, main believe karta 🌟
+why : Kyun try nahi? Tu capable 💪
+ok : Ok se aage badh, action le 🔥
+* : Tu stronger hai than you think 💪
+* : Small steps matter 🌱
+* : Keep going 🔥
+* : Tu enough hai 🌟
+* : Progress > perfection 💪
+* : One day at a time ☀️
+why : Kyun try nahi? Tu capable 💪
+* : Tu enough hai 🌟
+* : Progress > perfection 💪
+* : One day at a time ☀️
+hi : Hey, aaj ka din jeetne wala 💪
+* : Keep going 🔥
+help : Tu kar sakta, main believe karta 🌟
+* : Keep going 🔥
+why : Kyun try nahi? Tu capable 💪
+help : Tu kar sakta, main believe karta 🌟
+* : Tu stronger hai than you think 💪
+tired : Rest le, phir wapas aaja stronger 💪
+* : Tu enough hai 🌟
+sad, down, fail : Failure part of process, uth ja 🔥
+hi : Hey, aaj ka din jeetne wala 💪
+* : Progress > perfection 💪
+hi : Hey, aaj ka din jeetne wala 💪
+* : Small steps matter 🌱
+* : Tu stronger hai than you think 💪
+why : Kyun try nahi? Tu capable 💪
+* : One day at a time ☀️
+* : Tu stronger hai than you think 💪
+* : Keep going 🔥
+why : Kyun try nahi? Tu capable 💪
+sad, down, fail : Failure part of process, uth ja 🔥
+help : Tu kar sakta, main believe karta 🌟
+hi : Hey, aaj ka din jeetne wala 💪
+* : Small steps matter 🌱
+ok : Ok se aage badh, action le 🔥
+* : Tu enough hai 🌟
+tired : Rest le, phir wapas aaja stronger 💪
+* : Keep going 🔥
+* : Tu enough hai 🌟
+* : Tu enough hai 🌟
+sad, down, fail : Failure part of process, uth ja 🔥
+why : Kyun try nahi? Tu capable 💪
+ok : Ok se aage badh, action le 🔥
+* : One day at a time ☀️
+* : One day at a time ☀️
+* : Small steps matter 🌱
+sad, down, fail : Failure part of process, uth ja 🔥
+ok : Ok se aage badh, action le 🔥
+help : Tu kar sakta, main believe karta 🌟
+help : Tu kar sakta, main believe karta 🌟
+* : Tu enough hai 🌟
+tired : Rest le, phir wapas aaja stronger 💪
+* : One day at a time ☀️
+* : One day at a time ☀️
+* : Progress > perfection 💪
+tired : Rest le, phir wapas aaja stronger 💪
+* : Progress > perfection 💪
+ok : Ok se aage badh, action le 🔥
+hi : Hey, aaj ka din jeetne wala 💪
+why : Kyun try nahi? Tu capable 💪
+* : Tu enough hai 🌟
+ok : Ok se aage badh, action le 🔥
+tired : Rest le, phir wapas aaja stronger 💪
+help : Tu kar sakta, main believe karta 🌟
+sad, down, fail : Failure part of process, uth ja 🔥
+sad, down, fail : Failure part of process, uth ja 🔥
+sad, down, fail : Failure part of process, uth ja 🔥
+why : Kyun try nahi? Tu capable 💪
+* : Tu stronger hai than you think 💪
+* : Tu stronger hai than you think 💪
+ok : Ok se aage badh, action le 🔥
+tired : Rest le, phir wapas aaja stronger 💪
+help : Tu kar sakta, main believe karta 🌟
+help : Tu kar sakta, main believe karta 🌟
+* : One day at a time ☀️
+hi : Hey, aaj ka din jeetne wala 💪
+* : Tu stronger hai than you think 💪
+* : Small steps matter 🌱
+* : Small steps matter 🌱
+* : Small steps matter 🌱
+* : One day at a time ☀️
+help : Tu kar sakta, main believe karta 🌟
+why : Kyun try nahi? Tu capable 💪
+* : Tu stronger hai than you think 💪
+* : Tu enough hai 🌟
+* : Progress > perfection 💪
+why : Kyun try nahi? Tu capable 💪
+* : Tu enough hai 🌟
+* : Keep going 🔥
+help : Tu kar sakta, main believe karta 🌟
+why : Kyun try nahi? Tu capable 💪
+ok : Ok se aage badh, action le 🔥
+* : Keep going 🔥
+* : Small steps matter 🌱

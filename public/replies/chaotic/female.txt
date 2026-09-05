@@ -1,102 +1,103 @@
-# Chaotic - Female (Hinglish mix)
+# Chaotic - Female
+# Logical, relevant chat replies with emoji
 
-* : Acha
-* : Alright
-* : Cool
-* : Got it
-* : Haan
-* : Hmm interesting
-* : Okay noted
-* : Samajh gaya
-* : Sure
-* : Theek hai
-achha, who : Random spam incoming
-alone : Main decide karne mein fail ho gaya
-awesome : Main decide karne mein fail ho gaya
-bata : Random is the new normal
-call : Chaos is free therapy
-come : Chaos mode on, no plan just vibes
-crazy : Random thought: kya agar sab kuch simulation ho
-danger : Main 10 different personalities try kar raha
-definitely : No thoughts just pure chaos
-dost, listen : Chaos is a ladder... or something
-dream : Main abhi bhi nahi samajha
-drink : Main confused but committed
-fail : Kuch bhi bol raha hoon, ignore mat karna
-faith : Main 3 different things soch raha hoon simultaneously
-family, friend : Random is the new normal
-fool : Random energy spike
-free : Main 5 tabs open rakh ke soch raha hoon
-friend : Random thought dump starts now
-fun : Aaj ka day: plot twist every hour
-gn : Random energy spike
-good night : Aaj ka day: plot twist every hour
-gossip, kabhi nahi : No thoughts, head empty, just vibes
-great : Main abhi bhi buffering
-haan : No structure, only feelings
-haha : Main decide karne se darta hoon
-hangout, jaaneman : Main abhi bhi process kar raha hoon
-happy, crazy : Brain loading... 99% complete... error
-hello : Main 10 different personalities try kar raha
-help : Brain is doing parkour
-jaaneman : Chaos accepted
-joke : Main abhi bhi process mode mein
-kab, serious : Chaos mode: activated
-kabhi kabhi, morning : No structure, only feelings
-kabhi nahi : Main 3 different things soch raha hoon simultaneously
-kahan : Main abhi bhi loading
-kaun, of course : Aaj ka plan: no plan
-khabar, video : Aaj ka mood: unpredictable
-khel : Brain loading... 99% complete... error
-lazy : No thoughts, head empty, just vibes
-listen : Brain went offline for maintenance
-lmao, random thought : No plan survives contact with me
-love, please : Pure unfiltered energy
-madad : Random thought dump starts now
-mark, danger : Main abhi bhi process mode mein
-morning : Main decide karne se darta hoon
-msg : Random thought: kya agar sab kuch simulation ho
-music : Chaos is my comfort zone
-nice : Pure unfiltered energy
-nonsense : Aaj ka vibe: unfiltered
-of course : Main abhi decide nahi kar paya kya bolun
-padhai : Chaos accepted, order rejected
-paisa : Main abhi bhi nahi jaanta kya bolun next
-parents : Random switch stuck on
-party : Main decide nahi kar sakta simple cheez
-please : Kuch bhi bol raha hoon, ignore mat karna
-post : Random switch on
-problem, alone : Brain is doing parkour
-public : Main abhi bhi nahi samajha
-raat : Energy unstable
-random : Aaj ka energy: pure chaos
-random thought : Aaj ka plan cancelled, new plan also cancelled
-result, public : Chaos is my comfort zone
-risk : Brain.exe has stopped working
-rumour : No plan survives contact with me
-sach hai, drink : Main 5 tabs open rakh ke soch raha hoon
-sach, good night : Random fact: main random hoon
-score, parents : Kya scene hai, main confuse hoon
-serious : Brain went on vacation
-shayad : Chaos is a ladder... or something
-sis, gn : Main abhi bhi loading
-so ja : Brain.exe has stopped working
-status : Random spam incoming
-stupid : Main abhi decide nahi kar paya kya bolun
-success : Random fact: main random hoon
-sun : Aaj ka mood: unpredictable
-thak : Aaj ka plan cancelled, new plan also cancelled
-thanks : Aaj ka mood: unhinged
-thinking : Brain went offline for maintenance
-today, random : No thoughts just pure chaos
-ty : Main confused but committed
-video : Random switch on
-wassup : Aaj ka vibe: unfiltered
-welcome, wassup : Main abhi bhi nahi samajh paya kya hua
-what : Chaos accepted, order rejected
-who : Aaj ka mood: unhinged
-work from home : Aaj ka energy: pure chaos
-worry : Main abhi bhi nahi samajh paya kya hua
-yaad rakh, what : Chaos is free therapy
-yeah : Aaj ka plan: no plan
-yes, risk : Chaos mode on, no plan just vibes
+hi : Random hi 🤪
+how are you : Chaos mode 😵
+what : 5 cheezein soch 🤯
+why : No plan vibes 🤪
+ok : Plot twist aane wala 😏
+bored : Random spam 🤪
+talk : No structure 😵
+* : Brain stopped 🤯
+* : Just chaos 🤪
+* : Thought dump 💭
+* : Unstable ⚡
+* : Plot twist 😏
+how are you : Chaos mode 😵
+* : Plot twist 😏
+* : Just chaos 🤪
+* : Unstable ⚡
+hi : Random hi 🤪
+* : Unstable ⚡
+what : 5 cheezein soch 🤯
+bored : Random spam 🤪
+* : Brain stopped 🤯
+* : Just chaos 🤪
+* : Just chaos 🤪
+* : Unstable ⚡
+hi : Random hi 🤪
+why : No plan vibes 🤪
+ok : Plot twist aane wala 😏
+bored : Random spam 🤪
+* : Unstable ⚡
+hi : Random hi 🤪
+why : No plan vibes 🤪
+ok : Plot twist aane wala 😏
+how are you : Chaos mode 😵
+bored : Random spam 🤪
+bored : Random spam 🤪
+* : Thought dump 💭
+* : Thought dump 💭
+why : No plan vibes 🤪
+* : Thought dump 💭
+* : Thought dump 💭
+ok : Plot twist aane wala 😏
+bored : Random spam 🤪
+* : Unstable ⚡
+* : Unstable ⚡
+* : Unstable ⚡
+how are you : Chaos mode 😵
+how are you : Chaos mode 😵
+what : 5 cheezein soch 🤯
+* : Unstable ⚡
+* : Just chaos 🤪
+* : Unstable ⚡
+* : Just chaos 🤪
+ok : Plot twist aane wala 😏
+what : 5 cheezein soch 🤯
+ok : Plot twist aane wala 😏
+what : 5 cheezein soch 🤯
+what : 5 cheezein soch 🤯
+* : Brain stopped 🤯
+ok : Plot twist aane wala 😏
+ok : Plot twist aane wala 😏
+hi : Random hi 🤪
+what : 5 cheezein soch 🤯
+talk : No structure 😵
+* : Brain stopped 🤯
+* : Unstable ⚡
+how are you : Chaos mode 😵
+* : Thought dump 💭
+why : No plan vibes 🤪
+hi : Random hi 🤪
+what : 5 cheezein soch 🤯
+* : Just chaos 🤪
+how are you : Chaos mode 😵
+why : No plan vibes 🤪
+talk : No structure 😵
+* : Brain stopped 🤯
+* : Unstable ⚡
+* : Just chaos 🤪
+why : No plan vibes 🤪
+hi : Random hi 🤪
+* : Unstable ⚡
+bored : Random spam 🤪
+* : Brain stopped 🤯
+hi : Random hi 🤪
+why : No plan vibes 🤪
+* : Just chaos 🤪
+* : Thought dump 💭
+* : Plot twist 😏
+* : Just chaos 🤪
+talk : No structure 😵
+what : 5 cheezein soch 🤯
+talk : No structure 😵
+* : Brain stopped 🤯
+hi : Random hi 🤪
+* : Thought dump 💭
+why : No plan vibes 🤪
+bored : Random spam 🤪
+* : Unstable ⚡
+talk : No structure 😵
+* : Thought dump 💭
+what : 5 cheezein soch 🤯

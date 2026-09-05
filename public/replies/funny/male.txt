@@ -1,102 +1,103 @@
-# Funny / Meme - Male (Hinglish mix)
+# Funny / Meme - Male
+# Logical, relevant chat replies with emoji
 
-* : Acha
-* : Alright
-* : Cool
-* : Got it
-* : Haan
-* : Hmm interesting
-* : Okay noted
-* : Samajh gaya
-* : Sure
-* : Theek hai
-alone : Tu toh natural comedian
-always : Comedy without trying
-baat : Comedy timing perfect
-baby : Main screenshot le raha mentally
-bad : Tu toh natural comedian
-bata : Joke delivered successfully
-behen, welcome : Tu toh NPC energy de raha
-bhai, call : Comedy timing perfect
-bilkul : Bro thought he was the main character
-boring : Main meme banane wala mood mein
-busy : Tu toh accidental meme
-call : Tu toh accidental comedian
-chance : Main saving this for later
-chat : Tu toh accidental comedian
-cute, video : Comedy without trying
-deep talk, family : Main dying of laughter
-din : Joke level: expert
-dost : Main hasi mode permanent
-exam : Main hasi ke paise le sakta
-faith : Plot twist: koi nahi care karta
-family : Main still laughing
-forget, nonsense : Comedy mode activated
-free, really : Comedy show free mein mil gaya
-future : Joke deliver ho gaya
-gn, pasand : Yeh toh plot armor fail
-god, random thought : Brain.exe crashed successfully
-good night : Main replaying this mentally
-gussa : Tu toh funny without effort
-haha : Main can't even
-hate : Yeh toh pure gold
-hehe : Hasi free therapy
-hope : Tu toh meme material pure
-hot : Yeh toh classic fail
-how : Loading joke... complete
-jaaneman, post : Bro thought he was the main character
-joke, alone : Tu toh meme material pure
-kaam : Yeh toh failed serious attempt
-kabhi nahi : Comedy show free mein mil gaya
-kaise ho : Main second hand embarrassment feel
-kal : Yeh toh peak comedy
-kaun, kaam : Main entertainment ke liye yahan
-kha, theek : Loading joke... complete
-kya chal raha : Yeh toh failed serious attempt
-lie : Yeh energy unmatched (in wrong way)
-life : Hasi aa rahi control nahi
-like, faith : Main hasi ke paise le sakta
-lmao, vishwas : Main replaying this mentally
-love you : Yeh toh classic fail
-masti : Hasi free therapy
-meet : Hasi aa rahi control nahi
-nahi : Joke level: expert
-namaste : Tu toh walking joke ban gaya
-never, life : Joke delivered successfully
-night : Hasi nahi ruk rahi
-nonsense : Yeh toh pure gold
-okay : Brain.exe crashed successfully
-padhai : Main hasi nahi rok pa raha
-papa, hehe : Main can't stop
-parivar : Main entertainment satisfied
-pasand : Yeh toh unexpected plot
-pi, nahi : Tu toh accidental meme
-plan : Main clap kar raha sarcastically
-post : Joke deliver ho gaya
-problem, kal : Tu toh walking punchline
-pyaar : Tu toh comedy gold mine
-random : Comedy mode activated
-random thought : Main screenshot le raha mentally
-rank : Main laughing in binary
-really : Yeh toh unexpected funny
-relax : Main meme banane wala mood mein
-risk : Main can't stop
-rumour : Tu toh NPC energy de raha
-school : Entertainment value high
-secret : Main entertainment ke liye yahan
-sexy : Plot twist: koi nahi care karta
-smart, pyaar : Yeh toh comedy gold hai
-song, hot : Entertainment value high
-status : Yeh energy unmatched (in wrong way)
-subah : Error 404: seriousness not found
-thanks : Main dying of laughter
-theek : Main laughing in binary
-thinking : Error 404: seriousness not found
-tomorrow, relax : Main hasi nahi rok pa raha
-video : Main can't even
-vishwas : Tu toh walking joke ban gaya
-welcome : Main clap kar raha sarcastically
-who, status : Main saving this for later
-work from home, subah : Main second hand embarrassment feel
-worry : Main still laughing
-zindagi : Yeh toh unexpected funny
+hi : Bro thought he was main character 😂
+what : Plot twist: koi care nahi 🤣
+why : Kyun? Kyunki comedy gold 😂
+ok : Ok bolke L le liya 💀
+* : Error 404 seriousness 😂
+* : Walking meme 🤣
+* : Hasi nahi ruk rahi 😂
+* : Accidental comedian 💀
+* : Peak comedy 🤣
+* : Accidental comedian 💀
+why : Kyun? Kyunki comedy gold 😂
+hi : Bro thought he was main character 😂
+* : Accidental comedian 💀
+hi : Bro thought he was main character 😂
+* : Error 404 seriousness 😂
+* : Walking meme 🤣
+why : Kyun? Kyunki comedy gold 😂
+what : Plot twist: koi care nahi 🤣
+* : Hasi nahi ruk rahi 😂
+* : Peak comedy 🤣
+hi : Bro thought he was main character 😂
+why : Kyun? Kyunki comedy gold 😂
+what : Plot twist: koi care nahi 🤣
+* : Walking meme 🤣
+* : Hasi nahi ruk rahi 😂
+* : Accidental comedian 💀
+why : Kyun? Kyunki comedy gold 😂
+* : Error 404 seriousness 😂
+* : Hasi nahi ruk rahi 😂
+hi : Bro thought he was main character 😂
+* : Hasi nahi ruk rahi 😂
+why : Kyun? Kyunki comedy gold 😂
+* : Hasi nahi ruk rahi 😂
+hi : Bro thought he was main character 😂
+* : Accidental comedian 💀
+* : Walking meme 🤣
+hi : Bro thought he was main character 😂
+hi : Bro thought he was main character 😂
+what : Plot twist: koi care nahi 🤣
+* : Hasi nahi ruk rahi 😂
+* : Error 404 seriousness 😂
+ok : Ok bolke L le liya 💀
+* : Walking meme 🤣
+* : Error 404 seriousness 😂
+what : Plot twist: koi care nahi 🤣
+* : Accidental comedian 💀
+why : Kyun? Kyunki comedy gold 😂
+hi : Bro thought he was main character 😂
+* : Peak comedy 🤣
+* : Peak comedy 🤣
+hi : Bro thought he was main character 😂
+* : Hasi nahi ruk rahi 😂
+hi : Bro thought he was main character 😂
+* : Error 404 seriousness 😂
+* : Walking meme 🤣
+* : Peak comedy 🤣
+* : Accidental comedian 💀
+what : Plot twist: koi care nahi 🤣
+hi : Bro thought he was main character 😂
+* : Error 404 seriousness 😂
+ok : Ok bolke L le liya 💀
+hi : Bro thought he was main character 😂
+hi : Bro thought he was main character 😂
+hi : Bro thought he was main character 😂
+why : Kyun? Kyunki comedy gold 😂
+* : Error 404 seriousness 😂
+hi : Bro thought he was main character 😂
+what : Plot twist: koi care nahi 🤣
+* : Hasi nahi ruk rahi 😂
+* : Hasi nahi ruk rahi 😂
+* : Walking meme 🤣
+what : Plot twist: koi care nahi 🤣
+what : Plot twist: koi care nahi 🤣
+* : Peak comedy 🤣
+* : Error 404 seriousness 😂
+why : Kyun? Kyunki comedy gold 😂
+what : Plot twist: koi care nahi 🤣
+* : Peak comedy 🤣
+why : Kyun? Kyunki comedy gold 😂
+why : Kyun? Kyunki comedy gold 😂
+* : Hasi nahi ruk rahi 😂
+why : Kyun? Kyunki comedy gold 😂
+* : Accidental comedian 💀
+* : Hasi nahi ruk rahi 😂
+hi : Bro thought he was main character 😂
+* : Hasi nahi ruk rahi 😂
+* : Peak comedy 🤣
+ok : Ok bolke L le liya 💀
+ok : Ok bolke L le liya 💀
+why : Kyun? Kyunki comedy gold 😂
+* : Peak comedy 🤣
+hi : Bro thought he was main character 😂
+* : Error 404 seriousness 😂
+* : Walking meme 🤣
+* : Error 404 seriousness 😂
+* : Walking meme 🤣
+hi : Bro thought he was main character 😂
+ok : Ok bolke L le liya 💀
+why : Kyun? Kyunki comedy gold 😂
+* : Peak comedy 🤣

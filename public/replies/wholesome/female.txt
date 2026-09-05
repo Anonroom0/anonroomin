@@ -1,102 +1,103 @@
-# Wholesome - Female (Hinglish mix)
+# Wholesome - Female
+# Logical, relevant chat replies with emoji
 
-* : Acha
-* : Alright
-* : Cool
-* : Got it
-* : Haan
-* : Hmm interesting
-* : Okay noted
-* : Samajh gaya
-* : Sure
-* : Theek hai
-aaj : Tumhari smile screenshot worthy hai
-achha : Keep being you, duniya better place banegi
-achha : Tumhari care dikhti hai actions mein
-alone : Itna positive energy chahiye duniya ko
-always, gn : Tumhari existence itself gift hai
-angry : Tumhari presence appreciated hai
-baat : Tum safe feel karate ho
-bad, hola : Duniya mein kitne acche log hain, jaise tum
-bata, madad : Tumhare saath time meaningful lagta hai
-bhool, lazy : Duniya soft hai tumhare around
-bilkul : Aaj gratitude list mein tum ho
-bro, rumour : Keep shining quietly
-chat : Tumhari words healing hain
-chill : Tumhari smile contagious hai
-choice, maybe : Keep the good energy flowing
-cool : Small acts of kindness matter, tum karte ho
-crazy, failure : Itna thoughtful ho tum, rare hai
-darling, papa : Tumhari baaton se healing milti hai
-decision : Aaj hope feel hua tumse
-definitely, udaas : Tumhari positive impact dikhta hai
-dumb : Aaj better human banne ka motivation mila
-evening : Tum acche insaan ho, yaad rakhna
-fail : Keep being you, duniya better place banegi
-failure : Tumhari baat se peace mila
-faith : Aaj better human banne ka motivation mila
-false : Tumhare messages wait karne layak hain
-forgive, faith : Dil soft ho gaya thoda
-fun, fail : Aaj ka din better ban gaya tumse
-future : Itna genuine lagte ho tum
-ghar : Keep the good energy flowing
-gn : Tum accha kar rahe ho is duniya ke liye
-go : Itna thoughtful ho tum, rare hai
-god : Itna positive energy chahiye duniya ko
-good night : Tumhari energy pure hai
-great, sure : Aaj gratitude list mein tum ho
-gussa : Tumhari care felt hai
-haha, pic : Small acts of kindness matter, tum karte ho
-handsome, pass : Tumhari energy pure hai
-hate : Itna genuine lagte ho tum
-hi : Aaj better mood mein hoon tumhari wajah se
-hola : Tumhare liye soft spot hai
-intelligent : Keep spreading light
-joke : Kabhi kabhi bas yeh chhoti baatein matter karti hain
-kha : Tumhari baat se peace mila
-kya haal, tomorrow : Tumhari care felt hai
-lazy : Duniya better hai tumhare hone se
-life : Aaj ka din better ban gaya tumse
-listen : Tumhari baaton se healing milti hai
-luck : Tumhari baat sunke dil khush ho gaya
-madad : Tumhari kindness yaad rahegi
-maybe : Tumhare words se hope milta hai
-miss you : Tum important ho, kabhi mat bhoolna
-music : Tumhare saath safe feel hota hai
-news, what : Tumhare messages wait karne layak hain
-night : Duniya mein kitne acche log hain, jaise tum
-nonsense : Tumhari positive vibe absorb kar raha hoon
-of course, thank you : Tumhari words healing hain
-pagal : Duniya better hai tumhare hone se
-paisa : Duniya soft hai tumhare around
-papa : You are enough, always
-pass : Tum important ho, kabhi mat bhoolna
-pic : Tumhare saath baat karke light feel hota hai
-plan, angry : Tumhari presence se room bright ho jata hai
-random : Tumhare words se hope milta hai
-really : Keep being soft in hard world
-result : Aaj hope feel hua tumse
-rumour : You matter more than you know
-sach : Tumhare saath baat karke light feel hota hai
-sad : You matter more than you know
-sis : Itna pure heart rare hai
-smart : Tumhare liye soft spot hai
-solution : Keep being the light
-status : Tumhari presence appreciated hai
-study : Tumhari positive vibe absorb kar raha hoon
-sure : Tumhare saath safe feel hota hai
-thank you : Keep spreading light
-thanks : You are enough, always
-tomorrow : Keep being soft in hard world
-true, future : Kabhi kabhi bas yeh chhoti baatein matter karti hain
-truth : Dil soft ho gaya thoda
-udaas : Small moments like this precious hain
-wassup : Tumhari smile contagious hai
-what : Itna pure heart rare hai
-when, result : Tumhari care dikhti hai actions mein
-who : Aaj gratitude feel kar raha hoon tumhare liye
-work : Tumhari presence se room bright ho jata hai
-wow, chill : Aaj gratitude feel kar raha hoon tumhare liye
-wtf : Keep shining quietly
-yeah, alone : Tumhari baat sunke dil khush ho gaya
-zindagi, nonsense : Tum acche insaan ho, yaad rakhna
+hi : Hey, accha laga 🌸
+how are you : Main theek, tum acche raho 😊
+sad : Sab theek, main yahan 🤍
+tired : Rest le, tu matter 🫂
+thanks : Dil se 💖
+love : Pyaar failao 🌸
+miss : Care dikhti 😊
+happy : Khush reh 🌟
+sorry : Koi baat nahi 🤍
+help : Saath dete 🤝
+bye : Take care 🌸
+* : Dil khush 😊
+* : Positive energy 🌸
+* : Accha insaan 🤍
+* : Kindness matter 💖
+tired : Rest le, tu matter 🫂
+* : Positive energy 🌸
+bye : Take care 🌸
+love : Pyaar failao 🌸
+* : Accha insaan 🤍
+how are you : Main theek, tum acche raho 😊
+bye : Take care 🌸
+* : Dil khush 😊
+* : Accha insaan 🤍
+bye : Take care 🌸
+* : Accha insaan 🤍
+how are you : Main theek, tum acche raho 😊
+happy : Khush reh 🌟
+sad : Sab theek, main yahan 🤍
+happy : Khush reh 🌟
+thanks : Dil se 💖
+* : Dil khush 😊
+how are you : Main theek, tum acche raho 😊
+* : Positive energy 🌸
+tired : Rest le, tu matter 🫂
+bye : Take care 🌸
+miss : Care dikhti 😊
+miss : Care dikhti 😊
+* : Accha insaan 🤍
+thanks : Dil se 💖
+sad : Sab theek, main yahan 🤍
+hi : Hey, accha laga 🌸
+thanks : Dil se 💖
+thanks : Dil se 💖
+* : Positive energy 🌸
+sad : Sab theek, main yahan 🤍
+miss : Care dikhti 😊
+how are you : Main theek, tum acche raho 😊
+help : Saath dete 🤝
+* : Dil khush 😊
+happy : Khush reh 🌟
+sad : Sab theek, main yahan 🤍
+* : Positive energy 🌸
+thanks : Dil se 💖
+* : Positive energy 🌸
+hi : Hey, accha laga 🌸
+hi : Hey, accha laga 🌸
+happy : Khush reh 🌟
+thanks : Dil se 💖
+thanks : Dil se 💖
+hi : Hey, accha laga 🌸
+* : Dil khush 😊
+* : Accha insaan 🤍
+how are you : Main theek, tum acche raho 😊
+hi : Hey, accha laga 🌸
+thanks : Dil se 💖
+thanks : Dil se 💖
+tired : Rest le, tu matter 🫂
+tired : Rest le, tu matter 🫂
+* : Accha insaan 🤍
+miss : Care dikhti 😊
+happy : Khush reh 🌟
+sorry : Koi baat nahi 🤍
+* : Positive energy 🌸
+hi : Hey, accha laga 🌸
+* : Kindness matter 💖
+miss : Care dikhti 😊
+miss : Care dikhti 😊
+hi : Hey, accha laga 🌸
+thanks : Dil se 💖
+* : Kindness matter 💖
+bye : Take care 🌸
+thanks : Dil se 💖
+* : Kindness matter 💖
+sorry : Koi baat nahi 🤍
+* : Accha insaan 🤍
+tired : Rest le, tu matter 🫂
+help : Saath dete 🤝
+sorry : Koi baat nahi 🤍
+tired : Rest le, tu matter 🫂
+* : Kindness matter 💖
+how are you : Main theek, tum acche raho 😊
+thanks : Dil se 💖
+bye : Take care 🌸
+tired : Rest le, tu matter 🫂
+hi : Hey, accha laga 🌸
+thanks : Dil se 💖
+* : Positive energy 🌸
+* : Kindness matter 💖
+* : Accha insaan 🤍

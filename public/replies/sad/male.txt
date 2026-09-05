@@ -1,102 +1,103 @@
-# Sad / Moody - Male (Hinglish mix)
+# Sad / Moody - Male
+# Logical, relevant chat replies with emoji
 
-* : Acha
-* : Alright
-* : Cool
-* : Got it
-* : Haan
-* : Hmm interesting
-* : Okay noted
-* : Samajh gaya
-* : Sure
-* : Theek hai
-achha, gm : Main struggle kar raha mentally
-akela : Thoda isolated feel
-amazing : Aaj no motivation
-bad : Aaj thoda down feel kar raha hoon
-bata : Aaj positive nahi feel
-beautiful, today : Aaj positive nahi feel
-bhai, haan : Din pass nahi ho raha
-bored : Aaj heavy thoughts
-boring : Main processing heavy stuff
-bye : Aaj no light
-chat, sach hai : Main emotionally flat
-chill : Kuch bhi feel nahi ho raha accha
-choice : Din slow motion mein
-cool : Kuch bhi spark nahi
-crazy, khush : Din endless lag raha
-darling : Thoda alone feel ho raha
-day : Kuch bhi meaning nahi dikh raha
-definitely : Kuch bhi interesting nahi lag raha
-dream : Main low pe hoon
-dumb : Mood kharab hai thoda
-exactly, miss : Aaj heavy chest
-fail : Main drained ho gaya
-game : Aaj thoda down feel kar raha hoon
-ghar : Kuch bhi accha nahi lag raha
-gm : Kuch bhi accha nahi lag raha
-gn : Main low battery human
-haan : Main overthink mode mein
-handsome, update : Main processing heavy stuff
-hello, issue : Thoda hopeless feel
-hola, work : Main low energy pe hoon
-hot : Din bhari lag raha
-how : Din bhari lag raha
-issue : Main struggling silently
-jaan : Mood dark grey
-kabhi nahi : Main down but here
-kaise ho, peace : Kuch bhi feel nahi ho raha accha
-kaise, papa : Main empty feel kar raha hoon
-khush : Main down but here
-kya haal, game : Mood kharab hai thoda
-lmao : Energy zero hai aaj
-lol : Aaj no light
-lose : Main low pe hoon
-love : Main struggle kar raha mentally
-luck : Main emotionally flat
-maaf : Kuch bhi light nahi lag raha
-madad : Thoda broken feel
-mark, show : Mood off confirmed
-miss : Main just existing
-naukri, raaz : Kuch bhi try karne ka mood nahi
-no : Kuch bhi try karne ka mood nahi
-of course : Kuch bhi light nahi lag raha
-opportunity : Mood grey hai aaj
-option : Thoda numb feel kar raha
-padhai : Thoda numb feel kar raha
-papa : Thoda lost feel
-parents : Kuch bhi clear nahi
-parivar, thank you : Main quiet mode mein
-pass : Main tired of feeling tired
-peace : Thoda empty inside
-pi : Thoda isolated feel
-pic : Thoda lost feel
-pls : Aaj heavy chest
-raaz : Kuch bhi spark nahi
-rank, try : Mood off hai pure
-remember, how : Aaj blank feel
-sach hai : Thoda alone feel ho raha
-safe : Mood off hai pure
-secret : Din endless lag raha
-see you : Main just existing
-serious talk : Main quiet mode mein
-serious, lol : Kuch bhi interesting nahi lag raha
-show : Aaj heavy thoughts
-so ja : Main struggling silently
-study : Mood off confirmed
-subah : Aaj blank feel
-sure, gn : Main tired of everything
-talk, of course : Aaj no motivation
-text : Kuch bhi sense nahi bana raha
-thak : Aaj heavy dil hai
-thank you : Mood grey hai aaj
-thanks, akela : Main tired of feeling tired
-thinking, option : Aaj heavy dil hai
-today : Kuch bhi meaning nahi dikh raha
-tomorrow : Thoda empty inside
-try : Kuch bhi sense nahi bana raha
-update : Thoda broken feel
-video : Main empty feel kar raha hoon
-vishwas : Thoda hopeless feel
-what's up, dream : Main drained ho gaya
-work : Main quiet and low
+hi : Hey... aaj thoda down 😔
+how are you : Theek nahi... heavy feel 😢
+miss : Miss kar raha, empty 😔
+love : Pyaar... abhi soft nahi 💔
+ok : Ok... but heavy 😢
+* : Mood grey hai 😔
+* : Energy zero 😢
+* : Empty feel 💔
+* : Just existing 😔
+* : Heavy dil 😢
+* : Energy zero 😢
+how are you : Theek nahi... heavy feel 😢
+* : Energy zero 😢
+hi : Hey... aaj thoda down 😔
+* : Empty feel 💔
+how are you : Theek nahi... heavy feel 😢
+love : Pyaar... abhi soft nahi 💔
+* : Just existing 😔
+* : Mood grey hai 😔
+* : Heavy dil 😢
+* : Energy zero 😢
+hi : Hey... aaj thoda down 😔
+ok : Ok... but heavy 😢
+* : Empty feel 💔
+hi : Hey... aaj thoda down 😔
+* : Just existing 😔
+* : Energy zero 😢
+* : Heavy dil 😢
+hi : Hey... aaj thoda down 😔
+* : Empty feel 💔
+love : Pyaar... abhi soft nahi 💔
+love : Pyaar... abhi soft nahi 💔
+hi : Hey... aaj thoda down 😔
+hi : Hey... aaj thoda down 😔
+* : Energy zero 😢
+love : Pyaar... abhi soft nahi 💔
+miss : Miss kar raha, empty 😔
+love : Pyaar... abhi soft nahi 💔
+* : Empty feel 💔
+* : Just existing 😔
+* : Empty feel 💔
+miss : Miss kar raha, empty 😔
+how are you : Theek nahi... heavy feel 😢
+* : Empty feel 💔
+hi : Hey... aaj thoda down 😔
+* : Heavy dil 😢
+ok : Ok... but heavy 😢
+* : Mood grey hai 😔
+* : Empty feel 💔
+* : Energy zero 😢
+* : Heavy dil 😢
+how are you : Theek nahi... heavy feel 😢
+* : Heavy dil 😢
+miss : Miss kar raha, empty 😔
+* : Just existing 😔
+miss : Miss kar raha, empty 😔
+ok : Ok... but heavy 😢
+* : Mood grey hai 😔
+love : Pyaar... abhi soft nahi 💔
+how are you : Theek nahi... heavy feel 😢
+* : Just existing 😔
+ok : Ok... but heavy 😢
+* : Energy zero 😢
+* : Heavy dil 😢
+miss : Miss kar raha, empty 😔
+* : Heavy dil 😢
+miss : Miss kar raha, empty 😔
+how are you : Theek nahi... heavy feel 😢
+* : Heavy dil 😢
+* : Empty feel 💔
+* : Heavy dil 😢
+* : Mood grey hai 😔
+love : Pyaar... abhi soft nahi 💔
+hi : Hey... aaj thoda down 😔
+how are you : Theek nahi... heavy feel 😢
+hi : Hey... aaj thoda down 😔
+ok : Ok... but heavy 😢
+* : Energy zero 😢
+hi : Hey... aaj thoda down 😔
+* : Heavy dil 😢
+* : Heavy dil 😢
+love : Pyaar... abhi soft nahi 💔
+* : Energy zero 😢
+* : Just existing 😔
+love : Pyaar... abhi soft nahi 💔
+love : Pyaar... abhi soft nahi 💔
+love : Pyaar... abhi soft nahi 💔
+miss : Miss kar raha, empty 😔
+* : Heavy dil 😢
+* : Energy zero 😢
+ok : Ok... but heavy 😢
+* : Heavy dil 😢
+miss : Miss kar raha, empty 😔
+* : Just existing 😔
+ok : Ok... but heavy 😢
+* : Heavy dil 😢
+* : Energy zero 😢
+how are you : Theek nahi... heavy feel 😢
+* : Mood grey hai 😔
+* : Energy zero 😢

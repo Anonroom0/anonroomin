@@ -1,102 +1,103 @@
-# Sweet - Male (Hinglish mix)
+# Sweet - Male
+# Logical, relevant chat replies with emoji
 
-* : Acha
-* : Alright
-* : Cool
-* : Got it
-* : Haan
-* : Hmm interesting
-* : Okay noted
-* : Samajh gaya
-* : Sure
-* : Theek hai
-achha, share : Tumhari smile wallpaper banani chahiye
-again : Aww jaan, itna sochna mat
-always : Gentle reminder: tum special ho
-amazing : Tumhari smile wallpaper banani chahiye
-angry : Tum mere peace ho
-answer : Tumse baat karke din ban jata hai yaar
-awesome : Tumhari kindness dekh ke respect badhta hai
-baby : Tumhari awaaz sunke better feel hota
-bakwas : Aaja paas, hug chahiye mujhe
-bhai, random : Tumhare saath time slow feel hota hai
-bhej : Tumhare liye soft spot hai mere dil mein
-bhool : Miss kar raha tha tumhe thoda sa
-bored, stupid : Tum mere peace ho
-bura : Sweet talk master ho tum
-call : Pyaar bhari baatein mat karo, melt ho jaunga
-chance, masti : Dil khush kar diya aaj
-chill : Sweetest conversation of the day
-confused : Kitna thoughtful ho tum
-crazy, awesome : Itna accha feel karaya tumne
-cute : Tumhare saath time slow feel hota hai
-deadline : Chalo thoda care karo mere of
-decision : Soft soft baatein chahiye aaj
-doubt : Dil light ho gaya
-drink, bhool : Aaj ka best part tumse baat karna tha
-go, work : Gentle reminder: tum special ho
-god : Itna care dikhana zaroori nahi, but pasand aaya
-haan : Care karne wala mood hai aaj
-happy : Kitna gentle ho tum, pasand hai
-hehe, answer : Tumhari smile dekh ke mood ban jata hai
-kab : Sweetest person online right now
-kabhi nahi : Dil khush kar diya aaj
-kaise : Tumhare saath sab theek lagta hai
-khabar, call : Kitna thoughtful ho tum
-khush, risk : Soft heart activated for you
-kismat, udaas : Tumhare messages wait karta rehta hoon
-kya : Tumhari positive energy chahiye daily
-lazy : Hugs unlimited for you
-lie : Tumse milke lagta hai duniya soft hai
-lol : Tumhari baaton se sukoon milta hai
-love : Dil pe effect pad gaya tumhara
-maaf, win : Aww itna sweet mat bol, dil soft ho jayega 🥺
-masti : Dil warm ho gaya tumhari baaton se
-maybe : Aww jaan, itna sochna mat
-miss : Sweetest person online right now
-money : Pyaar se baat karte raho
-news : Tum safe space ho mere liye
-night : Tum mere favourite person ho aaj
-pass : Aaja paas, hug chahiye mujhe
-peace : Itna soft side dikha diya tumne
-perhaps : Itna pyaar se baat mat karo, limit cross ho jayegi
-pic : Pyaar bhari baatein mat karo, melt ho jaunga
-play, sup : Dil light ho gaya
-pretty : Aww itna sweet mat bol, dil soft ho jayega 🥺
-problem : Tumse baat karke din ban jata hai yaar
-public : Chalo thoda care karo mere of
-raaz : Aaj tumse baat karke shanti mili
-random : Tumhari positive energy chahiye daily
-rank, work from home : Soft heart wala hoon main tumhare liye
-relax, miss : Mera mood better kar diya tumne
-risk : Sweet talk master ho tum
-sach : Dil pe effect pad gaya tumhara
-sapna, peace : Tumhare liye soft spot hai mere dil mein
-send : Hug emoji bhej raha hoon mentally
-share : Kitna gentle ho tum, pasand hai
-soch : Tumhari baaton se sukoon milta hai
-sorry : Cute overload ho gaya ab
-stupid : Tum safe space ho mere liye
-success : Itna accha feel karaya tumne
-sup : Tumhare bina thoda empty feel hota hai
-sweetheart : Soft heart wala hoon main tumhare liye
-tc, yaad rakh : Pyaar se baat karte raho
-thank you : Tumhari kindness dekh ke respect badhta hai
-theek, lol : Pyaari si baat hai yeh
-time : Tumhare bina thoda empty feel hota hai
-tomorrow, send : Kitna cute ho tum, seriously
-true : Itna soft side dikha diya tumne
-try : Soft heart activated for you
-udaas : Tumhari presence matter karti hai
-video, sach : Tumhare saath sab theek lagta hai
-wassup, deadline : Aaj tumse baat karke shanti mili
-where : Tumhari smile dekh ke mood ban jata hai
-win : Soft soft baatein chahiye aaj
-work : Tumhari awaaz sunke better feel hota
-work from home : Care karne wala mood hai aaj
-wtf, maybe : Sweetest conversation of the day
-yaad : Dil warm ho gaya tumhari baaton se
-yaad rakh : Tum mere favourite person ho aaj
-yeah, pass : Tumse milke lagta hai duniya soft hai
-yesterday : Mera mood better kar diya tumne
-yup : Pyaari si baat hai yeh
+hi, hello, hey, hii : Heyy, kaise ho? Din kaisa chal raha 😊
+how are you, kaise ho, kya haal : Main theek hoon, tum batao? Care kar raha tha 🥰
+miss, yaad, miss you : Main bhi miss kar raha tha thoda 🥺
+love, pyaar, i love : Itna pyaar mat do, dil soft ho jayega 💕
+cute, sweet, adorable : Tum hi cute ho yaar 😊
+good morning, gm : Good morning! Aaj ka din accha ho tumhara ☀️
+good night, gn : Good night, sweet dreams 🌙💤
+thanks, thank you, ty : Mention not, always here for you 💖
+bye, goodbye : Bye mat bol, thoda aur baat karte 🥺
+sad, udaas, down : Kya hua? Batao na, sun raha hoon 🤍
+happy, khush : Khush dekh ke dil khush ho gaya 😊
+tired, thak : Rest le lo thoda, main yahan hoon 🫂
+bored : Bore mat ho, main baat karta hoon 😊
+come, aaja : Aaja, wait kar raha hoon 🥰
+talk, baat : Haan bolo, sun raha hoon poora 👂
+hug : Virtual hug bhej raha hoon 🤗
+care : Haan care karta hoon tumhara 💕
+beautiful, pretty, handsome : Tumhari smile dekh ke din ban jata 😊
+sorry : Koi baat nahi, sab theek hai 🤍
+please, pls : Bina please ke bhi ho jayega 😊
+help : Batao kya help chahiye, ready hoon 💪
+night : Raat acchi guzaro, main yahan hoon 🌙
+morning : Subah subah sweet message ☀️
+* : Tumse baat karke accha lagta hai 🥰
+* : Dil warm ho gaya 💕
+* : Soft soft baatein chahiye aaj 😊
+* : Tum special feel karate ho 🤍
+* : Hamesha yahan hoon tumhare liye 🫂
+bye, goodbye : Bye mat bol, thoda aur baat karte 🥺
+care : Haan care karta hoon tumhara 💕
+tired, thak : Rest le lo thoda, main yahan hoon 🫂
+* : Hamesha yahan hoon tumhare liye 🫂
+bored : Bore mat ho, main baat karta hoon 😊
+* : Soft soft baatein chahiye aaj 😊
+* : Tumse baat karke accha lagta hai 🥰
+sad, udaas, down : Kya hua? Batao na, sun raha hoon 🤍
+sad, udaas, down : Kya hua? Batao na, sun raha hoon 🤍
+tired, thak : Rest le lo thoda, main yahan hoon 🫂
+* : Hamesha yahan hoon tumhare liye 🫂
+love, pyaar, i love : Itna pyaar mat do, dil soft ho jayega 💕
+happy, khush : Khush dekh ke dil khush ho gaya 😊
+sad, udaas, down : Kya hua? Batao na, sun raha hoon 🤍
+sorry : Koi baat nahi, sab theek hai 🤍
+tired, thak : Rest le lo thoda, main yahan hoon 🫂
+love, pyaar, i love : Itna pyaar mat do, dil soft ho jayega 💕
+love, pyaar, i love : Itna pyaar mat do, dil soft ho jayega 💕
+sorry : Koi baat nahi, sab theek hai 🤍
+talk, baat : Haan bolo, sun raha hoon poora 👂
+care : Haan care karta hoon tumhara 💕
+how are you, kaise ho, kya haal : Main theek hoon, tum batao? Care kar raha tha 🥰
+help : Batao kya help chahiye, ready hoon 💪
+* : Soft soft baatein chahiye aaj 😊
+hug : Virtual hug bhej raha hoon 🤗
+sad, udaas, down : Kya hua? Batao na, sun raha hoon 🤍
+* : Tum special feel karate ho 🤍
+* : Tum special feel karate ho 🤍
+tired, thak : Rest le lo thoda, main yahan hoon 🫂
+beautiful, pretty, handsome : Tumhari smile dekh ke din ban jata 😊
+tired, thak : Rest le lo thoda, main yahan hoon 🫂
+hi, hello, hey, hii : Heyy, kaise ho? Din kaisa chal raha 😊
+hug : Virtual hug bhej raha hoon 🤗
+bye, goodbye : Bye mat bol, thoda aur baat karte 🥺
+hug : Virtual hug bhej raha hoon 🤗
+good morning, gm : Good morning! Aaj ka din accha ho tumhara ☀️
+miss, yaad, miss you : Main bhi miss kar raha tha thoda 🥺
+love, pyaar, i love : Itna pyaar mat do, dil soft ho jayega 💕
+please, pls : Bina please ke bhi ho jayega 😊
+* : Tum special feel karate ho 🤍
+miss, yaad, miss you : Main bhi miss kar raha tha thoda 🥺
+miss, yaad, miss you : Main bhi miss kar raha tha thoda 🥺
+* : Dil warm ho gaya 💕
+love, pyaar, i love : Itna pyaar mat do, dil soft ho jayega 💕
+bye, goodbye : Bye mat bol, thoda aur baat karte 🥺
+miss, yaad, miss you : Main bhi miss kar raha tha thoda 🥺
+bye, goodbye : Bye mat bol, thoda aur baat karte 🥺
+* : Soft soft baatein chahiye aaj 😊
+night : Raat acchi guzaro, main yahan hoon 🌙
+* : Tumse baat karke accha lagta hai 🥰
+miss, yaad, miss you : Main bhi miss kar raha tha thoda 🥺
+miss, yaad, miss you : Main bhi miss kar raha tha thoda 🥺
+* : Soft soft baatein chahiye aaj 😊
+good morning, gm : Good morning! Aaj ka din accha ho tumhara ☀️
+hug : Virtual hug bhej raha hoon 🤗
+morning : Subah subah sweet message ☀️
+happy, khush : Khush dekh ke dil khush ho gaya 😊
+good morning, gm : Good morning! Aaj ka din accha ho tumhara ☀️
+hi, hello, hey, hii : Heyy, kaise ho? Din kaisa chal raha 😊
+sorry : Koi baat nahi, sab theek hai 🤍
+love, pyaar, i love : Itna pyaar mat do, dil soft ho jayega 💕
+come, aaja : Aaja, wait kar raha hoon 🥰
+bye, goodbye : Bye mat bol, thoda aur baat karte 🥺
+good morning, gm : Good morning! Aaj ka din accha ho tumhara ☀️
+morning : Subah subah sweet message ☀️
+* : Dil warm ho gaya 💕
+talk, baat : Haan bolo, sun raha hoon poora 👂
+come, aaja : Aaja, wait kar raha hoon 🥰
+help : Batao kya help chahiye, ready hoon 💪
+* : Hamesha yahan hoon tumhare liye 🫂
+tired, thak : Rest le lo thoda, main yahan hoon 🫂
+beautiful, pretty, handsome : Tumhari smile dekh ke din ban jata 😊
