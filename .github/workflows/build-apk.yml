@@ -54,6 +54,7 @@ jobs:
 
       - name: Set app icon and splash screen
         run: |
+          sudo apt-get update -y && sudo apt-get install -y imagemagick
           npm install -g cordova-res
           mkdir -p resources
           cp public/android-chrome-512x512.png resources/icon.png
