@@ -52,11 +52,12 @@ jobs:
         run: |
           sed -i '/<uses-permission android:name="android.permission.INTERNET" \/>/a\    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />\n    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />' android/app/src/main/AndroidManifest.xml
 
-      - name: Set app icon
+      - name: Set app icon and splash screen
         run: |
           npm install -g cordova-res
           mkdir -p resources
           cp public/android-chrome-512x512.png resources/icon.png
+          cp public/android-chrome-512x512.png resources/splash.png
           cordova-res android --skip-config --copy
 
       - name: Copy web build into Android project
