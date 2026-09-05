@@ -4,6 +4,17 @@ import App from './App';
 import { isAdministratorSubdomain } from './lib/subdomain';
 import './styles/tokens.css';
 import './styles/animations.css';
+import { Capacitor } from '@capacitor/core';
+import { StatusBar } from '@capacitor/status-bar';
+
+// When running as the wrapped native Android app (Capacitor), the WebView
+// draws edge-to-edge under the status bar by default, which is what was
+// causing the app header to sit underneath/behind the status bar. This
+// tells the status bar not to overlay the web content, pushing the app's
+// own header down below it instead. No-op on the regular web/PWA build.
+if (Capacitor.isNativePlatform()) {
+  StatusBar.setOverlaysWebView({ overlay: false }).catch(() => {});
+}
 
 // Safety-net redirect: administrator.<root domain> is supposed to be served
 // admin.html directly at the host level (see vercel.json's host-based
