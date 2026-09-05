@@ -1,5 +1,5 @@
 /** ===========================================================================
- * SHARE STORY SHEET (v6)
+ * SHARE STORY SHEET (v7)
  * ============================================================================
  * <ShareStorySheet open onClose mode question reply message /> — a
  * GlassPanel sheet that turns a question ('mode="question"', the original
@@ -8,29 +8,25 @@
  * confession ('mode="message"' — see GroupChat.jsx's "Share as Story"
  * action) into a shareable 1080x1920 story image.
  *
- * v6 changes, on top of v5:
- *   - Every style pick (Background, Colour, Shape, Size) starts from a
- *     random preset each time the sheet opens, instead of always landing
- *     on the first item in each list.
- *   - A "Random" button in the header reshuffles all four at any time.
- *   - Background and Shape are no longer tap-to-select strips with a
- *     moving highlight border. They're centre-locked scroll wheels: a
- *     fixed highlight window sits in the middle of the strip and never
- *     moves, and scrolling brings a different item to rest under it,
- *     picker-wheel style. Tapping an item still scrolls it to centre as
- *     a shortcut, but the selection itself is driven by scroll position
- *     (see useWheelCarousel below), not by clicks.
- *   - Colour (colour wheel modal) and Size (dropdown) are unchanged from
- *     v5.
- * Every pick still drives the same live canvas preview.
- *
- * `question` needs an `id` (for the reply link) plus its text/type fields.
- * `reply` (mode="reply" only) needs its own reply text. `message`
- * (mode="message" only) needs an `id` (for the message link — see
- * buildMessageUrl), its text, sender_name, avatar_url, and is_anon —
- * GroupChat.jsx normalizes both group_messages rows and confession rows
- * into this same flat shape before opening the sheet. Column-name guesses
- * are centralized just below — flip them if the real schema differs.
+ * v7 changes, on top of v6:
+ *   - The "Standard" tab (template === 'tweet') now has a "Style" dropdown
+ *     with two options:
+ *       - "Normal" (NEW, default) — a confession-bubble-style card: a
+ *         colored tag header (color depends on what's being shared —
+ *         Question / Reply / Confession / Message each get their own
+ *         gradient), a grey card body with the text rendered white with a
+ *         black outline (sticker-text style), and the Anonroom logo
+ *         (public/logo.png) anchored at the bottom.
+ *       - "Tweet" (the old, only, Standard look) — the existing fixed
+ *         realistic-post preset, unchanged.
+ *   - `standardStyle` ('normal' | 'tweet') is threaded through to
+ *     generateStoryImage alongside the existing `template` field so
+ *     storyImageGenerator.js can branch its Standard-mode drawing routine.
+ *   - Tag label/gradient is derived once from `mode` + `isConfession` (see
+ *     `tagInfo` below) and passed down so the exported image always shows
+ *     the correct tag for what's actually being shared.
+ * Everything else (Customization tab, carousels, colour wheel, size field)
+ * is unchanged from v6.
  * ========================================================================= */
 
 import { useEffect, useRef, useState } from 'react';
@@ -73,6 +69,30 @@ function attachmentMeta(mediaType) {
     case 'sticker': return { emoji: '🏷️', label: 'Sticker' };
     default: return { emoji: '📄', label: 'Attachment' };
   }
+}
+
+// ---------------------------------------------------------------------------
+// Tag identity for the new "Normal" Standard style — one place that decides
+// what tag/colour a given share actually gets, so the sheet's own copy and
+// the exported canvas card (storyImageGenerator.js) always agree instead of
+// each guessing separately.
+//   - mode="question"           -> "Question" (blue)
+//   - mode="reply"               -> "Reply"    (green)
+//   - mode="message", confession -> "Confession" (purple, matches
+//                                    ConfessionBubble's existing header)
+//   - mode="message", plain      -> "Message"  (ember/orange)
+// ---------------------------------------------------------------------------
+function getTagInfo(mode, isConfession) {
+  if (mode === 'question') {
+    return { label: 'Question', from: '#3EA6F7', to: '#2B7FD6' };
+  }
+  if (mode === 'reply') {
+    return { label: 'Reply', from: '#22C55E', to: '#16A34A' };
+  }
+  if (isConfession) {
+    return { label: 'Confession', from: '#6A5CF5', to: '#9B5CF5' };
+  }
+  return { label: 'Message', from: '#FF6B35', to: '#FF9166' };
 }
 
 const PREVIEW_ASPECT_RATIO = 1080 / 1920;
@@ -526,7 +546,7 @@ function ShapeCarousel({ selectedId, onChange, scale }) {
 // color-wheel modal with every ACCENT_COLORS entry arranged in a circle.
 // Unchanged from v5.
 // ---------------------------------------------------------------------------
-function ColourField({ color, onOpen, label = 'Colour' }) {
+function ColourField({ color, onOpen }) {
   return (
     <button
       type="button"
@@ -535,7 +555,7 @@ function ColourField({ color, onOpen, label = 'Colour' }) {
     >
       <div style={{ width: 36, height: 36, borderRadius: '50%', background: color.hex, border: '2px solid var(--glass-border)', flexShrink: 0, boxShadow: '0 0 0 2px var(--ink) inset' }} />
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', flex: 1, minWidth: 0 }}>
-        <span style={{ fontSize: 12.5, fontWeight: 800, color: 'var(--dim)' }}>{label}</span>
+        <span style={{ fontSize: 12.5, fontWeight: 800, color: 'var(--dim)' }}>Colour</span>
         <span style={{ fontSize: 14, fontWeight: 700, color: 'var(--paper)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{color.name}</span>
       </div>
     </button>
@@ -546,7 +566,7 @@ const WHEEL_SIZE = 260;
 const WHEEL_RADIUS = 104;
 const WHEEL_SWATCH = 32;
 
-function ColorWheelModal({ selectedId, onPick, onClose, title = 'Colour' }) {
+function ColorWheelModal({ selectedId, onPick, onClose }) {
   useEffect(() => {
     hapticSheet();
     playOpen();
@@ -570,7 +590,7 @@ function ColorWheelModal({ selectedId, onPick, onClose, title = 'Colour' }) {
     <div
       role="dialog"
       aria-modal="true"
-      aria-label={title}
+      aria-label="Colour"
       onClick={(e) => { if (e.target === e.currentTarget) handleClose(); }}
       style={{
         position: 'fixed',
@@ -599,7 +619,7 @@ function ColorWheelModal({ selectedId, onPick, onClose, title = 'Colour' }) {
         }}
       >
         <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', width: '100%', marginBottom: 8 }}>
-          <span style={{ fontSize: 16, fontWeight: 900, color: 'var(--paper)' }}>{title}</span>
+          <span style={{ fontSize: 16, fontWeight: 900, color: 'var(--paper)' }}>Colour</span>
           <button type="button" onClick={handleClose} style={{ border: 'none', background: 'transparent', color: 'var(--ember)', fontSize: 14, fontWeight: 800, padding: '6px 4px' }}>
             Done
           </button>
@@ -700,6 +720,59 @@ function SizeField({ scaleId, onChange }) {
   );
 }
 
+// ---------------------------------------------------------------------------
+// StandardStyleField — NEW in v7. Only shown inside the "Standard" tab
+// (template === 'tweet'). Lets the user pick between the new "Normal"
+// confession-card look (default) and the old fixed "Tweet" look.
+// ---------------------------------------------------------------------------
+function StandardStyleField({ value, onChange, tagInfo }) {
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 12px', borderRadius: 16, border: '1px solid var(--glass-border)', background: 'var(--glass-white)' }}>
+      <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', flex: 1, minWidth: 0, gap: 4 }}>
+        <span style={{ fontSize: 12.5, fontWeight: 800, color: 'var(--dim)' }}>Style</span>
+        {value === 'normal' && (
+          <span
+            style={{
+              display: 'inline-flex',
+              alignItems: 'center',
+              padding: '2px 9px',
+              borderRadius: 999,
+              fontSize: 10.5,
+              fontWeight: 900,
+              color: '#fff',
+              background: `linear-gradient(135deg, ${tagInfo.from} 0%, ${tagInfo.to} 100%)`,
+              letterSpacing: 0.2,
+            }}
+          >
+            {tagInfo.label} tag
+          </span>
+        )}
+      </div>
+      <select
+        value={value}
+        onChange={(e) => { hapticSelect(); playTap(); onChange(e.target.value); }}
+        style={{
+          appearance: 'none',
+          WebkitAppearance: 'none',
+          background: 'var(--ink-2)',
+          color: 'var(--paper)',
+          border: '1px solid var(--glass-border)',
+          borderRadius: 12,
+          padding: '10px 30px 10px 14px',
+          fontSize: 14,
+          fontWeight: 700,
+          backgroundImage: 'url("data:image/svg+xml;utf8,<svg xmlns=%27http://www.w3.org/2000/svg%27 width=%2718%27 height=%2718%27 viewBox=%270 0 24 24%27 fill=%27none%27 stroke=%27%238B8B96%27 stroke-width=%272.5%27 stroke-linecap=%27round%27 stroke-linejoin=%27round%27><polyline points=%276 9 12 15 18 9%27/></svg>")',
+          backgroundRepeat: 'no-repeat',
+          backgroundPosition: 'right 8px center',
+        }}
+      >
+        <option value="normal" style={{ background: 'var(--ink-2)', color: 'var(--paper)' }}>Normal</option>
+        <option value="tweet" style={{ background: 'var(--ink-2)', color: 'var(--paper)' }}>Tweet</option>
+      </select>
+    </div>
+  );
+}
+
 export default function ShareStorySheet({ open, onClose, mode = 'question', question, reply, message, customizable = true, lockedStyle = null }) {
   if (!open) return null;
   return (
@@ -725,42 +798,19 @@ function ShareStorySheetContent({ mode, question, reply, message, customizable, 
   const [scaleId, setScaleId] = useState(() => (!customizable && lockedStyle) ? lockedStyle.scaleId : randomId(BODY_SCALES));
 
   // 'basic' = the fully customizable Background/Colour/Shape/Size system
-  // above; 'tweet' = a single fixed, professional realistic-post preset
-  // (see storyImageGenerator's drawTweetSlide) — no customization strips,
-  // just a toggle. Works for all three modes (question/reply/message).
+  // above; 'tweet' = "Standard" — a fixed, single-card layout with its own
+  // Style dropdown (see standardStyle below). Works for all three modes
+  // (question/reply/message).
   const [template, setTemplate] = useState(() => (!customizable ? (lockedStyle ? 'basic' : 'tweet') : 'basic'));
 
-  const [colorPickerOpen, setColorPickerOpen] = useState(false);
+  // NEW in v7 — only meaningful while template === 'tweet' ("Standard").
+  // 'normal' (default): confession-bubble-style card with a coloured tag
+  // header (see getTagInfo), grey body, black-outlined white text, and the
+  // Anonroom logo pinned to the bottom.
+  // 'tweet': the old fixed realistic-post preset, unchanged.
+  const [standardStyle, setStandardStyle] = useState('normal');
 
-  // ---------------------------------------------------------------------
-  // "Card" template — mirrors ConfessionBubble's own header-strip +
-  // glass-body look (see ConfessionBubble.jsx) instead of the realistic
-  // 'tweet' preset or the fully-custom 'basic' Background/Shape system.
-  // cardHeaderLabel defaults per share mode (Question / Reply / Confession
-  // for a confession-flagged message, or plain "Message" otherwise) but is
-  // freely editable. cardHeaderVariant picks how the header strip itself is
-  // painted — gradient / solid bold color / pattern — each starting from a
-  // random pick on open, same convention as the 'basic' fields above. The
-  // header TEXT is always rendered bold regardless of any of this — that's
-  // fixed, never exposed as a toggle here.
-  // ---------------------------------------------------------------------
-  const [cardHeaderLabel, setCardHeaderLabel] = useState(() => {
-    if (mode === 'question') return 'Question';
-    if (mode === 'reply') return 'Reply';
-    return message?.[MESSAGE_IS_CONFESSION_FIELD] === true ? 'Confession' : 'Message';
-  });
-  const [cardHeaderVariant, setCardHeaderVariant] = useState(() =>
-    randomId([{ id: 'gradient' }, { id: 'solid' }, { id: 'pattern' }])
-  );
-  const [cardHeaderFromId, setCardHeaderFromId] = useState(() => randomId(ACCENT_COLORS));
-  const [cardHeaderToId, setCardHeaderToId] = useState(() => randomId(ACCENT_COLORS, cardHeaderFromId));
-  const [cardHeaderSolidId, setCardHeaderSolidId] = useState(() => randomId(ACCENT_COLORS));
-  const [cardHeaderPatternId, setCardHeaderPatternId] = useState(() => randomId(BACKGROUND_STRUCTURES));
-  const [cardHeaderPatternColorId, setCardHeaderPatternColorId] = useState(() => randomId(ACCENT_COLORS));
-  const [cardHeaderTextColor, setCardHeaderTextColor] = useState('light'); // 'light' | 'dark'
-  // Which color field the shared ColorWheelModal is currently editing for
-  // the Card template: null | 'from' | 'to' | 'solid' | 'pattern'.
-  const [cardHeaderPickerTarget, setCardHeaderPickerTarget] = useState(null);
+  const [colorPickerOpen, setColorPickerOpen] = useState(false);
 
   const [previewUrl, setPreviewUrl] = useState(null);
   const [previewBlob, setPreviewBlob] = useState(null);
@@ -773,10 +823,6 @@ function ShareStorySheetContent({ mode, question, reply, message, customizable, 
 
   const color = getPresetById(ACCENT_COLORS, colorId);
   const scale = getPresetById(BODY_SCALES, scaleId);
-  const cardHeaderFromColor = getPresetById(ACCENT_COLORS, cardHeaderFromId);
-  const cardHeaderToColor = getPresetById(ACCENT_COLORS, cardHeaderToId);
-  const cardHeaderSolidColor = getPresetById(ACCENT_COLORS, cardHeaderSolidId);
-  const cardHeaderPatternColor = getPresetById(ACCENT_COLORS, cardHeaderPatternColorId);
 
   const questionText = question?.[QUESTION_TEXT_FIELD] || '';
   const questionType = question?.[QUESTION_TYPE_FIELD];
@@ -795,6 +841,10 @@ function ShareStorySheetContent({ mode, question, reply, message, customizable, 
   // (see GroupChat.jsx's "Share as Story" action on ConfessionBubble),
   // which gets its own "CONFESSION" badge on the rendered story card.
   const isConfession = mode === 'message' && message?.[MESSAGE_IS_CONFESSION_FIELD] === true;
+  // NEW in v7 — the tag identity (label + gradient) this share will carry
+  // in the "Normal" Standard style. Computed once here so the sheet's own
+  // dropdown preview chip and the exported canvas card can't disagree.
+  const tagInfo = getTagInfo(mode, isConfession);
   const [attachmentViewerOpen, setAttachmentViewerOpen] = useState(false);
   // In place of the question's reply link, mode="message" shows/copies a
   // link straight back to that chat message.
@@ -825,24 +875,18 @@ function ShareStorySheetContent({ mode, question, reply, message, customizable, 
       shapeId,
       scaleId,
       template,
+      // NEW in v7 — only used by storyImageGenerator when template ===
+      // 'tweet'. tagLabel/tagGradientFrom/tagGradientTo are passed through
+      // even though storyImageGenerator could recompute them from
+      // kind/isConfession itself, so the export can never show a different
+      // tag than the one previewed in the dropdown above.
+      standardStyle,
+      tagLabel: tagInfo.label,
+      tagGradientFrom: tagInfo.from,
+      tagGradientTo: tagInfo.to,
+      logoUrl: '/logo.png',
       mediaUrl: messageMediaUrl,
       mediaType: messageMediaType,
-      // "Card" template only (see the state block above for what each of
-      // these controls) — generateStoryImage needs a matching
-      // drawCardSlide (or similar) branch for template === 'card' that
-      // paints a header strip using these values, then the same text body
-      // treatment as drawTweetSlide/drawMessageSlide below it. Passed
-      // through unconditionally; harmless for the other two templates,
-      // which simply won't read them.
-      cardHeaderLabel,
-      cardHeaderVariant,
-      cardHeaderFrom: cardHeaderFromColor?.hex,
-      cardHeaderTo: cardHeaderToColor?.hex,
-      cardHeaderAngle: 135,
-      cardHeaderSolid: cardHeaderSolidColor?.hex,
-      cardHeaderPatternId,
-      cardHeaderPatternColor: cardHeaderPatternColor?.hex,
-      cardHeaderTextColor: cardHeaderTextColor === 'dark' ? '#0C0D10' : '#FFFFFF',
     })
       .then((blob) => {
         if (renderTokenRef.current !== token) return;
@@ -859,12 +903,7 @@ function ShareStorySheetContent({ mode, question, reply, message, customizable, 
         showToast(friendlyDbError('Could not render the preview. Please try again.'));
       });
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [
-    mode, questionText, replyText, questionType, messageText, messageSenderName, messageAvatarUrl,
-    isConfession, backgroundId, colorId, shapeId, scaleId, template, messageMediaUrl, messageMediaType,
-    cardHeaderLabel, cardHeaderVariant, cardHeaderFromId, cardHeaderToId, cardHeaderSolidId,
-    cardHeaderPatternId, cardHeaderPatternColorId, cardHeaderTextColor,
-  ]);
+  }, [mode, questionText, replyText, questionType, messageText, messageSenderName, messageAvatarUrl, isConfession, backgroundId, colorId, shapeId, scaleId, template, standardStyle, messageMediaUrl, messageMediaType]);
 
   useEffect(() => {
     return () => {
@@ -875,15 +914,6 @@ function ShareStorySheetContent({ mode, question, reply, message, customizable, 
   function handleRandomize() {
     hapticImpact();
     playTap();
-    if (template === 'card') {
-      setCardHeaderVariant((prev) => randomId([{ id: 'gradient' }, { id: 'solid' }, { id: 'pattern' }], prev));
-      setCardHeaderFromId((prev) => randomId(ACCENT_COLORS, prev));
-      setCardHeaderToId((prev) => randomId(ACCENT_COLORS, prev));
-      setCardHeaderSolidId((prev) => randomId(ACCENT_COLORS, prev));
-      setCardHeaderPatternId((prev) => randomId(BACKGROUND_STRUCTURES, prev));
-      setCardHeaderPatternColorId((prev) => randomId(ACCENT_COLORS, prev));
-      return;
-    }
     setBackgroundId((prev) => randomId(BACKGROUND_STRUCTURES, prev));
     setColorId((prev) => randomId(ACCENT_COLORS, prev));
     setShapeId((prev) => randomId(BODY_SHAPES, prev));
@@ -931,7 +961,7 @@ function ShareStorySheetContent({ mode, question, reply, message, customizable, 
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
         <div style={{ fontSize: 20, fontWeight: 900, color: 'var(--paper)' }}>Share to Story</div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          {customizable && (template === 'basic' || template === 'card') && (
+          {customizable && template === 'basic' && (
             <button
               type="button"
               onClick={handleRandomize}
@@ -952,13 +982,12 @@ function ShareStorySheetContent({ mode, question, reply, message, customizable, 
         </div>
       </div>
 
-      {/* Standard (fixed realistic-post preset) vs Card (header-strip +
-          glass-body, mirrors ConfessionBubble) vs Customization (fully
-          custom Background/Shape/Colour/Size) — applies to all three share
-          modes. Hidden entirely when customizable=false: the template is
-          already pinned (to whichever style the item was created with, or
-          Standard if it wasn't customized), so there's nothing to switch
-          between. */}
+      {/* Basic (fully customizable) vs Standard (single-card layout, with
+          its own Style dropdown below for Normal vs Tweet) — applies to all
+          three share modes. Hidden entirely when customizable=false: the
+          template is already pinned (to whichever style the item was
+          created with, or Standard if it wasn't customized), so there's
+          nothing to switch between. */}
       {customizable && (
         <div
           role="tablist"
@@ -967,7 +996,6 @@ function ShareStorySheetContent({ mode, question, reply, message, customizable, 
         >
           {[
             { id: 'tweet', label: 'Standard' },
-            { id: 'card', label: 'Card' },
             { id: 'basic', label: 'Customization' },
           ].map((opt) => {
             const active = template === opt.id;
@@ -994,6 +1022,13 @@ function ShareStorySheetContent({ mode, question, reply, message, customizable, 
             );
           })}
         </div>
+      )}
+
+      {/* NEW in v7 — Style dropdown, only inside the Standard tab. Defaults
+          to "Normal" (the new confession-card look); "Tweet" keeps the old
+          fixed realistic-post preset available. */}
+      {customizable && template === 'tweet' && (
+        <StandardStyleField value={standardStyle} onChange={setStandardStyle} tagInfo={tagInfo} />
       )}
 
       <div style={{ position: 'relative', width: '100%', maxWidth: 240, margin: '0 auto', flexShrink: 0 }}>
@@ -1023,10 +1058,10 @@ function ShareStorySheetContent({ mode, question, reply, message, customizable, 
 
           {/* Preview-only guide for where the manual IG link sticker goes —
               small + centered, matching the real (also shrunk) LINK_ZONE
-              the export leaves empty. The Standard/tweet template sits on a
-              light backdrop, so this flips to a dark guide there instead of
-              the white one made for the dark Customization/Card
-              backgrounds — otherwise it's invisible against the light card. */}
+              the export leaves empty. The Tweet style sits on a light
+              backdrop, so this flips to a dark guide there instead of the
+              white one used for the dark Customization/Normal backgrounds —
+              otherwise it's invisible against the light card. */}
           <div
             aria-hidden="true"
             style={{
@@ -1035,7 +1070,7 @@ function ShareStorySheetContent({ mode, question, reply, message, customizable, 
               left: `${LINK_ZONE_FRACTION.left * 100}%`,
               width: `${LINK_ZONE_FRACTION.width * 100}%`,
               height: `${LINK_ZONE_FRACTION.height * 100}%`,
-              border: template === 'tweet' ? '2px dashed rgba(15,20,25,0.35)' : '2px dashed rgba(255,255,255,0.45)',
+              border: template === 'tweet' && standardStyle === 'tweet' ? '2px dashed rgba(15,20,25,0.35)' : '2px dashed rgba(255,255,255,0.45)',
               borderRadius: 12,
               display: 'flex',
               alignItems: 'center',
@@ -1043,7 +1078,7 @@ function ShareStorySheetContent({ mode, question, reply, message, customizable, 
               pointerEvents: 'none',
             }}
           >
-            <span style={{ fontSize: 9, fontWeight: 800, color: template === 'tweet' ? 'rgba(15,20,25,0.6)' : 'rgba(255,255,255,0.75)', textAlign: 'center', padding: '0 4px', lineHeight: 1.2 }}>
+            <span style={{ fontSize: 9, fontWeight: 800, color: template === 'tweet' && standardStyle === 'tweet' ? 'rgba(15,20,25,0.6)' : 'rgba(255,255,255,0.75)', textAlign: 'center', padding: '0 4px', lineHeight: 1.2 }}>
               Link goes here
             </span>
           </div>
@@ -1084,136 +1119,28 @@ function ShareStorySheetContent({ mode, question, reply, message, customizable, 
       {/* Selection strips sit directly below the preview — both are
           centre-locked scroll wheels now: the highlight window is fixed,
           the strip scrolls under it. Only shown for the 'basic' template —
-          'tweet' is a single fixed preset with nothing to customize, and
-          'card' gets its own header-focused panel just below. Hidden
-          entirely when customizable=false — the style is already fixed
-          (either the item's own saved style, or Standard), so there's
-          nothing here to show or change. */}
-      {customizable && template === 'basic' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 14, flexShrink: 0 }}>
-          <BackgroundCarousel selectedId={backgroundId} onChange={setBackgroundId} />
-          <ShapeCarousel selectedId={shapeId} onChange={setShapeId} scale={scale} />
-          <div style={{ display: 'flex', gap: 10 }}>
-            <ColourField color={color} onOpen={() => { hapticTap(); setColorPickerOpen(true); }} />
-            <SizeField scaleId={scaleId} onChange={setScaleId} />
-          </div>
-        </div>
-      )}
-
-      {customizable && template === 'tweet' && (
-        <p style={{ margin: 0, fontSize: 12.5, color: 'var(--dim)', textAlign: 'center', lineHeight: 1.4, flexShrink: 0 }}>
-          A fixed, professional realistic-post style — nothing to customize here.
-        </p>
-      )}
-
-      {/* Card template's own customization panel — header label text plus
-          a gradient / bold solid color / pattern background picker for the
-          header strip. The header text is always bold no matter what's
-          picked here (see the note at the bottom of this panel). */}
-      {customizable && template === 'card' && (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 14, flexShrink: 0 }}>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
-            <span style={{ fontSize: 13, fontWeight: 800, color: 'var(--dim)' }}>Header label</span>
-            <input
-              type="text"
-              value={cardHeaderLabel}
-              onChange={(e) => setCardHeaderLabel(e.target.value.slice(0, 24))}
-              placeholder="Confession"
-              maxLength={24}
-              style={{
-                padding: '12px 14px',
-                borderRadius: 14,
-                border: '1px solid var(--glass-border)',
-                background: 'var(--glass-white)',
-                color: 'var(--paper)',
-                fontSize: 14,
-                fontWeight: 800,
-              }}
-            />
-          </div>
-
-          <div
-            role="tablist"
-            aria-label="Header background style"
-            style={{ display: 'flex', gap: 4, padding: 4, borderRadius: 16, background: 'var(--glass-white)', border: '1px solid var(--glass-border)' }}
-          >
-            {[
-              { id: 'gradient', label: 'Gradient' },
-              { id: 'solid', label: 'Bold color' },
-              { id: 'pattern', label: 'Pattern' },
-            ].map((opt) => {
-              const active = cardHeaderVariant === opt.id;
-              return (
-                <button
-                  key={opt.id}
-                  type="button"
-                  role="tab"
-                  aria-selected={active}
-                  onClick={() => { if (!active) { hapticSelect(); playTap(); setCardHeaderVariant(opt.id); } }}
-                  style={{
-                    flex: 1,
-                    padding: '9px 0',
-                    borderRadius: 12,
-                    border: 'none',
-                    background: active ? 'var(--ember)' : 'transparent',
-                    color: active ? 'var(--ink)' : 'var(--dim)',
-                    fontSize: 12.5,
-                    fontWeight: 800,
-                  }}
-                >
-                  {opt.label}
-                </button>
-              );
-            })}
-          </div>
-
-          {cardHeaderVariant === 'gradient' && (
+          'tweet' (Standard) is a single-card layout with nothing to
+          customize beyond the Style dropdown above. Hidden entirely when
+          customizable=false — the style is already fixed (either the
+          item's own saved style, or Standard), so there's nothing here to
+          show or change. */}
+      {customizable && (
+        template === 'basic' ? (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14, flexShrink: 0 }}>
+            <BackgroundCarousel selectedId={backgroundId} onChange={setBackgroundId} />
+            <ShapeCarousel selectedId={shapeId} onChange={setShapeId} scale={scale} />
             <div style={{ display: 'flex', gap: 10 }}>
-              <ColourField label="From" color={cardHeaderFromColor} onOpen={() => { hapticTap(); setCardHeaderPickerTarget('from'); }} />
-              <ColourField label="To" color={cardHeaderToColor} onOpen={() => { hapticTap(); setCardHeaderPickerTarget('to'); }} />
+              <ColourField color={color} onOpen={() => { hapticTap(); setColorPickerOpen(true); }} />
+              <SizeField scaleId={scaleId} onChange={setScaleId} />
             </div>
-          )}
-
-          {cardHeaderVariant === 'solid' && (
-            <ColourField label="Colour" color={cardHeaderSolidColor} onOpen={() => { hapticTap(); setCardHeaderPickerTarget('solid'); }} />
-          )}
-
-          {cardHeaderVariant === 'pattern' && (
-            <>
-              <BackgroundCarousel selectedId={cardHeaderPatternId} onChange={setCardHeaderPatternId} />
-              <ColourField label="Accent" color={cardHeaderPatternColor} onOpen={() => { hapticTap(); setCardHeaderPickerTarget('pattern'); }} />
-            </>
-          )}
-
-          <div style={{ display: 'flex', gap: 10 }}>
-            {[{ id: 'light', label: 'White text' }, { id: 'dark', label: 'Dark text' }].map((opt) => {
-              const active = cardHeaderTextColor === opt.id;
-              return (
-                <button
-                  key={opt.id}
-                  type="button"
-                  onClick={() => { if (!active) { hapticSelect(); playTap(); setCardHeaderTextColor(opt.id); } }}
-                  style={{
-                    flex: 1,
-                    padding: '11px 0',
-                    borderRadius: 14,
-                    border: '1px solid var(--glass-border)',
-                    background: active ? 'var(--ember)' : 'var(--glass-white)',
-                    color: active ? 'var(--ink)' : 'var(--paper)',
-                    fontSize: 13,
-                    fontWeight: 800,
-                  }}
-                >
-                  {opt.label}
-                </button>
-              );
-            })}
           </div>
-
-          <p style={{ margin: 0, fontSize: 11.5, color: 'var(--dim)', textAlign: 'center' }}>
-            Header text is always bold.
+        ) : (
+          <p style={{ margin: 0, fontSize: 12.5, color: 'var(--dim)', textAlign: 'center', lineHeight: 1.4, flexShrink: 0 }}>
+            {standardStyle === 'normal'
+              ? `A ${tagInfo.label.toLowerCase()} card with a coloured tag header and the Anonroom logo — nothing else to customize here.`
+              : 'A fixed, professional realistic-post style — nothing to customize here.'}
           </p>
-        </div>
+        )
       )}
 
       <div style={{ flexShrink: 0 }}>
@@ -1249,30 +1176,6 @@ function ShareStorySheetContent({ mode, question, reply, message, customizable, 
 
       {colorPickerOpen && (
         <ColorWheelModal selectedId={colorId} onPick={(id) => setColorId(id)} onClose={() => setColorPickerOpen(false)} />
-      )}
-
-      {cardHeaderPickerTarget && (
-        <ColorWheelModal
-          title={
-            cardHeaderPickerTarget === 'from' ? 'From colour'
-            : cardHeaderPickerTarget === 'to' ? 'To colour'
-            : cardHeaderPickerTarget === 'solid' ? 'Header colour'
-            : 'Accent colour'
-          }
-          selectedId={
-            cardHeaderPickerTarget === 'from' ? cardHeaderFromId
-            : cardHeaderPickerTarget === 'to' ? cardHeaderToId
-            : cardHeaderPickerTarget === 'solid' ? cardHeaderSolidId
-            : cardHeaderPatternColorId
-          }
-          onPick={(id) => {
-            if (cardHeaderPickerTarget === 'from') setCardHeaderFromId(id);
-            else if (cardHeaderPickerTarget === 'to') setCardHeaderToId(id);
-            else if (cardHeaderPickerTarget === 'solid') setCardHeaderSolidId(id);
-            else setCardHeaderPatternColorId(id);
-          }}
-          onClose={() => setCardHeaderPickerTarget(null)}
-        />
       )}
 
       <StoryTutorial open={tutorialOpen} onClose={() => setTutorialOpen(false)} />

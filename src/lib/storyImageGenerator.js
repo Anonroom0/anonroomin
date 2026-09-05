@@ -1,5 +1,5 @@
 /** ===========================================================================
- * STORY IMAGE GENERATOR (v2)
+ * STORY IMAGE GENERATOR (v3)
  * ============================================================================
  * Renders a shareable 1080x1920 (IG/NGL story) PNG using an offscreen
  * <canvas>, for two content shapes ("kinds"):
@@ -26,17 +26,32 @@
  * exported PNG, since a dashed placeholder box would show up as a visible
  * artifact in the final posted story.
  *
- * Every visual choice is looked up/derived from storyStylePresets.js by id —
- * a Background structure + an accent Colour (combined at render time via
- * buildThemeRuntime, below, into the concrete header-badge color and
- * background fill — see storyStylePresets.js's file banner for why v5
- * split these two apart instead of shipping fixed pairs), a Shape (the
- * card's silhouette), and a Scale (how bold/big the text reads). The
- * picker in ShareStorySheet just passes four ids in and never touches
- * drawing code.
+ * v3 adds a second `template === 'tweet'` ("Standard") look, chosen via the
+ * new `standardStyle` param:
+ *   - standardStyle: 'normal' (NEW, default) — drawNormalSlide, below: a
+ *     confession-bubble-style card with a coloured tag header (Question /
+ *     Reply / Confession / Message each get their own gradient — see
+ *     defaultTagInfo, which mirrors ShareStorySheet.jsx's own getTagInfo so
+ *     the sheet's preview and the export can never disagree), a solid grey
+ *     body, and the shared text rendered white-fill/black-outline
+ *     (sticker-text) so it stays legible over anything. No CTA pill, no
+ *     fake engagement row — just the card and the shared footer logo.
+ *   - standardStyle: 'tweet' — the original fixed realistic-post preset
+ *     (drawTweetSlide), unchanged.
+ *
+ * Every visual choice for the Basic template is looked up/derived from
+ * storyStylePresets.js by id — a Background structure + an accent Colour
+ * (combined at render time via buildThemeRuntime, below, into the concrete
+ * header-badge color and background fill — see storyStylePresets.js's file
+ * banner for why v5 split these two apart instead of shipping fixed pairs),
+ * a Shape (the card's silhouette), and a Scale (how bold/big the text
+ * reads). The picker in ShareStorySheet just passes four ids in and never
+ * touches drawing code.
  *
  * generateStoryImage({ kind, questionText, replyText, questionType,
- *                       backgroundId, colorId, shapeId, scaleId })
+ *                       backgroundId, colorId, shapeId, scaleId, template,
+ *                       standardStyle, tagLabel, tagGradientFrom,
+ *                       tagGradientTo })
  *   -> Promise<Blob>   (image/png)
  * generateQuestionStoryImage(...)  -> back-compat alias, kind: 'question'
  * shareStoryImage(blob, opts)       -> Promise<void>  (OS share / download)
@@ -77,7 +92,7 @@ export const LINK_ZONE = {
 // unbounded — that's what used to let a long message push the card past
 // LINK_ZONE/the footer. WITH_CTA is for the two slide kinds that draw a
 // "Reply anonymously" pill below the card (question, reply); NO_CTA is for
-// 'message', which doesn't.
+// 'message' and the new 'normal' Standard style, neither of which draws one.
 const CARD_SAFE_TOP = 210;
 const CARD_SAFE_BOTTOM_NO_CTA = LINK_ZONE.y - 60;
 const CARD_SAFE_BOTTOM_WITH_CTA = LINK_ZONE.y - 60 - 150; // reserves room for the pill + its gap below the card
@@ -964,10 +979,11 @@ function drawBodyCard(ctx, { x, y, width, height, bodyPreset, tokens, headerPres
 // public/logo.png hasn't been added yet)
 // ---------------------------------------------------------------------------
 // `textColor`, when passed, overrides the fallback wordmark's fill —
-// needed for the Tweet template, whose backdrop is light (#EFF3F4) rather
-// than one of the dark Basic backgrounds tokens.paper (near-white) was
-// designed to sit on top of. Without this override the wordmark renders
-// white-on-light and is effectively invisible.
+// needed for the Tweet-classic template, whose backdrop is light
+// (#EFF3F4) rather than one of the dark backgrounds (Basic, and the new
+// Normal Standard style) tokens.paper (near-white) was designed to sit on
+// top of. Without this override the wordmark renders white-on-light and is
+// effectively invisible.
 async function drawFooterLogo(ctx, tokens, { textColor } = {}) {
   const logo = await loadLogo();
   const centerX = CANVAS_WIDTH / 2;
@@ -1223,13 +1239,15 @@ function drawMessageSlide(ctx, { messageText, senderName, avatarImage, headerPre
 // ---------------------------------------------------------------------------
 // A fixed, non-customizable preset (Background/Shape/Colour/Size from
 // storyStylePresets.js don't apply here — see ShareStorySheet's
-// Basic/Tweet toggle) built to read like a genuine social-post screenshot:
-// a plain neutral canvas backdrop behind a white, rounded, drop-shadowed
-// card with an avatar+name/handle header, the shared text as the body copy,
-// a timestamp line, and a muted reply/repost/like/share icon row. Works for
-// all three share kinds — 'question' and 'reply' get a synthesized handle
-// and (for 'reply') a small quoted excerpt of the original question, the
-// same way drawReplySlide's quoted-question inset works.
+// Basic/Standard toggle) built to read like a genuine social-post
+// screenshot: a plain neutral canvas backdrop behind a white, rounded,
+// drop-shadowed card with an avatar+name/handle header, the shared text as
+// the body copy, a timestamp line, and a muted reply/repost/like/share icon
+// row. Works for all three share kinds — 'question' and 'reply' get a
+// synthesized handle and (for 'reply') a small quoted excerpt of the
+// original question, the same way drawReplySlide's quoted-question inset
+// works. This is `standardStyle === 'tweet'` — see drawNormalSlide below
+// for the newer, default `standardStyle === 'normal'` look.
 const TWEET_CARD_BG = '#FFFFFF';
 const TWEET_TEXT_PRIMARY = '#0F1419';
 const TWEET_TEXT_SECONDARY = '#536471';
@@ -1450,6 +1468,135 @@ function drawTweetSlide(ctx, { kind, questionText, questionType, replyText, mess
 }
 
 // ---------------------------------------------------------------------------
+// Layout — `standardStyle === 'normal'` (NEW default Standard look) — a
+// confession-bubble-style card: a coloured tag header (Question / Reply /
+// Confession / Message each get their own gradient — see
+// NORMAL_TAG_DEFAULTS/defaultTagInfo, which mirror ShareStorySheet.jsx's
+// own getTagInfo so the sheet's preview chip and this export can never
+// disagree) sitting above a solid grey body, with the shared text rendered
+// white-fill/black-outline (sticker-text) so it reads over anything.
+//
+// Uses the same fitTextBlock/roundedRectPath/centeredCardY machinery every
+// other layout in this file uses; no CTA pill, no engagement row — just the
+// card. The footer logo is drawn afterward by the shared drawFooterLogo
+// call in generateStoryImage, same as every other layout.
+// ---------------------------------------------------------------------------
+const NORMAL_TAG_DEFAULTS = {
+  question: { label: 'Question', from: '#3EA6F7', to: '#2B7FD6' },
+  reply: { label: 'Reply', from: '#22C55E', to: '#16A34A' },
+  confession: { label: 'Confession', from: '#6A5CF5', to: '#9B5CF5' },
+  message: { label: 'Message', from: '#FF6B35', to: '#FF9166' },
+};
+
+// Fallback for callers that don't pass tagLabel/tagGradientFrom/To
+// explicitly (ShareStorySheet.jsx v7 always does, via its own getTagInfo).
+function defaultTagInfo(kind, isConfession) {
+  if (kind === 'question') return NORMAL_TAG_DEFAULTS.question;
+  if (kind === 'reply') return NORMAL_TAG_DEFAULTS.reply;
+  if (isConfession) return NORMAL_TAG_DEFAULTS.confession;
+  return NORMAL_TAG_DEFAULTS.message;
+}
+
+const NORMAL_CARD_X = 80;
+const NORMAL_CARD_RADIUS = 40;
+const NORMAL_HEADER_HEIGHT = 140;
+const NORMAL_CARD_PADDING = 64;
+const NORMAL_BODY_FILL = '#2A2B33'; // solid grey card body, per spec
+
+function drawNormalSlide(ctx, { kind, questionText, replyText, messageText, tagLabel, tagGradientFrom, tagGradientTo, tokens }) {
+  // Solid dark backdrop — keeps focus on the card and guarantees the
+  // white/black-outlined text stays legible regardless of whatever the
+  // story ends up posted over afterward.
+  ctx.fillStyle = tokens.ink;
+  ctx.fillRect(0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+
+  const cardX = NORMAL_CARD_X;
+  const cardWidth = CANVAS_WIDTH - cardX * 2;
+  const font = FONT_STACKS.system;
+  const maxTextWidth = cardWidth - NORMAL_CARD_PADDING * 2;
+  const maxTextHeight = CARD_SAFE_HEIGHT_NO_CTA - NORMAL_HEADER_HEIGHT - NORMAL_CARD_PADDING * 2;
+
+  const bodyText = kind === 'reply' ? replyText : kind === 'message' ? messageText : questionText;
+
+  const fitted = fitTextBlock(ctx, bodyText, {
+    fontFamily: font,
+    weight: 800,
+    uppercase: false,
+    maxWidth: maxTextWidth,
+    maxHeight: maxTextHeight,
+    basePx: 54,
+    minPx: 28,
+    lineHeightRatio: 1.32,
+  });
+  const { lines, lineHeight, css, size } = fitted;
+
+  const bodyHeight = NORMAL_CARD_PADDING * 2 + lines.length * lineHeight;
+  const cardHeight = NORMAL_HEADER_HEIGHT + bodyHeight;
+  const cardY = centeredCardY(cardHeight, CARD_SAFE_HEIGHT_NO_CTA);
+
+  // --- shadow + full grey body fill first — this is what gives the header
+  // (drawn on top, clipped to the top corners only) its matching rounded
+  // top corners for free, and gives the whole card one soft drop shadow
+  // instead of two competing ones from drawing header/body separately. ---
+  ctx.save();
+  ctx.shadowColor = 'rgba(0,0,0,0.45)';
+  ctx.shadowBlur = 40;
+  ctx.shadowOffsetY = 16;
+  roundedRectPath(ctx, cardX, cardY, cardWidth, cardHeight, NORMAL_CARD_RADIUS);
+  ctx.fillStyle = NORMAL_BODY_FILL;
+  ctx.fill();
+  ctx.restore();
+
+  // --- coloured tag header, clipped to the card's top corners only ---
+  ctx.save();
+  roundedRectPath(ctx, cardX, cardY, cardWidth, NORMAL_HEADER_HEIGHT, { tl: NORMAL_CARD_RADIUS, tr: NORMAL_CARD_RADIUS, br: 0, bl: 0 });
+  ctx.clip();
+  const headerGrad = ctx.createLinearGradient(cardX, cardY, cardX + cardWidth, cardY + NORMAL_HEADER_HEIGHT);
+  headerGrad.addColorStop(0, tagGradientFrom);
+  headerGrad.addColorStop(1, tagGradientTo);
+  ctx.fillStyle = headerGrad;
+  ctx.fillRect(cardX, cardY, cardWidth, NORMAL_HEADER_HEIGHT);
+  ctx.restore();
+
+  // --- thin outer ring so header + body read as one cohesive card on any
+  // backdrop, same idea as drawBodyCard's 'glass' border treatment ---
+  roundedRectPath(ctx, cardX, cardY, cardWidth, cardHeight, NORMAL_CARD_RADIUS);
+  ctx.lineWidth = 2;
+  ctx.strokeStyle = 'rgba(255,255,255,0.10)';
+  ctx.stroke();
+
+  // --- tag label, centered in the header ---
+  ctx.save();
+  ctx.font = `800 44px ${font}`;
+  ctx.fillStyle = '#FFFFFF';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.shadowColor = 'rgba(0,0,0,0.25)';
+  ctx.shadowBlur = 6;
+  ctx.fillText((tagLabel || '').toUpperCase(), cardX + cardWidth / 2, cardY + NORMAL_HEADER_HEIGHT / 2);
+  ctx.restore();
+
+  // --- body text: white fill, black outline (sticker-text), centered ---
+  ctx.save();
+  ctx.font = css;
+  ctx.textAlign = 'center';
+  ctx.lineJoin = 'round';
+  ctx.miterLimit = 2;
+  const textCenterX = cardX + cardWidth / 2;
+  let cursorY = cardY + NORMAL_HEADER_HEIGHT + NORMAL_CARD_PADDING + Math.round(lineHeight * 0.78);
+  const strokeWidth = Math.max(6, Math.round(size * 0.14));
+  lines.forEach((line) => {
+    ctx.lineWidth = strokeWidth;
+    ctx.strokeStyle = '#000000';
+    ctx.strokeText(line, textCenterX, cursorY);
+    ctx.fillStyle = '#FFFFFF';
+    ctx.fillText(line, textCenterX, cursorY);
+    cursorY += lineHeight;
+  });
+  ctx.restore();
+}
+
+// ---------------------------------------------------------------------------
 // Attached-media notice (mode="message" only) — the actual photo/video/GIF
 // is never drawn into the exported image (and never shown anywhere in the
 // app UI either); instead a small fixed-position pill just says a media
@@ -1611,7 +1758,7 @@ export async function generateStoryImage({
   // mode="message" only — true for a confession-flagged chat message, so
   // the render can carry the same "CONFESSION" badge treatment
   // 'question'/'reply' get from their own type badges (see drawMessageSlide
-  // / drawTweetSlide).
+  // / drawTweetSlide / drawNormalSlide).
   isConfession = false,
   // 'reply' kind only — overrides the default "REPLY" header badge text.
   // CustomizedConfessionCard (see StoryViewer.jsx) reuses the 'reply' layout
@@ -1622,9 +1769,21 @@ export async function generateStoryImage({
   colorId,
   shapeId,
   scaleId,
-  // Preset toggle: 'basic' (fully customizable, default) or 'tweet' (a
-  // single fixed, professional realistic-post style — see drawTweetSlide).
+  // Preset toggle: 'basic' (fully customizable, default) or 'tweet'
+  // ("Standard" — a single fixed-layout card; see standardStyle below for
+  // which look it uses).
   template = 'basic',
+  // Only meaningful when template === 'tweet': 'normal' (NEW, default) is
+  // the confession-card look (drawNormalSlide); 'tweet' is the original
+  // fixed realistic-post preset (drawTweetSlide), unchanged.
+  standardStyle = 'normal',
+  // Tag identity for the 'normal' Standard style. ShareStorySheet.jsx's own
+  // getTagInfo is the source of truth for these, so the sheet's live
+  // preview chip and this export can never disagree; defaultTagInfo below
+  // is only a fallback for callers that don't pass them explicitly.
+  tagLabel,
+  tagGradientFrom,
+  tagGradientTo,
   // mode="message" only — when set, a small "media attached" notice pill
   // is drawn above the footer branding. The actual media is never rendered
   // into the image (or shown anywhere in the app) — just the notice.
@@ -1638,7 +1797,19 @@ export async function generateStoryImage({
 
   const tokens = getTokens();
 
-  if (template === 'tweet') {
+  if (template === 'tweet' && standardStyle === 'normal') {
+    const tag = defaultTagInfo(kind, isConfession);
+    drawNormalSlide(ctx, {
+      kind,
+      questionText,
+      replyText,
+      messageText,
+      tagLabel: tagLabel || tag.label,
+      tagGradientFrom: tagGradientFrom || tag.from,
+      tagGradientTo: tagGradientTo || tag.to,
+      tokens,
+    });
+  } else if (template === 'tweet') {
     const avatarImage = kind === 'message' ? await loadAvatarImage(avatarUrl) : null;
     drawTweetSlide(ctx, { kind, questionText, questionType, replyText, messageText, senderName, avatarImage, isConfession });
   } else {
@@ -1666,10 +1837,10 @@ export async function generateStoryImage({
     drawMediaAttachedNotice(ctx, mediaType, tokens);
   }
 
-  // Tweet template sits on a light backdrop, so the footer wordmark needs
-  // a dark fill instead of the light one the Basic template's dark
-  // backgrounds expect (see drawFooterLogo).
-  await drawFooterLogo(ctx, tokens, template === 'tweet' ? { textColor: TWEET_TEXT_PRIMARY } : undefined);
+  // Tweet-classic sits on a light backdrop, so the footer wordmark needs a
+  // dark fill instead of the light one every dark background (Basic, and
+  // the new Normal Standard style) expects (see drawFooterLogo).
+  await drawFooterLogo(ctx, tokens, template === 'tweet' && standardStyle === 'tweet' ? { textColor: TWEET_TEXT_PRIMARY } : undefined);
 
   return new Promise((resolve, reject) => {
     canvas.toBlob((blob) => {
