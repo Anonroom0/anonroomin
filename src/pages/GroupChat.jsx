@@ -55,6 +55,7 @@ const Vectors = {
   SearchSmall: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8" /><line x1="21" y1="21" x2="16.65" y2="16.65" /></svg>,
   Ghost: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M9 10h.01" /><path d="M15 10h.01" /><path d="M12 2a8 8 0 0 0-8 8v12l3-3 2.5 2.5L12 19l2.5 2.5L17 19l3 3V10a8 8 0 0 0-8-8z" /></svg>,
   Trash: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /></svg>,
+  Pin: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 17v5" /><path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V17a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 1 1 0 0 0 0-2H8a1 1 0 0 0 0 2 1 1 0 0 1 1 1z" /></svg>,
   Refresh: <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 4 23 10 17 10" /><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" /></svg>,
   CheckCircle: <svg width="20" height="20" viewBox="0 0 24 24" fill="#2FD8C4" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" stroke="none" /><polyline points="8 12 11 15 16 9" /></svg>,
   Instagram: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="2" width="20" height="20" rx="5" ry="5" /><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z" /><line x1="17.5" y1="6.5" x2="17.51" y2="6.5" /></svg>,
@@ -462,6 +463,8 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
   const [attachSheetOpen, setAttachSheetOpen] = useState(false);
   const [confessionModalOpen, setConfessionModalOpen] = useState(false);
   const [confessionNavIndex, setConfessionNavIndex] = useState(-1);
+  const [pinNavIndex, setPinNavIndex] = useState(-1);
+  const [pinning, setPinning] = useState(false);
   const [instagramModalOpen, setInstagramModalOpen] = useState(false);
   const [instagramLoading, setInstagramLoading] = useState(false);
 
@@ -835,6 +838,30 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
     await deleteMessagesSafely(msgsToDelete);
   };
 
+  // Pin/unpin a single selected message. Admin-only (see
+  // 0006_group_message_pins.sql's RLS policy — the same global
+  // `profiles.is_admin` flag that already gates message deletion above).
+  // Only offered when exactly one message is selected, since "pin" is a
+  // per-message toggle, not a bulk action like delete.
+  const handleTogglePinSelected = async () => {
+    if (!isAdmin || selectedMessages.length !== 1 || pinning) return;
+    const msg = messages.find((m) => m.id === selectedMessages[0]);
+    if (!msg) return;
+    const nextPinned = !msg.is_pinned;
+    setPinning(true);
+    setSelectedMessages([]);
+    setMessages((prev) => prev.map((m) => (m.id === msg.id ? { ...m, is_pinned: nextPinned } : m)));
+    const { error } = await supabase.from('group_messages').update({ is_pinned: nextPinned }).eq('id', msg.id);
+    setPinning(false);
+    if (error) {
+      console.error('Failed to toggle pin:', error);
+      showToast(friendlyDbError(), 'error');
+      setMessages((prev) => prev.map((m) => (m.id === msg.id ? { ...m, is_pinned: !nextPinned } : m)));
+      return;
+    }
+    showToast(nextPinned ? 'Message pinned' : 'Message unpinned', 'info');
+  };
+
   const currentSenderName = () => (isAnonMode ? 'Anonymous' : (profile?.is_admin ? ADMIN_DISPLAY_NAME : (profile?.username || 'Anonymous')));
 
   // Swaps a temp optimistic message for its canonical DB row — see the
@@ -1023,7 +1050,14 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
       {selectedMessages.length > 0 ? (
         <header style={{ flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 20px', background: '#FF6B35', color: '#fff', zIndex: 20 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}><button onClick={() => setSelectedMessages([])} style={{ border: 'none', background: 'transparent', color: '#fff', cursor: 'pointer', padding: '4px', marginLeft: '-8px' }}>{Vectors.Close}</button><span style={{ fontWeight: 700, fontSize: 16 }}>{selectedMessages.length} Selected</span></div>
-          <button onClick={handleDeleteSelected} style={{ border: 'none', background: 'transparent', color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontWeight: 600 }}>{Vectors.Trash} Delete</button>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 18 }}>
+            {selectedMessages.length === 1 && (
+              <button onClick={handleTogglePinSelected} disabled={pinning} style={{ border: 'none', background: 'transparent', color: '#fff', cursor: pinning ? 'default' : 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontWeight: 600, opacity: pinning ? 0.6 : 1 }}>
+                {Vectors.Pin} {messages.find((m) => m.id === selectedMessages[0])?.is_pinned ? 'Unpin' : 'Pin'}
+              </button>
+            )}
+            <button onClick={handleDeleteSelected} style={{ border: 'none', background: 'transparent', color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontWeight: 600 }}>{Vectors.Trash} Delete</button>
+          </div>
         </header>
       ) : (
         <header style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: 14, padding: '12px 20px', background: '#1C1D24', borderBottom: '1px solid rgba(255,255,255,0.06)', zIndex: 20 }}>
@@ -1063,59 +1097,120 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
 
       {(() => {
         const confessionMessages = messages.filter((m) => m.is_confession);
-        const hasConfessions = confessionMessages.length > 0 && !isSearching;
-        // Always mounted (never conditionally added/removed from the tree)
-        // and height/opacity-animated instead — previously this whole bar
-        // only rendered once `hasConfessions` became true, which meant
-        // nothing occupied its spot beforehand: the composer/message list
-        // sat flush against the header, then the bar suddenly popped in and
-        // shoved everything down, briefly exposing the plain background
-        // underneath mid-shove. Animating from a collapsed 0-height state
-        // to its real height gives the same end result without that flash.
+        const hasConfessions = confessionMessages.length > 0;
+        const pinnedMessages = messages.filter((m) => m.is_pinned);
+        const hasPinned = pinnedMessages.length > 0;
+        // Always visible whenever the composer itself would be (not just
+        // once a confession exists) — "Post Confession" here is a
+        // persistent shortcut to the same ConfessionModal the
+        // attachments sheet's "Confession" option opens (see
+        // onPickConfession below), so it needs to be reachable even in an
+        // empty chat with nothing to navigate to yet. "Previous
+        // Confession" and "Pin" only render once there's actually
+        // something to jump to.
+        const showBar = !isSearching && !!session && !isChannelLocked;
         return (
           <div
             style={{
-              maxHeight: hasConfessions ? 56 : 0,
-              opacity: hasConfessions ? 1 : 0,
+              maxHeight: showBar ? 56 : 0,
+              opacity: showBar ? 1 : 0,
               overflow: 'hidden',
               flexShrink: 0,
               background: '#1C1D24',
-              borderBottom: hasConfessions ? '1px solid rgba(255,255,255,0.06)' : 'none',
+              borderBottom: showBar ? '1px solid rgba(255,255,255,0.06)' : 'none',
               zIndex: 19,
               transition: 'max-height 0.32s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.24s ease, border-color 0.24s ease',
             }}
           >
-            <div style={{ padding: '10px 16px', display: 'flex' }}>
+            <div style={{ padding: '10px 16px', display: 'flex', gap: 8, overflowX: 'auto' }} className="custom-scrollbar">
+              {hasConfessions && (
+                <button
+                  onClick={() => {
+                    if (confessionMessages.length === 0) return;
+                    const nextIdx = confessionNavIndex + 1 >= confessionMessages.length ? 0 : confessionNavIndex + 1;
+                    setConfessionNavIndex(nextIdx);
+                    const el = document.getElementById(`msg-${confessionMessages[nextIdx].id}`);
+                    if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); setHighlightedMsgId(confessionMessages[nextIdx].id); setTimeout(() => setHighlightedMsgId(null), 2000); }
+                  }}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0,
+                    background: 'linear-gradient(180deg, rgba(255,107,53,0.16), rgba(255,107,53,0.08))',
+                    border: '1px solid rgba(255,107,53,0.28)',
+                    color: '#F4F3F0', borderRadius: 22, padding: '7px 14px 7px 8px',
+                    fontSize: 13, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap',
+                    transition: 'transform 0.12s ease-out, background 0.15s ease',
+                  }}
+                  onMouseDown={(e) => { e.currentTarget.style.transform = 'scale(0.96)'; }}
+                  onMouseUp={(e) => { e.currentTarget.style.transform = 'scale(1)'; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.transform = 'scale(1)'; }}
+                >
+                  <span style={{ width: 24, height: 24, borderRadius: '50%', background: 'rgba(255,107,53,0.2)', color: '#FF6B35', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    {Vectors.Ghost}
+                  </span>
+                  Previous Confession
+                  {confessionMessages.length > 1 && (
+                    <span style={{ fontSize: 11, fontWeight: 700, color: '#8B8B96', background: 'rgba(255,255,255,0.06)', borderRadius: 10, padding: '2px 7px' }}>
+                      {(confessionNavIndex % confessionMessages.length) + 1}/{confessionMessages.length}
+                    </span>
+                  )}
+                </button>
+              )}
+
+              {/* Same target as the attachments sheet's "Confession" option
+                  (onPickConfession -> setConfessionModalOpen(true)) — this
+                  is just a second, always-visible door to it. */}
               <button
-                onClick={() => {
-                  if (confessionMessages.length === 0) return;
-                  const nextIdx = confessionNavIndex + 1 >= confessionMessages.length ? 0 : confessionNavIndex + 1;
-                  setConfessionNavIndex(nextIdx);
-                  const el = document.getElementById(`msg-${confessionMessages[nextIdx].id}`);
-                  if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); setHighlightedMsgId(confessionMessages[nextIdx].id); setTimeout(() => setHighlightedMsgId(null), 2000); }
-                }}
+                onClick={() => setConfessionModalOpen(true)}
                 style={{
-                  display: 'flex', alignItems: 'center', gap: 8,
-                  background: 'linear-gradient(180deg, rgba(255,107,53,0.16), rgba(255,107,53,0.08))',
-                  border: '1px solid rgba(255,107,53,0.28)',
+                  display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0,
+                  background: 'rgba(255,255,255,0.05)',
+                  border: '1px solid rgba(255,255,255,0.10)',
                   color: '#F4F3F0', borderRadius: 22, padding: '7px 14px 7px 8px',
-                  fontSize: 13, fontWeight: 600, cursor: 'pointer',
+                  fontSize: 13, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap',
                   transition: 'transform 0.12s ease-out, background 0.15s ease',
                 }}
                 onMouseDown={(e) => { e.currentTarget.style.transform = 'scale(0.96)'; }}
                 onMouseUp={(e) => { e.currentTarget.style.transform = 'scale(1)'; }}
                 onMouseLeave={(e) => { e.currentTarget.style.transform = 'scale(1)'; }}
               >
-                <span style={{ width: 24, height: 24, borderRadius: '50%', background: 'rgba(255,107,53,0.2)', color: '#FF6B35', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                <span style={{ width: 24, height: 24, borderRadius: '50%', background: 'rgba(255,255,255,0.08)', color: '#F4F3F0', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                   {Vectors.Ghost}
                 </span>
-                Previous Confession
-                {confessionMessages.length > 1 && (
-                  <span style={{ fontSize: 11, fontWeight: 700, color: '#8B8B96', background: 'rgba(255,255,255,0.06)', borderRadius: 10, padding: '2px 7px' }}>
-                    {(confessionNavIndex % confessionMessages.length) + 1}/{confessionMessages.length}
-                  </span>
-                )}
+                Post Confession
               </button>
+
+              {hasPinned && (
+                <button
+                  onClick={() => {
+                    if (pinnedMessages.length === 0) return;
+                    const nextIdx = pinNavIndex + 1 >= pinnedMessages.length ? 0 : pinNavIndex + 1;
+                    setPinNavIndex(nextIdx);
+                    const el = document.getElementById(`msg-${pinnedMessages[nextIdx].id}`);
+                    if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); setHighlightedMsgId(pinnedMessages[nextIdx].id); setTimeout(() => setHighlightedMsgId(null), 2000); }
+                  }}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0,
+                    background: 'linear-gradient(180deg, rgba(255,255,255,0.10), rgba(255,255,255,0.04))',
+                    border: '1px solid rgba(255,255,255,0.14)',
+                    color: '#F4F3F0', borderRadius: 22, padding: '7px 14px 7px 8px',
+                    fontSize: 13, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap',
+                    transition: 'transform 0.12s ease-out, background 0.15s ease',
+                  }}
+                  onMouseDown={(e) => { e.currentTarget.style.transform = 'scale(0.96)'; }}
+                  onMouseUp={(e) => { e.currentTarget.style.transform = 'scale(1)'; }}
+                  onMouseLeave={(e) => { e.currentTarget.style.transform = 'scale(1)'; }}
+                >
+                  <span style={{ width: 24, height: 24, borderRadius: '50%', background: 'rgba(255,255,255,0.10)', color: '#F4F3F0', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+                    {Vectors.Pin}
+                  </span>
+                  Pinned
+                  {pinnedMessages.length > 1 && (
+                    <span style={{ fontSize: 11, fontWeight: 700, color: '#8B8B96', background: 'rgba(255,255,255,0.06)', borderRadius: 10, padding: '2px 7px' }}>
+                      {(pinNavIndex % pinnedMessages.length) + 1}/{pinnedMessages.length}
+                    </span>
+                  )}
+                </button>
+              )}
             </div>
           </div>
         );
@@ -1400,8 +1495,16 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
         <button onClick={handleJumpToMention} style={{ position: 'absolute', right: 16, bottom: 80, width: 40, height: 40, borderRadius: '50%', background: '#FF6B35', color: '#fff', border: 'none', boxShadow: '0 6px 18px rgba(0,0,0,0.35)', zIndex: 30, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: 18, cursor: 'pointer', animation: 'pop-in 0.3s cubic-bezier(0.2, 0.8, 0.2, 1)' }}>@</button>
       )}
 
-      {/* COMPOSER */}
-      <div className="safe-bottom" style={{ flexShrink: 0, zIndex: 20, position: 'sticky', bottom: 0 }}>
+      {/* COMPOSER
+          `background` set explicitly here to match the composer form's own
+          `#1C1D24` — previously this wrapper was transparent, so its own
+          safe-area bottom padding (see .safe-bottom in tokens.css) showed
+          the page background (#0C0D10) through it: a visible dark seam
+          between the composer bar and the true bottom edge that didn't
+          match either color. Setting the same solid color here removes the
+          seam by making the padding area indistinguishable from the bar
+          it's padding. */}
+      <div className="safe-bottom" style={{ flexShrink: 0, zIndex: 20, position: 'sticky', bottom: 0, background: '#1C1D24' }}>
         {!session ? (
           <div style={{ padding: '16px', background: '#1C1D24', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
             <button onClick={() => setAuthOpen(true)} style={{ width: '100%', padding: '14px 0', borderRadius: 20, border: 'none', background: '#FF6B35', color: '#fff', fontWeight: 700, fontSize: 15, cursor: 'pointer', boxShadow: '0 6px 18px rgba(0,0,0,0.35)' }}>Sign in to send message</button>
@@ -1463,7 +1566,20 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
                    {typingName} is typing…
                  </div>
                )}
-               <form onSubmit={handleSend} autoComplete="off-nope" data-form-type="other" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px', paddingBottom: 'calc(12px + var(--keyboard-inset, 0px))', background: '#1C1D24', borderTop: replyingTo ? 'none' : '1px solid rgba(255,255,255,0.06)', position: 'relative', zIndex: 20 }}>
+               {/* paddingBottom is a plain 12px, not the earlier
+                   `calc(12px + var(--keyboard-inset))`. This page's whole
+                   root is already resized against the real visible
+                   viewport up in Home.jsx (see useViewportHeight.js) — the
+                   composer sits `position: sticky; bottom: 0` inside a
+                   container that's ALREADY shrunk to clear the keyboard.
+                   Also padding the form's own bottom by the keyboard's
+                   height on top of that double-compensated: the container
+                   shrinks by the keyboard height AND the form grew taller
+                   by the same amount, so the composer's solid-color area
+                   visibly ballooned to swallow most of the remaining
+                   screen the moment the keyboard opened. One source of
+                   truth (the outer resize) is enough. */}
+               <form onSubmit={handleSend} autoComplete="off-nope" data-form-type="other" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px', background: '#1C1D24', borderTop: replyingTo ? 'none' : '1px solid rgba(255,255,255,0.06)', position: 'relative', zIndex: 20 }}>
               <EmojiGifPicker open={pickerOpen} onClose={() => setPickerOpen(false)} onEmoji={(char) => setText(p=>p+char)} onMedia={handleMediaPicked} />
               <button type="button" onClick={() => setAttachSheetOpen(true)} disabled={uploading || cooldownPercent > 0 || selectedMessages.length > 0} style={{ width: 36, height: 36, borderRadius: '50%', border: 'none', background: 'transparent', color: '#8B8B96', cursor: 'pointer', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{uploading ? Vectors.Spinner : Vectors.Attach}</button>
               <input ref={fileInputRef} type="file" onChange={handleAttachmentSelected} style={{ position: 'absolute', width: 1, height: 1, padding: 0, margin: -1, overflow: 'hidden', clip: 'rect(0,0,0,0)', whiteSpace: 'nowrap', border: 0, opacity: 0, pointerEvents: 'none' }} />
