@@ -1420,8 +1420,17 @@ function emptyBotForm() {
     group_ids: [], name: '', gender: 'male', avatar_url: '', behaviors: [],
     mode: 'reactive', self_chat_style: 'bots_only', min_interval_seconds: 60, max_interval_seconds: 240,
     active: true, dm_enabled: false,
+    ai_model: '', ai_prefix_prompt: '', groq_api_key: '',
   };
 }
+
+const chipStyle = {
+  display: 'inline-flex', alignItems: 'center', gap: 6, background: 'rgba(255,255,255,0.08)',
+  border: '1px solid var(--glass-border)', borderRadius: 999, padding: '6px 10px', fontSize: 12.5, color: 'var(--paper)',
+};
+const chipRemoveBtnStyle = {
+  background: 'none', border: 'none', color: 'var(--dim)', cursor: 'pointer', fontSize: 14, lineHeight: 1, padding: 0,
+};
 
 function BotsTab({ actor }) {
   const [bots, setBots] = useState([]);
@@ -1432,6 +1441,7 @@ function BotsTab({ actor }) {
   const [busyId, setBusyId] = useState(null);
   const [editing, setEditing] = useState(null); // null = closed, {} = new, {...bot} = edit
   const [form, setForm] = useState(emptyBotForm());
+  const [customBehaviorInput, setCustomBehaviorInput] = useState('');
   const [saving, setSaving] = useState(false);
   const [avatarUploading, setAvatarUploading] = useState(false);
   const avatarInputRef = useRef(null);
@@ -1458,14 +1468,17 @@ function BotsTab({ actor }) {
 
   useEffect(() => { load(); }, [load]);
 
-  // behaviors.json is a plain static file (see public/replies/FORMAT.md) —
-  // fetched once, not part of the database.
+  // behaviors.json still supplies quick-pick suggestion pills, but a bot's
+  // `behaviors` are now just free-text persona/topic tags fed straight into
+  // the AI prompt — not a file-lookup key. Admins can also type any custom
+  // tag below; it doesn't need to exist in this catalog.
   useEffect(() => {
     fetch('/replies/behaviors.json').then((r) => r.json()).then(setBehaviorCatalog).catch(() => setBehaviorCatalog([]));
   }, []);
 
   function openCreate() {
     setForm(emptyBotForm());
+    setCustomBehaviorInput('');
     setEditing({});
   }
 
@@ -1475,12 +1488,27 @@ function BotsTab({ actor }) {
       behaviors: bot.behaviors || [], mode: bot.mode, self_chat_style: bot.self_chat_style,
       min_interval_seconds: bot.min_interval_seconds, max_interval_seconds: bot.max_interval_seconds,
       active: bot.active, dm_enabled: !!bot.dm_enabled,
+      ai_model: bot.ai_model || '', ai_prefix_prompt: bot.ai_prefix_prompt || '', groq_api_key: bot.groq_api_key || '',
     });
+    setCustomBehaviorInput('');
     setEditing(bot);
   }
 
   function toggleBehavior(id) {
     setForm((f) => ({ ...f, behaviors: f.behaviors.includes(id) ? f.behaviors.filter((b) => b !== id) : [...f.behaviors, id] }));
+  }
+
+  function addCustomBehavior() {
+    const tag = customBehaviorInput.trim();
+    if (!tag) return;
+    setForm((f) => (
+      f.behaviors.some((b) => b.toLowerCase() === tag.toLowerCase()) ? f : { ...f, behaviors: [...f.behaviors, tag] }
+    ));
+    setCustomBehaviorInput('');
+  }
+
+  function removeBehavior(tag) {
+    setForm((f) => ({ ...f, behaviors: f.behaviors.filter((b) => b !== tag) }));
   }
 
   function toggleGroup(id) {
@@ -1517,7 +1545,6 @@ function BotsTab({ actor }) {
     const name = form.name.trim();
     if (!name) { showToast('Bot needs a name.', 'error'); return; }
     if (!form.group_ids.length) { showToast('Select at least one group for this bot.', 'error'); return; }
-    if (!form.behaviors.length) { showToast('Select at least one behavior.', 'error'); return; }
 
     setSaving(true);
     const payload = {
@@ -1525,6 +1552,9 @@ function BotsTab({ actor }) {
       behaviors: form.behaviors, mode: form.mode, self_chat_style: form.self_chat_style,
       min_interval_seconds: Number(form.min_interval_seconds) || 60, max_interval_seconds: Number(form.max_interval_seconds) || 240,
       active: form.active, dm_enabled: form.dm_enabled,
+      ai_model: form.ai_model.trim() || null,
+      ai_prefix_prompt: form.ai_prefix_prompt.trim() || null,
+      groq_api_key: form.groq_api_key.trim() || null,
     };
 
     let botId = editing?.id;
@@ -1571,6 +1601,7 @@ function BotsTab({ actor }) {
 
   const groupNames = (botId) => (botGroupMap[botId] || []).map((gid) => groups.find((g) => g.id === gid)?.name).filter(Boolean);
   const visibleBots = groupFilter === 'all' ? bots : bots.filter((b) => (botGroupMap[b.id] || []).includes(groupFilter));
+  const customFormBehaviors = form.behaviors.filter((b) => !behaviorCatalog.some((c) => c.id === b));
 
   if (loading) return <div style={{ color: 'var(--dim)', textAlign: 'center', padding: 40 }}>{Vectors.Spinner}</div>;
 
@@ -1600,11 +1631,15 @@ function BotsTab({ actor }) {
                 <span style={{ fontWeight: 700, fontSize: 14.5, color: 'var(--paper)' }}>{bot.name}</span>
                 <span style={badgeStyle(bot.mode === 'self_chat' ? '#8B5CF6' : 'var(--signal)')}>{bot.mode === 'self_chat' ? 'Self-chat' : 'Reactive'}</span>
                 {bot.dm_enabled && <span style={badgeStyle('#3B82F6')}>DM</span>}
+                {bot.groq_api_key && <span style={badgeStyle('#F59E0B')}>Custom key</span>}
                 {!bot.active && <span style={badgeStyle('var(--dim)')}>Inactive</span>}
               </div>
               <div style={{ fontSize: 12.5, color: 'var(--dim)', marginTop: 3 }}>
-                {groupNames(bot.id).join(', ') || 'no groups assigned'} · {bot.gender} · {(bot.behaviors || []).join(', ') || 'no behaviors'}
+                {groupNames(bot.id).join(', ') || 'no groups assigned'} · {bot.gender} · {bot.ai_model || 'default model'}
               </div>
+              {!!(bot.behaviors || []).length && (
+                <div style={{ fontSize: 12, color: 'var(--dim)', marginTop: 2 }}>{bot.behaviors.join(', ')}</div>
+              )}
             </div>
             <LiquidSwitch checked={bot.active} onChange={() => toggleActive(bot)} disabled={busyId === bot.id} />
             <button onClick={() => openEdit(bot)} style={iconBtnStyle} title="Edit bot">{Vectors.Edit}</button>
@@ -1640,21 +1675,71 @@ function BotsTab({ actor }) {
               {!groups.length && <span style={{ fontSize: 12.5, color: 'var(--dim)' }}>No groups exist yet — create one in the Groups tab first.</span>}
             </div>
 
-            <label style={{ fontSize: 12.5, color: 'var(--dim)', display: 'block', marginBottom: 4 }}>Gender (picks which reply file it uses)</label>
+            <label style={{ fontSize: 12.5, color: 'var(--dim)', display: 'block', marginBottom: 4 }}>Gender (used in the AI persona prompt)</label>
             <div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
               <button onClick={() => setForm((f) => ({ ...f, gender: 'male' }))} style={pillBtnStyle(form.gender === 'male')}>Male</button>
               <button onClick={() => setForm((f) => ({ ...f, gender: 'female' }))} style={pillBtnStyle(form.gender === 'female')}>Female</button>
             </div>
 
-            <label style={{ fontSize: 12.5, color: 'var(--dim)', display: 'block', marginBottom: 6 }}>Behaviors (select any number)</label>
-            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 14 }}>
+            <label style={{ fontSize: 12.5, color: 'var(--dim)', display: 'block', marginBottom: 6 }}>Behaviors / persona tags (optional — fed directly into the AI's prompt)</label>
+            <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 8 }}>
               {behaviorCatalog.map((b) => (
                 <button key={b.id} onClick={() => toggleBehavior(b.id)} style={pillBtnStyle(form.behaviors.includes(b.id))}>
                   {b.emoji} {b.label}
                 </button>
               ))}
-              {!behaviorCatalog.length && <span style={{ fontSize: 12.5, color: 'var(--dim)' }}>No behaviors found — check public/replies/behaviors.json.</span>}
+              {!behaviorCatalog.length && <span style={{ fontSize: 12.5, color: 'var(--dim)' }}>No suggested tags found — check public/replies/behaviors.json. You can still add custom tags below.</span>}
             </div>
+            {!!customFormBehaviors.length && (
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 8 }}>
+                {customFormBehaviors.map((tag) => (
+                  <span key={tag} style={chipStyle}>
+                    {tag}
+                    <button onClick={() => removeBehavior(tag)} style={chipRemoveBtnStyle} title="Remove tag">×</button>
+                  </span>
+                ))}
+              </div>
+            )}
+            <div style={{ display: 'flex', gap: 6, marginBottom: 14 }}>
+              <input
+                style={{ ...inputStyle, flex: 1 }}
+                value={customBehaviorInput}
+                onChange={(e) => setCustomBehaviorInput(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addCustomBehavior(); } }}
+                placeholder="Add a custom tag, e.g. sarcastic, night-owl, cricket fan"
+              />
+              <button onClick={addCustomBehavior} style={{ ...iconBtnStyle, width: 'auto', padding: '8px 14px', fontSize: 13, fontWeight: 600, color: 'var(--paper)' }}>Add</button>
+            </div>
+
+            <label style={{ fontSize: 12.5, color: 'var(--dim)', display: 'block', marginBottom: 4 }}>Groq model (optional)</label>
+            <input
+              style={{ ...inputStyle, marginBottom: 4 }}
+              value={form.ai_model}
+              onChange={(e) => setForm((f) => ({ ...f, ai_model: e.target.value }))}
+              placeholder="e.g. openai/gpt-oss-120b"
+              autoComplete="off"
+            />
+            <p style={{ fontSize: 12, color: 'var(--dim)', margin: '0 0 12px' }}>Leave blank to use the server's default model.</p>
+
+            <label style={{ fontSize: 12.5, color: 'var(--dim)', display: 'block', marginBottom: 4 }}>Persona instructions (optional)</label>
+            <textarea
+              style={{ ...inputStyle, marginBottom: 4, minHeight: 80, resize: 'vertical', fontFamily: 'inherit' }}
+              value={form.ai_prefix_prompt}
+              onChange={(e) => setForm((f) => ({ ...f, ai_prefix_prompt: e.target.value }))}
+              placeholder="e.g. flirty, teases a lot, loves cricket, replies mostly in Hinglish"
+            />
+            <p style={{ fontSize: 12, color: 'var(--dim)', margin: '0 0 12px' }}>Free-text instructions passed straight into the AI's prompt — this is what actually shapes how the bot talks.</p>
+
+            <label style={{ fontSize: 12.5, color: 'var(--dim)', display: 'block', marginBottom: 4 }}>Custom Groq API key (optional)</label>
+            <input
+              type="password"
+              style={{ ...inputStyle, marginBottom: 4 }}
+              value={form.groq_api_key}
+              onChange={(e) => setForm((f) => ({ ...f, groq_api_key: e.target.value }))}
+              placeholder="Leave blank to use the shared key"
+              autoComplete="off"
+            />
+            <p style={{ fontSize: 12, color: 'var(--dim)', margin: '0 0 12px' }}>Overrides the shared Groq key for just this bot. Stored as plain text in the bots table, so only set this if that's acceptable for your setup.</p>
 
             <label style={{ fontSize: 12.5, color: 'var(--dim)', display: 'block', marginBottom: 4 }}>Mode</label>
             <div style={{ display: 'flex', gap: 8, marginBottom: 8 }}>
@@ -1662,7 +1747,7 @@ function BotsTab({ actor }) {
               <button onClick={() => setForm((f) => ({ ...f, mode: 'self_chat' }))} style={pillBtnStyle(form.mode === 'self_chat')}>Self-chat</button>
             </div>
             <p style={{ fontSize: 12, color: 'var(--dim)', margin: '0 0 12px' }}>
-              Both modes always reply to @mentions, replies-to-it, and keyword matches. Self-chat additionally posts on its own.
+              Reactive bots use AI to reply to messages in their groups/DMs. Self-chat additionally posts its own AI-generated lines on a random interval.
             </p>
 
             {form.mode === 'self_chat' && (
