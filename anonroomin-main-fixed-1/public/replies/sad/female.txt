@@ -1,0 +1,103 @@
+# Sad / Moody - Female
+# Logical, relevant chat replies with emoji
+
+hi : Hey... down 😔
+how are you : Heavy feel 😢
+miss : Empty 😔
+love : Soft nahi 💔
+ok : Heavy 😢
+* : Grey mood 😔
+* : Zero energy 😢
+* : Empty 💔
+* : Existing 😔
+* : Heavy 😢
+love : Soft nahi 💔
+* : Empty 💔
+* : Heavy 😢
+* : Empty 💔
+ok : Heavy 😢
+hi : Hey... down 😔
+how are you : Heavy feel 😢
+* : Heavy 😢
+* : Existing 😔
+* : Heavy 😢
+* : Empty 💔
+ok : Heavy 😢
+love : Soft nahi 💔
+miss : Empty 😔
+* : Empty 💔
+how are you : Heavy feel 😢
+love : Soft nahi 💔
+* : Grey mood 😔
+how are you : Heavy feel 😢
+* : Empty 💔
+* : Heavy 😢
+* : Existing 😔
+ok : Heavy 😢
+how are you : Heavy feel 😢
+how are you : Heavy feel 😢
+* : Heavy 😢
+* : Empty 💔
+* : Zero energy 😢
+* : Zero energy 😢
+ok : Heavy 😢
+miss : Empty 😔
+* : Empty 💔
+how are you : Heavy feel 😢
+love : Soft nahi 💔
+hi : Hey... down 😔
+how are you : Heavy feel 😢
+* : Empty 💔
+miss : Empty 😔
+miss : Empty 😔
+* : Existing 😔
+* : Heavy 😢
+miss : Empty 😔
+miss : Empty 😔
+ok : Heavy 😢
+* : Heavy 😢
+ok : Heavy 😢
+how are you : Heavy feel 😢
+* : Empty 💔
+* : Empty 💔
+miss : Empty 😔
+* : Grey mood 😔
+ok : Heavy 😢
+love : Soft nahi 💔
+* : Empty 💔
+* : Zero energy 😢
+* : Heavy 😢
+* : Empty 💔
+* : Empty 💔
+* : Existing 😔
+* : Existing 😔
+ok : Heavy 😢
+* : Existing 😔
+* : Zero energy 😢
+* : Empty 💔
+* : Empty 💔
+miss : Empty 😔
+* : Existing 😔
+* : Empty 💔
+ok : Heavy 😢
+* : Heavy 😢
+* : Empty 💔
+* : Zero energy 😢
+love : Soft nahi 💔
+* : Heavy 😢
+ok : Heavy 😢
+* : Existing 😔
+* : Zero energy 😢
+hi : Hey... down 😔
+* : Heavy 😢
+* : Heavy 😢
+* : Existing 😔
+miss : Empty 😔
+how are you : Heavy feel 😢
+hi : Hey... down 😔
+* : Existing 😔
+hi : Hey... down 😔
+* : Existing 😔
+miss : Empty 😔
+* : Grey mood 😔
+* : Existing 😔
