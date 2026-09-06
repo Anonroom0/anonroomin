@@ -36,6 +36,7 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import supabase from '../lib/supabaseClient';
 import { useAuth } from '../lib/authContext';
+import { useViewportHeight } from '../lib/useViewportHeight';
 import { getOrCreateVisitorId } from '../lib/visitorId';
 import { ROOT_PATH, isShortId } from '../lib/subdomain';
 import { showToast, friendlyDbError } from '../lib/toast';
@@ -239,10 +240,10 @@ function ReplyBubble({ reply, isOwn, canShare, onShare }) {
           background: isOwn
             ? 'linear-gradient(135deg, var(--ink-2) 0%, #23242e 100%)'
             : 'var(--glass-white)',
-          border: `1px solid ${isOwn ? 'rgba(255,107,53,0.25)' : 'var(--glass-border)'}`,
+          border: `1px solid ${isOwn ? 'rgba(47,111,255,0.25)' : 'var(--glass-border)'}`,
           backdropFilter: 'blur(20px) saturate(115%)',
           WebkitBackdropFilter: 'blur(20px) saturate(115%)',
-          boxShadow: '0 6px 18px rgba(0,0,0,0.35)',
+          boxShadow: 'var(--shadow-float)',
           color: 'var(--paper)',
           boxSizing: 'border-box',
           position: 'relative',
@@ -375,12 +376,12 @@ export default function QuestionThread({ questionId, onBack, onShareReply }) {
   // Local state for standalone sharing
   const [sharingReplyLocal, setSharingReplyLocal] = useState(null);
 
-  // Height comes from the parent (Home.jsx's RIGHT PANEL wrapper), which
-  // is already keyboard-aware via useViewportHeight — see that file's
-  // comment and Home.jsx's rightPanelHeight for why the height source
-  // lives up there instead of being independently re-derived here. This
-  // page just fills whatever height its parent gives it.
-  const pageHeight = '100%';
+  // Prefer measured visual-viewport height so the composer stays above the
+  // keyboard without extra --keyboard-inset padding (which double-counts and
+  // stretches the bar to the top of the screen). Fall back to 100% if the
+  // parent already constrains height (e.g. Home right panel).
+  const { height: viewportHeight, offsetTop: viewportOffsetTop } = useViewportHeight();
+  const pageHeight = viewportHeight ? `${viewportHeight}px` : '100dvh';
 
   const scrollRef = useRef(null);
 
@@ -628,7 +629,8 @@ export default function QuestionThread({ questionId, onBack, onShareReply }) {
         height: pageHeight,
         width: '100%',
         overflow: 'hidden',
-        background: 'radial-gradient(circle at 50% 0%, rgba(255,107,53,0.06), transparent 55%), var(--ink)',
+        background: 'radial-gradient(circle at 50% 0%, rgba(59,130,246,0.06), transparent 55%), var(--ink)',
+        transform: viewportOffsetTop ? `translateY(${viewportOffsetTop}px)` : undefined,
       }}
     >
       <header
@@ -709,7 +711,7 @@ export default function QuestionThread({ questionId, onBack, onShareReply }) {
             fontWeight: 700,
             textTransform: 'uppercase',
             letterSpacing: 0.5,
-            boxShadow: '0 2px 8px rgba(255,107,53,0.4)',
+            boxShadow: '0 2px 8px rgba(47,111,255,0.4)',
           }}
         >
           Join
@@ -763,22 +765,50 @@ export default function QuestionThread({ questionId, onBack, onShareReply }) {
           ))}
       </div>
 
-      <div className="safe-bottom" style={{ flexShrink: 0, zIndex: 20, background: 'var(--glass-white)', backdropFilter: 'blur(20px) saturate(115%)', WebkitBackdropFilter: 'blur(20px) saturate(115%)', borderTop: '1px solid var(--glass-border)' }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '10px 16px 0' }}>
+      <div
+        className="safe-bottom"
+        style={{
+          flexShrink: 0,
+          zIndex: 20,
+          position: 'sticky',
+          bottom: 0,
+          width: '100%',
+          background: 'var(--composer-bg, var(--header-bg))',
+          backdropFilter: 'blur(20px) saturate(140%)',
+          WebkitBackdropFilter: 'blur(20px) saturate(140%)',
+          borderTop: '1px solid var(--separator)',
+        }}
+      >
+        {/* Single compact meta row — never stacks into 3 bars that steal height */}
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+            padding: '8px 12px 0',
+            flexWrap: 'nowrap',
+            overflow: 'hidden',
+          }}
+        >
           <span
             style={{
               display: 'inline-flex',
               alignItems: 'center',
               gap: 5,
-              padding: '4px 10px',
+              padding: '3px 10px',
               borderRadius: 999,
-              background: 'var(--glass-border)',
+              background: 'var(--glass)',
               color: 'var(--dim)',
               fontSize: 11,
               fontWeight: 700,
+              whiteSpace: 'nowrap',
+              flexShrink: 1,
+              minWidth: 0,
+              overflow: 'hidden',
+              textOverflow: 'ellipsis',
             }}
           >
-            {Icons.Ghost} Your identity stays hidden
+            {Icons.Ghost} Anonymous
           </span>
           {isPrivate && (
             <span
@@ -786,25 +816,56 @@ export default function QuestionThread({ questionId, onBack, onShareReply }) {
                 display: 'inline-flex',
                 alignItems: 'center',
                 gap: 5,
-                padding: '4px 10px',
+                padding: '3px 10px',
                 borderRadius: 999,
-                background: 'var(--glass-border)',
+                background: 'var(--glass)',
                 color: 'var(--dim)',
                 fontSize: 11,
                 fontWeight: 700,
+                whiteSpace: 'nowrap',
+                flexShrink: 0,
               }}
             >
               {Icons.Lock} Private
             </span>
           )}
+          {isAuthor && addToConfessions && (
+            <span
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 5,
+                padding: '3px 10px',
+                borderRadius: 999,
+                background: 'var(--ember-soft)',
+                color: 'var(--ember)',
+                fontSize: 11,
+                fontWeight: 700,
+                whiteSpace: 'nowrap',
+                flexShrink: 0,
+              }}
+            >
+              + Confessions
+            </span>
+          )}
         </div>
 
-        {isAuthor && addToConfessions && (
-          <div style={{ padding: '8px 16px 0', fontSize: 12, color: 'var(--dim)' }}>
-            This reply will also be posted to Confessions.
-          </div>
-        )}
-        <form onSubmit={handleSendReply} autoComplete="off-nope" data-form-type="other" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px', paddingBottom: 'calc(12px + var(--keyboard-inset, 0px))' }}>
+        {/* One input row, edge-to-edge — NO --keyboard-inset padding (parent
+            height already tracks the visual viewport; adding inset again
+            stretches this bar up the screen and hides the thread). */}
+        <form
+          onSubmit={handleSendReply}
+          autoComplete="off-nope"
+          data-form-type="other"
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+            width: '100%',
+            padding: '10px 12px',
+            boxSizing: 'border-box',
+          }}
+        >
           {isAuthor && (
             <button
               type="button"
@@ -815,12 +876,12 @@ export default function QuestionThread({ questionId, onBack, onShareReply }) {
                 display: 'flex',
                 alignItems: 'center',
                 justifyContent: 'center',
-                width: 36,
-                height: 36,
+                width: 40,
+                height: 40,
                 borderRadius: '50%',
                 flexShrink: 0,
                 border: 'none',
-                background: addToConfessions ? 'var(--ember)' : 'var(--glass-border)',
+                background: addToConfessions ? 'var(--ember)' : 'var(--surface-2, var(--glass-border))',
                 color: addToConfessions ? '#fff' : 'var(--dim)',
                 cursor: 'pointer',
                 transition: 'background 0.15s ease, color 0.15s ease',
@@ -843,25 +904,28 @@ export default function QuestionThread({ questionId, onBack, onShareReply }) {
             onChange={(e) => setReplyText(e.target.value.slice(0, MAX_TEXT_LENGTH))}
             maxLength={MAX_TEXT_LENGTH}
             onFocus={() => { if (scrollRef.current) scrollRef.current.scrollTop = 0; }}
-            placeholder="Write an honest, anonymous response…"
+            placeholder="Anonymous reply…"
             aria-label="Reply"
             disabled={sending}
             style={{
               flex: 1,
-              border: '1px solid var(--glass-border)',
+              minWidth: 0,
+              border: '1px solid var(--separator)',
               outline: 'none',
-              background: 'var(--ink-2)',
+              background: 'var(--surface)',
               color: 'var(--paper)',
-              borderRadius: 24,
-              padding: '12px 18px',
+              borderRadius: 22,
+              padding: '12px 16px',
               fontSize: 15,
             }}
           />
-          <SendButton canSend={!!replyText.trim()} sending={sending} cooldownPercent={0} />
+          <div style={{ flexShrink: 0 }}>
+            <SendButton canSend={!!replyText.trim()} sending={sending} cooldownPercent={0} />
+          </div>
         </form>
       </div>
 
-      <AuthModal open={authOpen} onClose={() => setAuthOpen(false)} initialTab="signup" onVerified={() => setAuthOpen(false)} />
+     <AuthModal open={authOpen} onClose={() => setAuthOpen(false)} initialTab="signup" onVerified={() => setAuthOpen(false)} />
       
       {/* Renders locally when mounted standalone without Home.jsx overriding it */}
       {sharingReplyLocal && (

@@ -4,9 +4,9 @@
  * ============================================================================
  * CHANGES IN THIS PASS:
  * - MATCHED GROUP CHAT: Unified the visual language to use the Solid Matte 
- *   Hex palette (#1C1D24, #15161B, #0C0D10) instead of legacy glass variables.
- * - PROFESSIONAL COLORS: Sent messages use Deep Slate (#2A2B32) and received 
- *   messages use Matte Gray (#15161B).
+ *   Hex palette (var(--ink-2), var(--ink-2), var(--ink)) instead of legacy glass variables.
+ * - PROFESSIONAL COLORS: Sent messages use Deep Slate (var(--surface-2)) and received 
+ *   messages use Matte Gray (var(--ink-2)).
  * - REACTION BAR INTEGRATION: Implemented the permanent ReactionBar below 
  *   message bubbles and the active popup override tray for clean Telegram-style 
  *   tapping.
@@ -58,7 +58,7 @@ const Vectors = {
   GhostSolid: <svg width="42" height="42" viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M12 2a8 8 0 0 0-8 8v12l3-3 2.5 2.5L12 19l2.5 2.5L17 19l3 3V10a8 8 0 0 0-8-8zm-3 8a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3zm6 0a1.5 1.5 0 1 1 0-3 1.5 1.5 0 0 1 0 3z" /></svg>,
   Trash: <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /></svg>,
   Refresh: <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 4 23 10 17 10" /><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" /></svg>,
-  CheckCircle: <svg width="20" height="20" viewBox="0 0 24 24" fill="#FF6B35" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" stroke="none" /><polyline points="8 12 11 15 16 9" /></svg>,
+  CheckCircle: <svg width="20" height="20" viewBox="0 0 24 24" fill="var(--ember)" stroke="#fff" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10" stroke="none" /><polyline points="8 12 11 15 16 9" /></svg>,
   Play: <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="none"><polygon points="6 3 20 12 6 21 6 3" /></svg>,
   Pause: <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="none"><rect x="6" y="4" width="4" height="16" rx="1" /><rect x="14" y="4" width="4" height="16" rx="1" /></svg>,
   Camera: <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z" /><circle cx="12" cy="13" r="4" /></svg>,
@@ -169,9 +169,9 @@ const GlobalKeyframes = () => (
     @keyframes slideUpFade { 0% { opacity: 0; transform: translateY(10px); } 100% { opacity: 1; transform: translateY(0); } }
     @keyframes pop-in { 0% { transform: scale(0.5); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
     @keyframes highlightPulse {
-      0% { background-color: rgba(255, 107, 53, 0.4); transform: scale(1.02); }
-      50% { background-color: rgba(255, 107, 53, 0.1); transform: scale(1); }
-      100% { background-color: rgba(255, 107, 53, 0.4); transform: scale(1.02); }
+      0% { background-color: rgba(47, 111, 255, 0.4); transform: scale(1.02); }
+      50% { background-color: rgba(47, 111, 255, 0.1); transform: scale(1); }
+      100% { background-color: rgba(47, 111, 255, 0.4); transform: scale(1.02); }
     }
     .highlight-flash { animation: highlightPulse 0.6s ease-in-out 3; }
     .spinner-animation { animation: spin 1.2s linear infinite; }
@@ -181,7 +181,7 @@ const GlobalKeyframes = () => (
     @keyframes shimmer { 0% { background-position: -1000px 0; } 100% { background-position: 1000px 0; } }
     .shimmer-bg {
       animation: shimmer 2s infinite linear;
-      background: linear-gradient(to right, #1C1D24 4%, #2A2B32 25%, #1C1D24 36%);
+      background: linear-gradient(to right, var(--ink-2) 4%, var(--surface-2) 25%, var(--ink-2) 36%);
       background-size: 1000px 100%;
     }
     .no-copy-text {
@@ -219,7 +219,7 @@ function DMLiquidAvatar({ identity, size = 42, isAnon = false }) {
 
   if (isAnon) {
     return (
-      <div style={{ ...containerStyle, background: '#15161B', color: '#8B8B96' }}>
+      <div style={{ ...containerStyle, background: 'var(--ink-2)', color: 'var(--dim)' }}>
         <div style={{ transform: 'scale(0.6)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
           {Vectors.GhostSolid}
         </div>
@@ -242,7 +242,7 @@ function DMLiquidAvatar({ identity, size = 42, isAnon = false }) {
               position: 'absolute', right: -2, bottom: -2,
               width: Math.max(14, Math.round(size * 0.36)), height: Math.max(14, Math.round(size * 0.36)),
               borderRadius: '50%', background: 'linear-gradient(135deg, var(--admin-1) 0%, var(--admin-2) 100%)',
-              color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 0 0 2px #0C0D10',
+              color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 0 0 2px var(--ink)',
             }}
           >
             {Vectors.AdminShield}
@@ -270,7 +270,7 @@ function DMLiquidAvatar({ identity, size = 42, isAnon = false }) {
 
   // Solid brand ember — matches EditProfile.jsx and LiquidAvatar.jsx.
   return (
-    <div style={{ ...containerStyle, background: '#FF6B35', color: '#ffffff', fontWeight: 700, fontSize: size * 0.4 }}>
+    <div style={{ ...containerStyle, background: 'var(--ember)', color: '#ffffff', fontWeight: 700, fontSize: size * 0.4 }}>
       {getInitials(identity.name)}
     </div>
   );
@@ -309,13 +309,13 @@ function AudioBubble({ src, isOwn }) {
   };
 
   const barCount = 26;
-  const activeColor = isOwn ? '#fff' : '#FF6B35';
+  const activeColor = isOwn ? '#fff' : 'var(--ember)';
   const inactiveColor = isOwn ? 'rgba(255,255,255,0.35)' : 'rgba(255,255,255,0.1)';
 
   return (
     <div style={{ display: 'flex', alignItems: 'center', gap: 10, width: 230, padding: '2px 2px' }}>
       <audio ref={audioRef} src={src} preload="metadata" style={{ display: 'none' }} />
-      <button onClick={toggle} style={{ width: 34, height: 34, borderRadius: '50%', border: 'none', flexShrink: 0, background: isOwn ? 'rgba(255,255,255,0.1)' : '#FF6B35', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
+      <button onClick={toggle} style={{ width: 34, height: 34, borderRadius: '50%', border: 'none', flexShrink: 0, background: isOwn ? 'rgba(255,255,255,0.1)' : 'var(--ember)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer' }}>
         {playing ? Vectors.Pause : Vectors.Play}
       </button>
       <div onClick={seek} style={{ flex: 1, display: 'flex', alignItems: 'center', gap: 2, height: 26, cursor: 'pointer' }}>
@@ -325,7 +325,7 @@ function AudioBubble({ src, isOwn }) {
           return <div key={i} style={{ width: 2.5, height: h, borderRadius: 2, background: active ? activeColor : inactiveColor, transition: 'background 0.1s' }} />;
         })}
       </div>
-      <span style={{ fontSize: 11, fontWeight: 600, color: isOwn ? 'rgba(255,255,255,0.85)' : '#8B8B96', flexShrink: 0, minWidth: 30, textAlign: 'right' }}>
+      <span style={{ fontSize: 11, fontWeight: 600, color: isOwn ? 'rgba(255,255,255,0.85)' : 'var(--dim)', flexShrink: 0, minWidth: 30, textAlign: 'right' }}>
         {formatClock(playing || currentTime ? currentTime : duration)}
       </span>
     </div>
@@ -343,17 +343,17 @@ function VideoBubble({ src }) {
 function InstagramCard({ message, isOwn }) {
   const followers = formatCount(message.instagram_followers);
   return (
-    <a href={`https://instagram.com/${message.instagram_username}`} target="_blank" rel="noopener noreferrer" style={{ display: 'flex', gap: 12, alignItems: 'center', padding: 12, borderRadius: 16, minWidth: 220, textDecoration: 'none', background: isOwn ? 'rgba(255,255,255,0.05)' : 'rgba(255,255,255,0.02)' }}>
-      <div style={{ width: 48, height: 48, borderRadius: '50%', overflow: 'hidden', flexShrink: 0, background: 'rgba(255,255,255,0.06)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: isOwn ? '#fff' : '#FF6B35' }}>
+    <a href={`https://instagram.com/${message.instagram_username}`} target="_blank" rel="noopener noreferrer" style={{ display: 'flex', gap: 12, alignItems: 'center', padding: 12, borderRadius: 16, minWidth: 220, textDecoration: 'none', background: isOwn ? 'rgba(63,120,255,0.06)' : 'var(--glass)' }}>
+      <div style={{ width: 48, height: 48, borderRadius: '50%', overflow: 'hidden', flexShrink: 0, background: 'rgba(255,255,255,0.06)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: isOwn ? '#fff' : 'var(--ember)' }}>
         {message.instagram_pfp_url ? <img src={message.instagram_pfp_url} alt={message.instagram_username} style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : Vectors.Instagram}
       </div>
       <div style={{ minWidth: 0 }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-          <span style={{ fontWeight: 700, fontSize: 14, color: '#F4F3F0', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>@{message.instagram_username}</span>
-          {message.instagram_is_verified && <span style={{ color: '#FF6B35', fontSize: 13 }}>✓</span>}
+          <span style={{ fontWeight: 700, fontSize: 14, color: 'var(--paper)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>@{message.instagram_username}</span>
+          {message.instagram_is_verified && <span style={{ color: 'var(--ember)', fontSize: 13 }}>✓</span>}
         </div>
-        {message.instagram_full_name && <div style={{ fontSize: 12, color: isOwn ? 'rgba(255,255,255,0.85)' : '#8B8B96', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{message.instagram_full_name}</div>}
-        <div style={{ fontSize: 11, color: isOwn ? 'rgba(255,255,255,0.7)' : '#8B8B96', marginTop: 2 }}>{followers ? `${followers} followers` : 'View on Instagram'}</div>
+        {message.instagram_full_name && <div style={{ fontSize: 12, color: isOwn ? 'rgba(255,255,255,0.85)' : 'var(--dim)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{message.instagram_full_name}</div>}
+        <div style={{ fontSize: 11, color: isOwn ? 'rgba(255,255,255,0.7)' : 'var(--dim)', marginTop: 2 }}>{followers ? `${followers} followers` : 'View on Instagram'}</div>
       </div>
     </a>
   );
@@ -363,13 +363,13 @@ function AttachmentSheet({ open, onClose, onOpenCamera, onPickInstagram }) {
   if (!open) return null;
   const Item = ({ icon, label, onClick }) => (
     <button onClick={onClick} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 6, border: 'none', background: 'transparent', cursor: 'pointer', flex: 1 }}>
-      <div style={{ width: 52, height: 52, borderRadius: '50%', background: '#15161B', border: '1px solid rgba(255,255,255,0.06)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#FF6B35' }}>{icon}</div>
-      <span style={{ fontSize: 12, color: '#F4F3F0', fontWeight: 600 }}>{label}</span>
+      <div style={{ width: 52, height: 52, borderRadius: '50%', background: 'var(--ink-2)', border: '1px solid var(--separator)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--ember)' }}>{icon}</div>
+      <span style={{ fontSize: 12, color: 'var(--paper)', fontWeight: 600 }}>{label}</span>
     </button>
   );
   return (
     <div onClick={onClose} style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.85)', zIndex: 50, display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}>
-      <div onClick={(e) => e.stopPropagation()} style={{ width: '100%', maxWidth: 500, margin: '0 auto', background: '#1C1D24', borderTop: '1px solid rgba(255,255,255,0.06)', borderRadius: '28px 28px 0 0', padding: '24px 20px', display: 'flex', gap: 8 }}>
+      <div onClick={(e) => e.stopPropagation()} style={{ width: '100%', maxWidth: 500, margin: '0 auto', background: 'var(--ink-2)', borderTop: '1px solid var(--separator)', borderRadius: '28px 28px 0 0', padding: '24px 20px', display: 'flex', gap: 8 }}>
         <Item icon={Vectors.Camera} label="Camera" onClick={onOpenCamera} />
         <Item icon={Vectors.Instagram} label="Instagram" onClick={onPickInstagram} />
       </div>
@@ -395,23 +395,23 @@ function InstagramModal({ open, onClose, onSubmit, loading }) {
         background: 'rgba(0,0,0,0.85)', zIndex: 50, display: 'flex', alignItems: 'flex-end', justifyContent: 'center',
       }}
     >
-      <div onClick={(e) => e.stopPropagation()} style={{ width: '100%', maxWidth: 500, margin: '0 auto', background: '#1C1D24', borderRadius: '28px 28px 0 0', padding: '24px 20px', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
-        <h3 style={{ margin: '0 0 6px', color: '#F4F3F0', display: 'flex', alignItems: 'center', gap: 8 }}><div style={{ color: '#FF6B35' }}>{Vectors.Instagram}</div> Share Instagram Profile</h3>
-        <p style={{ margin: '0 0 16px', fontSize: 14, color: '#8B8B96' }}>Just the username — we'll pull the profile card automatically.</p>
+      <div onClick={(e) => e.stopPropagation()} style={{ width: '100%', maxWidth: 500, margin: '0 auto', background: 'var(--ink-2)', borderRadius: '28px 28px 0 0', padding: '24px 20px', borderTop: '1px solid var(--separator)' }}>
+        <h3 style={{ margin: '0 0 6px', color: 'var(--paper)', display: 'flex', alignItems: 'center', gap: 8 }}><div style={{ color: 'var(--ember)' }}>{Vectors.Instagram}</div> Share Instagram Profile</h3>
+        <p style={{ margin: '0 0 16px', fontSize: 14, color: 'var(--dim)' }}>Just the username — we'll pull the profile card automatically.</p>
         <div style={{ position: 'relative' }}>
-          <span style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', color: '#8B8B96', fontWeight: 700 }}>@</span>
+          <span style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', color: 'var(--dim)', fontWeight: 700 }}>@</span>
           <input
             autoFocus type="text" name="dm-ig-username" autoComplete="off" data-lpignore="true" data-1p-ignore data-form-type="other" value={username} disabled={loading}
             onChange={(e) => setUsername(e.target.value.replace(/^@/, '').trim())}
             onKeyDown={(e) => { if (e.key === 'Enter' && username.trim()) onSubmit(username.trim()); }}
             placeholder="username"
-            style={{ width: '100%', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 16, padding: '14px 14px 14px 32px', fontSize: 15, boxSizing: 'border-box', color: '#F4F3F0', background: '#15161B', outline: 'none' }}
+            style={{ width: '100%', border: '1px solid var(--separator)', borderRadius: 16, padding: '14px 14px 14px 32px', fontSize: 15, boxSizing: 'border-box', color: 'var(--paper)', background: 'var(--ink-2)', outline: 'none' }}
           />
         </div>
         <button
           onClick={() => username.trim() && onSubmit(username.trim())}
           disabled={loading || !username.trim()}
-          style={{ width: '100%', marginTop: 16, padding: 16, borderRadius: 20, border: 'none', background: loading ? '#2A2B32' : '#FF6B35', color: '#fff', fontWeight: 700, cursor: loading ? 'default' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, fontSize: 16 }}
+          style={{ width: '100%', marginTop: 16, padding: 16, borderRadius: 20, border: 'none', background: loading ? 'var(--surface-2)' : 'var(--ember)', color: '#fff', fontWeight: 700, cursor: loading ? 'default' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, fontSize: 16 }}
         >
           {loading ? (<>{Vectors.Spinner} Fetching profile…</>) : 'Share Profile'}
         </button>
@@ -464,7 +464,7 @@ function SwipeableMessage({ children, onSwipe, disabled }) {
 
   return (
     <div onTouchStart={handleTouchStart} onTouchMove={handleTouchMove} onTouchEnd={handleTouchEnd} style={{ transform: `translateX(${translateX}px)`, transition: translateX === 0 ? 'transform 0.25s cubic-bezier(0.2, 0.8, 0.2, 1)' : 'none', width: '100%', position: 'relative', touchAction: 'pan-y', willChange: 'transform' }}>
-      <div style={{ position: 'absolute', top: '50%', right: -40, transform: 'translateY(-50%)', opacity: translateX < -20 ? 1 : 0, transition: 'opacity 0.2s', color: '#8B8B96' }}>{Vectors.ReplyAction}</div>
+      <div style={{ position: 'absolute', top: '50%', right: -40, transform: 'translateY(-50%)', opacity: translateX < -20 ? 1 : 0, transition: 'opacity 0.2s', color: 'var(--dim)' }}>{Vectors.ReplyAction}</div>
       {children}
     </div>
   );
@@ -484,8 +484,8 @@ function SendButton({ canSend, sending, cooldownPercent }) {
       disabled={!canSend || sending || isCoolingDown}
       style={{
         position: 'relative', width: ringSize, height: ringSize, borderRadius: '50%', border: 'none', flexShrink: 0,
-        background: isCoolingDown ? '#15161B' : (canSend ? '#FF6B35' : '#2A2B32'),
-        color: canSend ? '#fff' : '#8B8B96', cursor: canSend && !isCoolingDown ? 'pointer' : 'default',
+        background: isCoolingDown ? 'var(--ink-2)' : (canSend ? 'var(--ember)' : 'var(--surface-2)'),
+        color: canSend ? '#fff' : 'var(--dim)', cursor: canSend && !isCoolingDown ? 'pointer' : 'default',
         display: 'flex', alignItems: 'center', justifyContent: 'center', transition: 'background 0.2s',
       }}
     >
@@ -493,9 +493,9 @@ function SendButton({ canSend, sending, cooldownPercent }) {
         <>
           <svg width={ringSize} height={ringSize} style={{ position: 'absolute', top: 0, left: 0, transform: 'rotate(-90deg)' }}>
             <circle cx={ringSize / 2} cy={ringSize / 2} r={radius} fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth={strokeWidth} />
-            <circle cx={ringSize / 2} cy={ringSize / 2} r={radius} fill="none" stroke="#FF6B35" strokeWidth={strokeWidth} strokeLinecap="round" strokeDasharray={circumference} strokeDashoffset={dashOffset} style={{ transition: 'stroke-dashoffset 0.2s linear' }} />
+            <circle cx={ringSize / 2} cy={ringSize / 2} r={radius} fill="none" stroke="var(--ember)" strokeWidth={strokeWidth} strokeLinecap="round" strokeDasharray={circumference} strokeDashoffset={dashOffset} style={{ transition: 'stroke-dashoffset 0.2s linear' }} />
           </svg>
-          <span style={{ width: 8, height: 8, borderRadius: '50%', background: '#FF6B35' }} />
+          <span style={{ width: 8, height: 8, borderRadius: '50%', background: 'var(--ember)' }} />
         </>
       ) : (
         Vectors.Send
@@ -919,7 +919,7 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
     return parts.map((part, i) => {
       if (part.startsWith('@') && part.length > 1) {
         const username = part.substring(1);
-        return <button key={i} onClick={() => handleMentionClick(username)} style={{ color: isOwn ? '#fff' : '#FF6B35', textDecoration: 'underline', background: 'none', border: 'none', padding: 0, fontWeight: 700, cursor: 'pointer', fontSize: 'inherit' }}>{part}</button>;
+        return <button key={i} onClick={() => handleMentionClick(username)} style={{ color: isOwn ? '#fff' : 'var(--ember)', textDecoration: 'underline', background: 'none', border: 'none', padding: 0, fontWeight: 700, cursor: 'pointer', fontSize: 'inherit' }}>{part}</button>;
       }
       return <span key={i}>{part}</span>;
     });
@@ -1065,17 +1065,17 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
     return m.text?.toLowerCase().includes(q);
   });
 
-  if (threadStatus === 'loading') return <div className="no-copy-text" style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#0C0D10' }}><div style={{ color: '#FF6B35' }}>{Vectors.Spinner}</div></div>;
-  if (threadStatus === 'error' || !activeThread) return <div className="no-copy-text" style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#0C0D10', flexDirection: 'column', gap: 16, padding: 24 }}><p style={{ color: '#8B8B96', fontWeight: 600 }}>Failed to load chat.</p><button onClick={onBack} style={{ background: '#FF6B35', color: '#fff', border: 'none', padding: '10px 20px', borderRadius: 12, cursor: 'pointer', fontWeight: 700 }}>Go Back</button></div>;
+  if (threadStatus === 'loading') return <div className="no-copy-text" style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--ink)' }}><div style={{ color: 'var(--ember)' }}>{Vectors.Spinner}</div></div>;
+  if (threadStatus === 'error' || !activeThread) return <div className="no-copy-text" style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--ink)', flexDirection: 'column', gap: 16, padding: 24 }}><p style={{ color: 'var(--dim)', fontWeight: 600 }}>Failed to load chat.</p><button onClick={onBack} style={{ background: 'var(--ember)', color: '#fff', border: 'none', padding: '10px 20px', borderRadius: 12, cursor: 'pointer', fontWeight: 700 }}>Go Back</button></div>;
 
   const otherIdentity = resolveIdentity(activeThread.otherUser);
 
   return (
-    <div className="no-copy-text" style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', position: 'relative', height: '100%', overflow: 'hidden', zIndex: 1, userSelect: 'none', WebkitUserSelect: 'none', background: '#0C0D10' }}>
+    <div className="no-copy-text" style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', position: 'relative', height: '100%', overflow: 'hidden', zIndex: 1, userSelect: 'none', WebkitUserSelect: 'none', background: 'var(--ink)' }}>
       <GlobalKeyframes />
 
       {selectedMessages.length > 0 ? (
-        <header style={{ flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 20px', background: '#FF6B35', color: '#fff', zIndex: 20 }}>
+        <header style={{ flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 20px', background: 'var(--ember)', color: '#fff', zIndex: 20 }}>
           <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
             <button onClick={() => setSelectedMessages([])} style={{ border: 'none', background: 'transparent', color: '#fff', cursor: 'pointer', padding: '4px', marginLeft: '-8px' }}>{Vectors.Close}</button>
             <span style={{ fontWeight: 700, fontSize: 16 }}>{selectedMessages.length} Selected</span>
@@ -1083,24 +1083,24 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
           <button onClick={handleDeleteSelected} style={{ border: 'none', background: 'transparent', color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontWeight: 600 }}>{Vectors.Trash} Delete</button>
         </header>
       ) : (
-        <header style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: 14, padding: '12px 20px', background: '#1C1D24', borderBottom: '1px solid rgba(255,255,255,0.06)', zIndex: 20 }}>
-          <button onClick={onBack} style={{ border: 'none', background: 'transparent', color: '#F4F3F0', cursor: 'pointer', padding: '4px', marginLeft: '-8px' }}>{Vectors.Back}</button>
+        <header style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: 14, padding: '12px 20px', background: 'var(--header-bg)', borderBottom: '1px solid var(--separator)', backdropFilter: 'blur(20px) saturate(140%)', WebkitBackdropFilter: 'blur(20px) saturate(140%)', zIndex: 20 }}>
+          <button onClick={onBack} style={{ border: 'none', background: 'transparent', color: 'var(--paper)', cursor: 'pointer', padding: '4px', marginLeft: '-8px' }}>{Vectors.Back}</button>
           <button onClick={() => setProfileCardUserId(activeThread.otherUser.id)} style={{ border: 'none', background: 'transparent', padding: 0, cursor: 'pointer' }}>
             <DMLiquidAvatar identity={otherIdentity} size={42} />
           </button>
           <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', flex: 1 }}>
-            <button onClick={() => setProfileCardUserId(activeThread.otherUser.id)} style={{ fontWeight: 700, fontSize: 16, color: otherIdentity.isAdmin ? 'var(--admin-1)' : '#F4F3F0', background: 'transparent', border: 'none', padding: 0, cursor: 'pointer', textAlign: 'left', display: 'flex', alignItems: 'center', gap: 6 }}>
+            <button onClick={() => setProfileCardUserId(activeThread.otherUser.id)} style={{ fontWeight: 700, fontSize: 16, color: otherIdentity.isAdmin ? 'var(--admin-1)' : 'var(--paper)', background: 'transparent', border: 'none', padding: 0, cursor: 'pointer', textAlign: 'left', display: 'flex', alignItems: 'center', gap: 6 }}>
               {otherIdentity.name}
               {otherIdentity.isAdmin && Vectors.AdminShield}
             </button>
-            <span style={{ fontSize: 13, color: '#8B8B96' }}>Online</span>
+            <span style={{ fontSize: 13, color: 'var(--dim)' }}>Online</span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
             <div style={{ position: 'relative' }}>
-              <button onClick={() => setMenuOpen((v) => !v)} style={{ border: 'none', background: 'transparent', color: '#F4F3F0', cursor: 'pointer', padding: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '50%' }}>{Vectors.ThreeDots}</button>
+              <button onClick={() => setMenuOpen((v) => !v)} style={{ border: 'none', background: 'transparent', color: 'var(--paper)', cursor: 'pointer', padding: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '50%' }}>{Vectors.ThreeDots}</button>
               {menuOpen && (
-                <div style={{ position: 'absolute', right: 0, top: '100%', marginTop: 4, background: '#1C1D24', border: '1px solid rgba(255,255,255,0.06)', borderRadius: 12, boxShadow: '0 8px 24px rgba(0,0,0,0.5)', zIndex: 30, minWidth: 160, padding: 6 }}>
-                  <button onClick={() => { setIsSearching(true); setMenuOpen(false); }} style={{ width: '100%', padding: '10px 14px', border: 'none', background: 'transparent', color: '#F4F3F0', textAlign: 'left', borderRadius: 8, cursor: 'pointer', fontSize: 14, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8 }}>{Vectors.SearchSmall} Search Chat</button>
+                <div style={{ position: 'absolute', right: 0, top: '100%', marginTop: 4, background: 'var(--ink-2)', border: '1px solid var(--separator)', borderRadius: 12, boxShadow: 'var(--shadow-card)', zIndex: 30, minWidth: 160, padding: 6 }}>
+                  <button onClick={() => { setIsSearching(true); setMenuOpen(false); }} style={{ width: '100%', padding: '10px 14px', border: 'none', background: 'transparent', color: 'var(--paper)', textAlign: 'left', borderRadius: 8, cursor: 'pointer', fontSize: 14, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8 }}>{Vectors.SearchSmall} Search Chat</button>
                 </div>
               )}
             </div>
@@ -1109,16 +1109,16 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
       )}
 
       {isSearching && (
-        <div style={{ background: '#1C1D24', borderBottom: '1px solid rgba(255,255,255,0.06)', padding: '10px 16px', display: 'flex', alignItems: 'center', gap: 10, zIndex: 19 }}>
+        <div style={{ background: 'var(--header-bg)', borderBottom: '1px solid var(--separator)', backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)', padding: '10px 16px', display: 'flex', alignItems: 'center', gap: 10, zIndex: 19 }}>
           <div style={{ flex: 1, position: 'relative' }}>
-            <span style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: '#8B8B96', pointerEvents: 'none' }}>{Vectors.SearchSmall}</span>
-            <input autoFocus type="search" name="dm-chat-search-f" autoComplete="off-nope" autoCorrect="off" autoCapitalize="off" spellCheck="false" data-lpignore="true" data-1p-ignore data-form-type="other" value={chatSearchQuery} onChange={(e) => setChatSearchQuery(e.target.value)} placeholder="Search in chat..." style={{ width: '100%', padding: '8px 12px 8px 36px', borderRadius: 16, border: 'none', background: '#15161B', color: '#F4F3F0', fontSize: 14, outline: 'none', boxSizing: 'border-box' }} />
+            <span style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--dim)', pointerEvents: 'none' }}>{Vectors.SearchSmall}</span>
+            <input autoFocus type="search" name="dm-chat-search-f" autoComplete="off-nope" autoCorrect="off" autoCapitalize="off" spellCheck="false" data-lpignore="true" data-1p-ignore data-form-type="other" value={chatSearchQuery} onChange={(e) => setChatSearchQuery(e.target.value)} placeholder="Search in chat..." style={{ width: '100%', padding: '8px 12px 8px 36px', borderRadius: 16, border: 'none', background: 'var(--ink-2)', color: 'var(--paper)', fontSize: 14, outline: 'none', boxSizing: 'border-box' }} />
           </div>
-          <button onClick={() => { setIsSearching(false); setChatSearchQuery(''); }} style={{ background: 'none', border: 'none', color: '#8B8B96', fontWeight: 600, cursor: 'pointer', fontSize: 14 }}>Cancel</button>
+          <button onClick={() => { setIsSearching(false); setChatSearchQuery(''); }} style={{ background: 'none', border: 'none', color: 'var(--dim)', fontWeight: 600, cursor: 'pointer', fontSize: 14 }}>Cancel</button>
         </div>
       )}
 
-      <div style={{ position: 'absolute', top: 72, left: 0, right: 0, height: 60, display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 5, transform: `translateY(${Math.min(pullDistance - 60, 0)}px)`, opacity: pullDistance > 10 ? 1 : 0, transition: isRefreshing ? 'transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1)' : 'none', color: '#FF6B35' }}>
+      <div style={{ position: 'absolute', top: 72, left: 0, right: 0, height: 60, display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 5, transform: `translateY(${Math.min(pullDistance - 60, 0)}px)`, opacity: pullDistance > 10 ? 1 : 0, transition: isRefreshing ? 'transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1)' : 'none', color: 'var(--ember)' }}>
         <div className={isRefreshing ? "refresh-spin" : ""} style={{ transform: `rotate(${pullDistance * 4}deg)` }}>{Vectors.Refresh}</div>
       </div>
 
@@ -1131,7 +1131,7 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
 
         {!messagesLoading && filteredMessages.length === 0 && (
           <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <div style={{ background: '#1C1D24', padding: '8px 16px', borderRadius: 20, fontSize: 14, color: '#8B8B96', border: '1px solid rgba(255,255,255,0.06)' }}>
+            <div style={{ background: 'var(--ink-2)', padding: '8px 16px', borderRadius: 20, fontSize: 14, color: 'var(--dim)', border: '1px solid var(--separator)' }}>
               {isSearching ? 'No messages found.' : `Say hello to ${otherIdentity.name} 👋`}
             </div>
           </div>
@@ -1150,8 +1150,17 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
           const isHighlighted = highlightedMsgId === message.id;
           const isSelected = selectedMessages.includes(message.id);
 
-          const bubbleBackground = isStickerOrGif ? 'transparent' : (isOwn ? '#2A2B32' : '#15161B');
-          const bubbleColor = '#F4F3F0';
+          
+          const bubbleBackground = isStickerOrGif
+            ? 'transparent'
+            : (isAnonMsg
+                ? 'var(--bubble-anon)'
+                : (isOwn ? 'var(--bubble-own)' : 'var(--bubble-other)'));
+          const bubbleColor = isStickerOrGif
+            ? 'var(--paper)'
+            : (isAnonMsg
+                ? 'var(--bubble-anon-text)'
+                : (isOwn ? 'var(--bubble-own-text)' : 'var(--bubble-other-text)'));
 
           return (
             <React.Fragment key={message.id}>
@@ -1167,10 +1176,10 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
                   <div
                     id={`dm-msg-${message.id}`}
                     className={isHighlighted ? 'highlight-flash' : ''}
-                    style={{ display: 'flex', flexDirection: 'column', width: '100%', marginBottom: 16, borderRadius: 16, padding: '4px 8px', background: isSelected ? 'rgba(255, 107, 53, 0.15)' : 'transparent', animation: 'slideUpFade 0.3s cubic-bezier(0.2, 0.8, 0.2, 1) both', transition: 'background 0.2s' }}
+                    style={{ display: 'flex', flexDirection: 'column', width: '100%', marginBottom: 16, borderRadius: 16, padding: '4px 8px', background: isSelected ? 'var(--ember-soft)' : 'transparent', animation: 'slideUpFade 0.3s cubic-bezier(0.2, 0.8, 0.2, 1) both', transition: 'background 0.2s' }}
                   >
                     {selectedMessages.length > 0 && isAdmin && (
-                       <div style={{ display: 'flex', justifyContent: isOwn ? 'flex-end' : 'flex-start', margin: '0 0 8px', color: isSelected ? '#FF6B35' : 'rgba(255,255,255,0.1)' }}>
+                       <div style={{ display: 'flex', justifyContent: isOwn ? 'flex-end' : 'flex-start', margin: '0 0 8px', color: isSelected ? 'var(--ember)' : 'rgba(255,255,255,0.1)' }}>
                          {isSelected ? Vectors.CheckCircle : <div style={{ width: 20, height: 20, borderRadius: '50%', border: '2px solid currentColor' }} />}
                        </div>
                     )}
@@ -1182,12 +1191,12 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
                     {!isOwn && (
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6, paddingLeft: 2 }}>
                         <DMLiquidAvatar identity={otherIdentity} isAnon={isAnonMsg} size={26} />
-                        {isAnonMsg && <span style={{ fontSize: 13, fontWeight: 700, color: '#8B8B96' }}>Anonymous</span>}
+                        {isAnonMsg && <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--dim)' }}>Anonymous</span>}
                       </div>
                     )}
 
                     <div style={{ display: 'flex', flexDirection: 'column', alignItems: isOwn ? 'flex-end' : 'flex-start', maxWidth: '75%', marginLeft: isOwn ? 0 : 34, alignSelf: isOwn ? 'flex-end' : 'flex-start' }}>
-                      <div style={{ maxWidth: '100%', padding: isInstagram ? '4px' : ((message.media_url && !isStickerOrGif) ? '4px' : (isStickerOrGif ? 0 : '10px 16px')), borderRadius: isStickerOrGif ? 0 : 20, borderBottomRightRadius: isStickerOrGif ? 0 : (isOwn ? 4 : 20), borderBottomLeftRadius: isStickerOrGif ? 0 : (isOwn ? 20 : 4), background: bubbleBackground, color: bubbleColor, border: isStickerOrGif ? 'none' : (isOwn ? '1px solid rgba(255,255,255,0.08)' : '1px solid rgba(255,255,255,0.04)'), boxShadow: isStickerOrGif ? 'none' : '0 6px 18px rgba(0,0,0,0.2)' }}>
+                      <div style={{ maxWidth: '100%', padding: isInstagram ? '4px' : ((message.media_url && !isStickerOrGif) ? '4px' : (isStickerOrGif ? 0 : '10px 16px')), borderRadius: isStickerOrGif ? 0 : 20, borderBottomRightRadius: isStickerOrGif ? 0 : (isOwn ? 4 : 20), borderBottomLeftRadius: isStickerOrGif ? 0 : (isOwn ? 20 : 4), background: bubbleBackground, color: bubbleColor, border: isStickerOrGif ? 'none' : (isOwn ? '1px solid var(--bubble-border-own)' : '1px solid var(--bubble-border-other)'), boxShadow: isStickerOrGif ? 'none' : 'var(--shadow-bubble)' }}>
                         {message.reply_to_id && (
                           <div 
                             onClick={(e) => {
@@ -1199,10 +1208,10 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
                                 setTimeout(() => targetEl.classList.remove('highlight-flash'), 2000);
                               }
                             }}
-                            style={{ display: 'flex', flexDirection: 'column', gap: 2, padding: '6px 10px', marginBottom: 8, marginTop: (message.media_url || isInstagram) ? 4 : 0, borderRadius: 10, background: '#15161B', borderLeft: `3px solid ${isOwn ? '#8B8B96' : '#FF6B35'}`, cursor: 'pointer' }}
+                            style={{ display: 'flex', flexDirection: 'column', gap: 2, padding: '6px 10px', marginBottom: 8, marginTop: (message.media_url || isInstagram) ? 4 : 0, borderRadius: 10, background: 'var(--ink-2)', borderLeft: `3px solid ${isOwn ? 'var(--dim)' : 'var(--ember)'}`, cursor: 'pointer' }}
                           >
-                            <span style={{ fontSize: 12, fontWeight: 700, color: '#F4F3F0' }}>{repliedMessage ? (repliedMessage.is_anon ? 'Anonymous' : (repliedMessage.sender_id === userId ? 'You' : otherIdentity.name)) : 'Original'}</span>
-                            <span className="no-copy-text" style={{ fontSize: 13, color: '#8B8B96', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{generateReplySnippet(repliedMessage)}</span>
+                            <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--paper)' }}>{repliedMessage ? (repliedMessage.is_anon ? 'Anonymous' : (repliedMessage.sender_id === userId ? 'You' : otherIdentity.name)) : 'Original'}</span>
+                            <span className="no-copy-text" style={{ fontSize: 13, color: 'var(--dim)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{generateReplySnippet(repliedMessage)}</span>
                           </div>
                         )}
 
@@ -1223,7 +1232,7 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
                               <AudioBubble src={message.media_url} isOwn={isOwn} />
                             ) : (
                               <a href={message.media_url} target="_blank" rel="noopener noreferrer" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px', background: isOwn ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.04)', borderRadius: 16, textDecoration: 'none' }}>
-                                <div style={{ color: isOwn ? '#fff' : '#FF6B35' }}>{Vectors.FileText}</div><span style={{ color: isOwn ? '#fff' : '#F4F3F0', fontSize: 14, fontWeight: 600 }}>Document</span>
+                                <div style={{ color: isOwn ? '#fff' : 'var(--ember)' }}>{Vectors.FileText}</div><span style={{ color: isOwn ? '#fff' : 'var(--paper)', fontSize: 14, fontWeight: 600 }}>Document</span>
                               </a>
                             )}
                             {message.text && <span className="no-copy-text" style={{ fontSize: 14, whiteSpace: 'pre-wrap', wordBreak: 'break-word', padding: '0 4px' }}>{renderMessageTextWithMentions(message.text, isOwn)}</span>}
@@ -1258,7 +1267,7 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
                         />
                       </div>
 
-                      <span style={{ fontSize: 11, color: message._failed ? '#FF6B6B' : '#8B8B96', marginTop: 4, marginInline: 4, fontWeight: 500 }}>
+                      <span style={{ fontSize: 11, color: message._failed ? '#FF6B6B' : 'var(--dim)', marginTop: 4, marginInline: 4, fontWeight: 500 }}>
                         {message._pending ? 'Sending…' : message._failed ? 'Failed to send' : formatTime(message.created_at)}
                       </span>
                     </div>
@@ -1268,7 +1277,7 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
 
               {showDayDivider && !isSearching && (
                 <div style={{ textAlign: 'center', margin: '24px 0 16px', position: 'sticky', top: 16, zIndex: 15 }}>
-                  <span style={{ fontSize: 12, fontWeight: 600, color: '#8B8B96', background: '#1C1D24', padding: '6px 14px', borderRadius: 14, border: '1px solid rgba(255,255,255,0.06)', boxShadow: '0 4px 12px rgba(0,0,0,0.2)' }}>
+                  <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--dim)', background: 'var(--ink-2)', padding: '6px 14px', borderRadius: 14, border: '1px solid var(--separator)', boxShadow: '0 4px 12px rgba(0,0,0,0.2)' }}>
                     {formatDayLabel(message.created_at)}
                   </span>
                 </div>
@@ -1284,67 +1293,67 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
         {!messagesLoading && !isSearching && hasMoreMessages && (
           <div ref={loadMoreSentinelRef} style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '16px 0', minHeight: 44 }}>
             {loadingMoreMessages && (
-              <div style={{ color: '#FF6B35', display: 'flex' }}>{Vectors.Spinner}</div>
+              <div style={{ color: 'var(--ember)', display: 'flex' }}>{Vectors.Spinner}</div>
             )}
           </div>
         )}
       </div>
 
       {hasUnreadMention && (
-        <button onClick={handleJumpToMention} style={{ position: 'absolute', right: 16, bottom: 80, width: 40, height: 40, borderRadius: '50%', background: '#FF6B35', color: '#fff', border: 'none', boxShadow: '0 6px 18px rgba(0,0,0,0.35)', zIndex: 30, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: 18, cursor: 'pointer', animation: 'pop-in 0.3s cubic-bezier(0.2, 0.8, 0.2, 1)' }}>@</button>
+        <button onClick={handleJumpToMention} style={{ position: 'absolute', right: 16, bottom: 80, width: 40, height: 40, borderRadius: '50%', background: 'var(--ember)', color: '#fff', border: 'none', boxShadow: 'var(--shadow-float)', zIndex: 30, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: 18, cursor: 'pointer', animation: 'pop-in 0.3s cubic-bezier(0.2, 0.8, 0.2, 1)' }}>@</button>
       )}
 
       {/* COMPOSER
           background set explicitly to match the composer form's own
-          #1C1D24 — see the matching comment in GroupChat.jsx for why this
+          var(--ink-2) — see the matching comment in GroupChat.jsx for why this
           wrapper being transparent produced a mismatched-color strip at
           the bottom edge. */}
-      <div className="safe-bottom" style={{ flexShrink: 0, zIndex: 20, position: 'sticky', bottom: 0, background: '#1C1D24' }}>
+      <div className="safe-bottom" style={{ flexShrink: 0, zIndex: 20, position: 'sticky', bottom: 0, background: 'var(--ink-2)' }}>
         {!session ? (
-          <div style={{ padding: '16px', background: '#1C1D24', borderTop: '1px solid rgba(255,255,255,0.06)' }}>
-            <button onClick={() => setAuthOpen(true)} style={{ width: '100%', padding: '14px 0', borderRadius: 20, border: 'none', background: '#FF6B35', color: '#fff', fontWeight: 700, fontSize: 15, cursor: 'pointer', boxShadow: '0 6px 18px rgba(0,0,0,0.35)' }}>Sign in to send message</button>
+          <div style={{ padding: '16px', background: 'var(--ink-2)', borderTop: '1px solid var(--separator)' }}>
+            <button onClick={() => setAuthOpen(true)} style={{ width: '100%', padding: '14px 0', borderRadius: 20, border: 'none', background: 'var(--ember)', color: '#fff', fontWeight: 700, fontSize: 15, cursor: 'pointer', boxShadow: 'var(--shadow-float)' }}>Sign in to send message</button>
           </div>
         ) : (
         <>
         {pendingFile && (
-          <div style={{ position: 'absolute', bottom: '100%', left: 0, right: 0, background: '#1C1D24', borderTop: '1px solid rgba(255,255,255,0.06)', padding: '12px 16px', zIndex: 21 }}>
+          <div style={{ position: 'absolute', bottom: '100%', left: 0, right: 0, background: 'var(--ink-2)', borderTop: '1px solid var(--separator)', padding: '12px 16px', zIndex: 21 }}>
             <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 10 }}>
               {pendingFile.type === 'image' ? (
                 <img src={pendingFile.previewUrl} alt="" style={{ width: 56, height: 56, borderRadius: 12, objectFit: 'cover' }} />
               ) : pendingFile.type === 'video' ? (
                 <video src={pendingFile.previewUrl} style={{ width: 56, height: 56, borderRadius: 12, objectFit: 'cover' }} />
               ) : pendingFile.type === 'audio' ? (
-                <div style={{ width: 56, height: 56, borderRadius: 12, background: 'rgba(255,255,255,0.06)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#F4F3F0' }}>{Vectors.Smiley}</div>
+                <div style={{ width: 56, height: 56, borderRadius: 12, background: 'rgba(255,255,255,0.06)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--paper)' }}>{Vectors.Smiley}</div>
               ) : (
-                <div style={{ width: 56, height: 56, borderRadius: 12, background: 'rgba(255,255,255,0.06)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#F4F3F0' }}>{Vectors.FileText}</div>
+                <div style={{ width: 56, height: 56, borderRadius: 12, background: 'rgba(255,255,255,0.06)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--paper)' }}>{Vectors.FileText}</div>
               )}
               <div style={{ flex: 1, minWidth: 0 }}>
-                <span style={{ fontSize: 13, fontWeight: 700, color: '#F4F3F0', display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{pendingFile.file.name}</span>
-                {uploading && <span style={{ fontSize: 12, color: '#8B8B96' }}>Uploading… {uploadSecondsLeft}s</span>}
+                <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--paper)', display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{pendingFile.file.name}</span>
+                {uploading && <span style={{ fontSize: 12, color: 'var(--dim)' }}>Uploading… {uploadSecondsLeft}s</span>}
               </div>
-              <button onClick={cancelPendingAttachment} disabled={uploading} style={{ border: 'none', background: 'rgba(255,255,255,0.06)', width: 28, height: 28, borderRadius: '50%', color: '#F4F3F0', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{Vectors.Close}</button>
+              <button onClick={cancelPendingAttachment} disabled={uploading} style={{ border: 'none', background: 'rgba(255,255,255,0.06)', width: 28, height: 28, borderRadius: '50%', color: 'var(--paper)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{Vectors.Close}</button>
             </div>
             <div style={{ display: 'flex', gap: 10, alignItems: 'center' }}>
-              <input type="search" name="dm-media-caption-f" autoComplete="off-nope" autoCorrect="off" autoCapitalize="off" spellCheck="false" data-lpignore="true" data-1p-ignore data-form-type="other" value={caption} onChange={(e) => setCaption(e.target.value.slice(0, MAX_TEXT_LENGTH))} maxLength={MAX_TEXT_LENGTH} placeholder="Add a caption…" disabled={uploading} style={{ flex: 1, border: '1px solid rgba(255,255,255,0.06)', outline: 'none', background: '#15161B', borderRadius: 20, padding: '10px 16px', fontSize: 14, color: '#F4F3F0' }} />
-              <button type="button" onClick={sendPendingAttachment} disabled={uploading} style={{ width: 44, height: 44, borderRadius: '50%', border: 'none', background: uploading ? 'rgba(255,255,255,0.06)' : '#FF6B35', color: '#fff', cursor: uploading ? 'default' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
+              <input type="search" name="dm-media-caption-f" autoComplete="off-nope" autoCorrect="off" autoCapitalize="off" spellCheck="false" data-lpignore="true" data-1p-ignore data-form-type="other" value={caption} onChange={(e) => setCaption(e.target.value.slice(0, MAX_TEXT_LENGTH))} maxLength={MAX_TEXT_LENGTH} placeholder="Add a caption…" disabled={uploading} style={{ flex: 1, border: '1px solid var(--separator)', outline: 'none', background: 'var(--surface)', borderRadius: 20, padding: '10px 16px', fontSize: 14, color: 'var(--paper)' }} />
+              <button type="button" onClick={sendPendingAttachment} disabled={uploading} style={{ width: 44, height: 44, borderRadius: '50%', border: 'none', background: uploading ? 'rgba(255,255,255,0.06)' : 'var(--ember)', color: '#fff', cursor: uploading ? 'default' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
                 {uploading ? Vectors.Spinner : Vectors.Send}
               </button>
             </div>
           </div>
         )}
 
-        <div style={{ position: 'absolute', bottom: pendingFile ? undefined : '100%', top: pendingFile ? '100%' : undefined, left: 0, right: 0, background: '#1C1D24', borderTop: '1px solid rgba(255,255,255,0.06)', display: 'flex', alignItems: 'center', padding: '10px 16px', gap: 12, transition: 'all 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.1)', transform: replyingTo && !pendingFile ? 'translateY(0)' : 'translateY(100%)', opacity: replyingTo && !pendingFile ? 1 : 0, visibility: replyingTo && !pendingFile ? 'visible' : 'hidden', zIndex: 19 }}>
-          <div style={{ color: '#8B8B96' }}>{Vectors.ReplyAction}</div>
-          <div style={{ width: 3, height: 34, borderRadius: 2, background: '#8B8B96', flexShrink: 0 }} />
+        <div style={{ position: 'absolute', bottom: pendingFile ? undefined : '100%', top: pendingFile ? '100%' : undefined, left: 0, right: 0, background: 'var(--ink-2)', borderTop: '1px solid var(--separator)', display: 'flex', alignItems: 'center', padding: '10px 16px', gap: 12, transition: 'all 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.1)', transform: replyingTo && !pendingFile ? 'translateY(0)' : 'translateY(100%)', opacity: replyingTo && !pendingFile ? 1 : 0, visibility: replyingTo && !pendingFile ? 'visible' : 'hidden', zIndex: 19 }}>
+          <div style={{ color: 'var(--dim)' }}>{Vectors.ReplyAction}</div>
+          <div style={{ width: 3, height: 34, borderRadius: 2, background: 'var(--dim)', flexShrink: 0 }} />
           <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-            <span style={{ fontSize: 13, fontWeight: 700, color: '#F4F3F0' }}>Replying to {replyingTo?.sender_name}</span>
-            <span style={{ fontSize: 13, color: '#8B8B96', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{generateReplySnippet(replyingTo)}</span>
+            <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--paper)' }}>Replying to {replyingTo?.sender_name}</span>
+            <span style={{ fontSize: 13, color: 'var(--dim)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{generateReplySnippet(replyingTo)}</span>
           </div>
-          <button onClick={() => setReplyingTo(null)} style={{ border: 'none', background: 'rgba(255,255,255,0.06)', width: 28, height: 28, borderRadius: '50%', color: '#F4F3F0', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{Vectors.Close}</button>
+          <button onClick={() => setReplyingTo(null)} style={{ border: 'none', background: 'rgba(255,255,255,0.06)', width: 28, height: 28, borderRadius: '50%', color: 'var(--paper)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{Vectors.Close}</button>
         </div>
 
         {typingName && (
-          <div style={{ position: 'absolute', top: -26, left: 16, fontSize: 12, color: '#8B8B96', fontStyle: 'italic' }}>
+          <div style={{ position: 'absolute', top: -26, left: 16, fontSize: 12, color: 'var(--dim)', fontStyle: 'italic' }}>
             {typingName} is typing…
           </div>
         )}
@@ -1353,15 +1362,15 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
             visible viewport up in Home.jsx, so also padding the form's own
             bottom by the keyboard height double-compensated and made the
             composer balloon to fill most of the screen on keyboard open. */}
-        <form onSubmit={handleSend} autoComplete="off-nope" data-form-type="other" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px', background: '#1C1D24', borderTop: replyingTo ? 'none' : '1px solid rgba(255,255,255,0.06)', position: 'relative', zIndex: 20 }}>
+        <form onSubmit={handleSend} autoComplete="off-nope" data-form-type="other" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px', background: 'var(--ink-2)', borderTop: replyingTo ? 'none' : '1px solid var(--separator)', position: 'relative', zIndex: 20 }}>
           <EmojiGifPicker open={pickerOpen} onClose={() => setPickerOpen(false)} onEmoji={handleEmojiPicked} onMedia={handleMediaPicked} />
-          <button type="button" onClick={() => setAttachSheetOpen(true)} disabled={uploading || cooldownPercent > 0 || selectedMessages.length > 0} style={{ width: 36, height: 36, borderRadius: '50%', border: 'none', background: 'transparent', color: '#8B8B96', cursor: 'pointer', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{uploading ? Vectors.Spinner : Vectors.Attach}</button>
+          <button type="button" onClick={() => setAttachSheetOpen(true)} disabled={uploading || cooldownPercent > 0 || selectedMessages.length > 0} style={{ width: 36, height: 36, borderRadius: '50%', border: 'none', background: 'transparent', color: 'var(--dim)', cursor: 'pointer', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{uploading ? Vectors.Spinner : Vectors.Attach}</button>
           
           <input ref={fileInputRef} type="file" accept="*/*" onChange={handleAttachmentSelected} style={{ position: 'absolute', width: 1, height: 1, padding: 0, margin: -1, overflow: 'hidden', clip: 'rect(0,0,0,0)', whiteSpace: 'nowrap', border: 0, opacity: 0, pointerEvents: 'none' }} />
           <input ref={photoInputRef} type="file" accept="image/*" onChange={handleAttachmentSelected} style={{ position: 'absolute', width: 1, height: 1, padding: 0, margin: -1, overflow: 'hidden', clip: 'rect(0,0,0,0)', whiteSpace: 'nowrap', border: 0, opacity: 0, pointerEvents: 'none' }} />
           <input ref={cameraInputRef} type="file" accept="image/*,video/*" onChange={handleAttachmentSelected} style={{ position: 'absolute', width: 1, height: 1, padding: 0, margin: -1, overflow: 'hidden', clip: 'rect(0,0,0,0)', whiteSpace: 'nowrap', border: 0, opacity: 0, pointerEvents: 'none' }} />
           
-          <button type="button" onClick={() => setPickerOpen((v) => !v)} disabled={uploading || selectedMessages.length > 0} style={{ width: 36, height: 36, borderRadius: '50%', border: 'none', background: pickerOpen ? 'rgba(255,255,255,0.06)' : 'transparent', color: pickerOpen ? '#F4F3F0' : '#8B8B96', cursor: 'pointer', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{Vectors.Smiley}</button>
+          <button type="button" onClick={() => setPickerOpen((v) => !v)} disabled={uploading || selectedMessages.length > 0} style={{ width: 36, height: 36, borderRadius: '50%', border: 'none', background: pickerOpen ? 'rgba(255,255,255,0.06)' : 'transparent', color: pickerOpen ? 'var(--paper)' : 'var(--dim)', cursor: 'pointer', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{Vectors.Smiley}</button>
           {/* type="search" is kept (not "text") purely as the anti-autofill
               hack this codebase uses throughout — see LiquidInput in
               EditProfile.jsx for the same trick. Left alone, that type makes
@@ -1373,7 +1382,7 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
               (calling the same handleSend used by the form's onSubmit/the
               send button) so Enter always works even on keyboards that
               ignore enterKeyHint. */}
-          <input type="search" enterKeyHint="send" name="dm-message-f" autoComplete="off-nope" autoCorrect="off" autoCapitalize="off" spellCheck="false" data-lpignore="true" data-1p-ignore data-form-type="other" readOnly={composerLocked} value={text} onChange={(e) => setText(e.target.value.slice(0, MAX_TEXT_LENGTH))} maxLength={MAX_TEXT_LENGTH} onFocus={() => { setComposerLocked(false); setPickerOpen(false); }} onBlur={() => setComposerLocked(true)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); if (!uploading && selectedMessages.length === 0) handleSend(e); } }} placeholder={uploading ? 'Uploading media...' : 'Message'} disabled={uploading || selectedMessages.length > 0} style={{ flex: 1, border: '1px solid rgba(255,255,255,0.06)', outline: 'none', background: '#15161B', borderRadius: 24, padding: '12px 18px', fontSize: 15, color: '#F4F3F0', transition: 'border-color 0.2s' }} />
+          <input type="search" enterKeyHint="send" name="dm-message-f" autoComplete="off-nope" autoCorrect="off" autoCapitalize="off" spellCheck="false" data-lpignore="true" data-1p-ignore data-form-type="other" readOnly={composerLocked} value={text} onChange={(e) => setText(e.target.value.slice(0, MAX_TEXT_LENGTH))} maxLength={MAX_TEXT_LENGTH} onFocus={() => { setComposerLocked(false); setPickerOpen(false); }} onBlur={() => setComposerLocked(true)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); if (!uploading && selectedMessages.length === 0) handleSend(e); } }} placeholder={uploading ? 'Uploading media...' : 'Message'} disabled={uploading || selectedMessages.length > 0} style={{ flex: 1, border: '1px solid var(--separator)', outline: 'none', background: 'var(--surface)', borderRadius: 24, padding: '12px 18px', fontSize: 15, color: 'var(--paper)', transition: 'border-color 0.2s' }} />
           <SendButton canSend={!!text.trim()} sending={sending || uploading} cooldownPercent={cooldownPercent} />
         </form>
         </>
@@ -1416,11 +1425,11 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
 function AdminMonitorMessageBubble({ message, isFromViewedUser }) {
   const isInstagram = !!message.instagram_username;
   const isStickerOrGif = message.media_type === 'gif' || message.media_type === 'sticker';
-  const bubbleBackground = isStickerOrGif ? 'transparent' : (isFromViewedUser ? '#2A2B32' : '#15161B');
+  const bubbleBackground = isStickerOrGif ? 'transparent' : (isFromViewedUser ? 'var(--bubble-own)' : 'var(--bubble-other)');
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', alignItems: isFromViewedUser ? 'flex-end' : 'flex-start', marginBottom: 10 }}>
-      <div style={{ maxWidth: '78%', padding: isStickerOrGif ? 0 : '10px 14px', borderRadius: 18, background: bubbleBackground, border: isStickerOrGif ? 'none' : '1px solid rgba(255,255,255,0.06)' }}>
+      <div style={{ maxWidth: '78%', padding: isStickerOrGif ? 0 : '10px 14px', borderRadius: 18, background: bubbleBackground, border: isStickerOrGif ? 'none' : '1px solid var(--glass-border)', color: isFromViewedUser ? 'var(--bubble-own-text)' : 'var(--bubble-other-text)' }}>
         {isInstagram ? (
           <InstagramCard message={message} isOwn={isFromViewedUser} />
         ) : message.media_url ? (
@@ -1432,10 +1441,10 @@ function AdminMonitorMessageBubble({ message, isFromViewedUser }) {
             <img src={message.media_url} alt="Attachment" style={{ maxWidth: 220, maxHeight: 220, borderRadius: 12, display: 'block', objectFit: 'cover' }} />
           )
         ) : null}
-        {message.text && <span style={{ fontSize: 14, whiteSpace: 'pre-wrap', wordBreak: 'break-word', color: '#F4F3F0' }}>{message.text}</span>}
-        {!message.text && !message.media_url && !isInstagram && <span style={{ fontSize: 13, color: '#8B8B96', fontStyle: 'italic' }}>(empty message)</span>}
+        {message.text && <span style={{ fontSize: 14, whiteSpace: 'pre-wrap', wordBreak: 'break-word', color: 'var(--paper)' }}>{message.text}</span>}
+        {!message.text && !message.media_url && !isInstagram && <span style={{ fontSize: 13, color: 'var(--dim)', fontStyle: 'italic' }}>(empty message)</span>}
       </div>
-      <span style={{ fontSize: 10.5, color: '#8B8B96', marginTop: 3, padding: '0 4px' }}>
+      <span style={{ fontSize: 10.5, color: 'var(--dim)', marginTop: 3, padding: '0 4px' }}>
         {message.is_anon ? 'Anonymous · ' : ''}{formatTime(message.created_at)}
       </span>
     </div>
@@ -1471,27 +1480,27 @@ export function AdminDmMonitor({ threadId, otherUsername, viewedUsername, viewed
   }, [threadId]);
 
   return (
-    <div className="no-copy-text" style={{ position: 'fixed', inset: 0, zIndex: 60, background: '#0C0D10', display: 'flex', flexDirection: 'column' }}>
-      <header style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: 12, padding: '14px 20px', background: '#1C1D24', borderBottom: '1px solid rgba(255,255,255,0.06)' }}>
-        <button onClick={onClose} style={{ border: 'none', background: 'rgba(255,255,255,0.06)', width: 32, height: 32, borderRadius: '50%', color: '#F4F3F0', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{Vectors.Back}</button>
+    <div className="no-copy-text" style={{ position: 'fixed', inset: 0, zIndex: 60, background: 'var(--ink)', display: 'flex', flexDirection: 'column' }}>
+      <header style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: 12, padding: '14px 20px', background: 'var(--header-bg)', borderBottom: '1px solid var(--separator)', backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)' }}>
+        <button onClick={onClose} style={{ border: 'none', background: 'rgba(255,255,255,0.06)', width: 32, height: 32, borderRadius: '50%', color: 'var(--paper)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>{Vectors.Back}</button>
         <div style={{ flex: 1, minWidth: 0 }}>
-          <div style={{ fontSize: 15, fontWeight: 700, color: '#F4F3F0' }}>@{viewedUsername || 'unknown'} ↔ @{otherUsername || 'unknown'}</div>
-          <div style={{ fontSize: 11.5, color: '#FF6B35', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.4 }}>Monitoring · read only</div>
+          <div style={{ fontSize: 15, fontWeight: 700, color: 'var(--paper)' }}>@{viewedUsername || 'unknown'} ↔ @{otherUsername || 'unknown'}</div>
+          <div style={{ fontSize: 11.5, color: 'var(--ember)', fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.4 }}>Monitoring · read only</div>
         </div>
       </header>
 
       <div className="admin-scrollbar" style={{ flex: 1, overflowY: 'auto', WebkitOverflowScrolling: 'touch', padding: '18px 16px' }}>
         {status === 'loading' && (
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#FF6B35' }}>{Vectors.Spinner}</div>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--ember)' }}>{Vectors.Spinner}</div>
         )}
         {status === 'error' && (
-          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: 12, color: '#8B8B96' }}>
+          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', height: '100%', gap: 12, color: 'var(--dim)' }}>
             <p>Couldn't load this thread.</p>
-            <button onClick={load} style={{ background: '#FF6B35', color: '#fff', border: 'none', padding: '8px 16px', borderRadius: 10, cursor: 'pointer', fontWeight: 700 }}>Retry</button>
+            <button onClick={load} style={{ background: 'var(--ember)', color: '#fff', border: 'none', padding: '8px 16px', borderRadius: 10, cursor: 'pointer', fontWeight: 700 }}>Retry</button>
           </div>
         )}
         {status === 'ready' && messages.length === 0 && (
-          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: '#8B8B96', fontSize: 14 }}>No messages in this thread yet.</div>
+          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', height: '100%', color: 'var(--dim)', fontSize: 14 }}>No messages in this thread yet.</div>
         )}
         {status === 'ready' && messages.map((message) => (
           <AdminMonitorMessageBubble key={message.id} message={message} isFromViewedUser={message.sender_id === viewedUserId} />
