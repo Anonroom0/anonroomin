@@ -302,3 +302,28 @@ input::-webkit-clear-button {
   position: absolute;
   right: 0;
 }
+
+/*
+  .no-copy-text is applied throughout GroupChat.jsx, Home.jsx, and
+  DirectMessages.jsx wherever a long-press gesture needs to be caught by our
+  own JS (see useLongPress in GroupChat.jsx, used for the admin
+  select/pin/delete flow) instead of the OS/browser — but the class itself
+  was never actually defined anywhere, so it did nothing: on Chrome
+  (Android especially) a long-press on message text still triggered the
+  native text-selection handles + Copy/Share callout menu on top of, or
+  instead of, our own handler ever firing. This is that missing definition.
+
+  -webkit-touch-callout: none disables the native long-press callout
+  (Copy/Share/Look Up) on WebKit/Blink mobile browsers — the actual fix for
+  "Chrome's menu appears" on long press. user-select: none prevents the
+  text-selection highlight + handles that otherwise show up first and can
+  swallow the touch before our JS timer-based long-press even completes.
+*/
+.no-copy-text {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+}
+
