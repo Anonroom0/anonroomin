@@ -132,6 +132,16 @@ export default function SendButton({ canSend, sending, cooldownPercent = 0, onCl
     <button
       type="submit"
       onClick={handleClick}
+      // Tapping a button normally steals focus away from whatever text input
+      // was focused, which is exactly what was forcing the on-screen
+      // keyboard to close after every single message: the composer's text
+      // field blurred the instant this button was pressed. Focus is moved
+      // on 'mousedown'/'pointerdown' (before 'click' ever fires), so
+      // preventing default there is what actually stops the steal — doing
+      // it in onClick would be too late. This keeps the composer focused
+      // and the keyboard open so the next message can be typed immediately.
+      onMouseDown={(e) => e.preventDefault()}
+      onPointerDown={(e) => e.preventDefault()}
       disabled={!isInteractive}
       className={isTapping ? 'send-btn-tap' : ''}
       style={{

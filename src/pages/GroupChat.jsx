@@ -473,6 +473,14 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
   const cameraInputRef = useRef(null);
   const cooldownRef = useRef(null);
   const loadMoreSentinelRef = useRef(null);
+  const messageInputRef = useRef(null);
+  // Tracks the id of whichever message currently sits at the front of the
+  // (newest-first) messages array, so the scroll-to-bottom effect below can
+  // tell "a brand new message just arrived" apart from "older history got
+  // paginated in at the tail" or "an existing message's fields changed" —
+  // both of which also change `messages` but shouldn't yank the scroll
+  // position.
+  const lastNewestMessageIdRef = useRef(null);
 
   // Mirror refs for the pagination guards below, so the scroll-triggered
   // loader always reads the latest values instead of whatever was captured
@@ -775,6 +783,28 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
     observer.observe(target);
     return () => observer.disconnect();
   }, [hasMoreMessages, messagesLoading, isSearching, loadOlderMessages, group?.id]);
+
+  // Scroll to the newest message every time one actually arrives — whether
+  // it's the local optimistic bubble from sending, the realtime INSERT echo
+  // reconciling it, or a message from someone else coming in live. The list
+  // is rendered `flex-direction: column-reverse` with newest-first data (see
+  // the MESSAGES LIST container below), so "scrolled to the bottom" means
+  // scrollTop === 0 here, not scrollHeight.
+  //
+  // Compares message[0]'s id rather than just watching `messages.length` so
+  // this doesn't also fire (and yank the scroll position away from wherever
+  // someone's mid-read) when older history gets appended at the *tail* via
+  // pagination/deep-link context-loading, or when an existing message is
+  // merely edited/updated in place.
+  useEffect(() => {
+    const newestId = messages[0]?.id ?? null;
+    if (newestId && newestId !== lastNewestMessageIdRef.current) {
+      const isFirstLoad = lastNewestMessageIdRef.current === null;
+      lastNewestMessageIdRef.current = newestId;
+      const el = scrollRef.current;
+      if (el) el.scrollTo({ top: 0, behavior: isFirstLoad ? 'auto' : 'smooth' });
+    }
+  }, [messages]);
 
   const toggleSelection = (msgId) => { if (!isAdmin) return; hapticSelect(); setSelectedMessages((prev) => (prev.includes(msgId) ? prev.filter((id) => id !== msgId) : [...prev, msgId])); };
   const handleLongPress = (msg) => { if (isAdmin) toggleSelection(msg.id); };
@@ -1680,7 +1710,7 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
                   explicit, guaranteed send path (calling the same handleSend
                   used by the form's onSubmit/the send button) so Enter always
                   works even on keyboards that ignore enterKeyHint. */}
-              <input type="search" enterKeyHint="send" name="group-chat-message-f" autoComplete="off-nope" autoCorrect="off" autoCapitalize="off" spellCheck="false" data-lpignore="true" data-1p-ignore data-form-type="other" readOnly={composerLocked} value={text} onChange={(e) => setText(e.target.value.slice(0, MAX_TEXT_LENGTH))} maxLength={MAX_TEXT_LENGTH} onFocus={() => { setComposerLocked(false); setPickerOpen(false); }} onBlur={() => setComposerLocked(true)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); if (!uploading && selectedMessages.length === 0) handleSend(e); } }} placeholder={uploading ? 'Uploading media...' : 'Message'} disabled={uploading || selectedMessages.length > 0} style={{ flex: 1, border: '1px solid var(--separator)', outline: 'none', background: 'var(--surface)', borderRadius: 24, padding: '12px 18px', fontSize: 15, color: 'var(--paper)', transition: 'border-color 0.2s' }} />
+              <input ref={messageInputRef} type="search" enterKeyHint="send" name="group-chat-message-f" autoComplete="off-nope" autoCorrect="off" autoCapitalize="off" spellCheck="false" data-lpignore="true" data-1p-ignore data-form-type="other" readOnly={composerLocked} value={text} onChange={(e) => setText(e.target.value.slice(0, MAX_TEXT_LENGTH))} maxLength={MAX_TEXT_LENGTH} onFocus={() => { setComposerLocked(false); setPickerOpen(false); }} onBlur={() => setComposerLocked(true)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); if (!uploading && selectedMessages.length === 0) { handleSend(e); /* Some mobile on-screen keyboards auto-dismiss on the search/enter action key even with preventDefault() above (it's an IME-level decision, not a cancellable DOM default). Re-focusing right here, synchronously inside this same keydown handler, keeps it counted as part of the user's own gesture so the keyboard stays up for the next message. */ e.currentTarget.focus(); } } }} placeholder={uploading ? 'Uploading media...' : 'Message'} disabled={uploading || selectedMessages.length > 0} style={{ flex: 1, border: '1px solid var(--separator)', outline: 'none', background: 'var(--surface)', borderRadius: 24, padding: '12px 18px', fontSize: 15, color: 'var(--paper)', transition: 'border-color 0.2s' }} />
               <SendButton canSend={!!text.trim()} sending={sending || uploading} cooldownPercent={cooldownPercent} />
             </form>
           </>

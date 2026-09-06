@@ -32,15 +32,18 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { AuthProvider } from './lib/authContext';
 import ToastContainer from './components/ToastContainer';
+import ErrorBoundary from './components/shared/ErrorBoundary';
 import AdminPanel from './pages/AdminPanel';
 import './styles/tokens.css';
 import './styles/animations.css';
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
-    <ToastContainer />
-    <AuthProvider>
-      <AdminPanel />
-    </AuthProvider>
+    <ErrorBoundary>
+      <ToastContainer />
+      <AuthProvider>
+        <AdminPanel />
+      </AuthProvider>
+    </ErrorBoundary>
   </React.StrictMode>
 );
