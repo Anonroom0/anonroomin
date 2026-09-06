@@ -9,20 +9,21 @@
  * that group without ever creating an account.
  *
  * Deliberately a different door than GroupChat.jsx's "New Confession" sheet
- * (which requires sign-in and posts through group_messages so it shows up
- * inline in the live chat — see 0003_group_confession_story_style.sql). This
- * page instead writes straight into public.confessions with
- * visibility: 'group', author_id: null, is_anon: true — the exact row shape
- * StoriesBar.jsx already reads for a group's Stories ring, so a submission
- * here shows up as a Story for the group, same as any other group
- * confession, with no session and no chat access required.
+ * (which requires sign-in and posts through group_messages directly — see
+ * 0003_group_confession_story_style.sql). This page instead writes into
+ * public.anon_confession, a dedicated write-only mailbox for exactly this
+ * route — a SECURITY DEFINER trigger then fans that out server-side into
+ * group_messages (chat) and, from there, confessions (Stories), the exact
+ * row shape StoriesBar.jsx already reads for a group's Stories ring. No
+ * session and no chat access required either way.
  *
- * RLS: see supabase/migrations/0005_confess_group_anon.sql —
- * confessions_insert_group_anon (anon role, narrowly scoped: text-only,
- * no media, no story customization, must carry a visitor_id, group must
- * have confessions_enabled) + a real server-side rate-limit trigger keyed
- * off that visitor_id (client-side cooldowns alone don't mean anything on a
- * fully unauthenticated public endpoint).
+ * RLS: see supabase/migrations/0008_anon_confession_table.sql —
+ * anon_confession_insert_anon (anon role, narrowly scoped: text-only, must
+ * carry a visitor_id, group must have confessions_enabled) + a real
+ * server-side rate-limit trigger keyed off that visitor_id (client-side
+ * cooldowns alone don't mean anything on a fully unauthenticated public
+ * endpoint). Older direct-to-group_messages/confessions policies
+ * (0005/0007) are left in place, untouched, purely as a fallback below.
  *
  * Kept deliberately simple/chaotic rather than matching the rest of the
  * app's chrome: one card, one box, one button — nothing else to configure.
@@ -124,45 +125,57 @@ export default function ConfessToGroup({ groupSlug }) {
 
     const visitorId = getOrCreateVisitorId();
 
-    // Preferred path: insert into group_messages (is_confession: true), the
-    // exact same table the authenticated "New Confession" sheet in
-    // GroupChat.jsx writes to — sync_group_confession_to_confessions()
-    // (see 0001/0003) then automatically mirrors it into public.confessions
-    // for the Stories bar, same as it always has. This is what makes an
-    // unauthenticated submission show up in the live chat, not just as a
-    // Story. See 0007_confess_via_group_messages.sql for the RLS behind
-    // this.
-    const { error: messageError } = await supabase.from('group_messages').insert({
+    // Preferred path: insert into public.anon_confession, a dedicated
+    // write-only mailbox for this exact route (see
+    // 0008_anon_confession_table.sql). A SECURITY DEFINER trigger on that
+    // table does the actual fan-out server-side: it inserts into
+    // group_messages (is_confession: true) so the submission shows up
+    // inline in the live chat, which in turn fires the existing
+    // sync_group_confession_to_confessions() trigger (0001/0003) that
+    // mirrors it into public.confessions for the group's Stories bar.
+    // Both tables get written automatically, in one transaction, without
+    // this page needing to touch either of them directly or juggle a
+    // client-side fallback between them.
+    const { error: anonConfessionError } = await supabase.from('anon_confession').insert({
       group_id: group.id,
-      user_id: null,
-      is_anon: true,
-      is_confession: true,
-      sender_name: 'Anonymous',
       text: trimmed,
       visitor_id: visitorId,
     });
 
-    let error = messageError;
+    let error = anonConfessionError;
 
-    // Fallback: the older, narrower direct-to-confessions path from
-    // 0005_confess_group_anon.sql. Only reached if the group_messages
-    // insert above was rejected — e.g. an unforeseen NOT NULL column on
-    // group_messages that 0007's migration didn't know to satisfy, since
-    // that table's full definition predates this feature and isn't fully
-    // visible from the app's own migrations. This still reaches Stories
-    // (StoriesBar.jsx reads confessions directly); it just won't show up
-    // in the chat feed itself the way the primary path does.
-    if (messageError && !messageError.message?.includes('rate_limited')) {
-      console.error('group_messages confession insert failed, falling back to confessions table:', messageError);
-      const fallback = await supabase.from('confessions').insert({
-        text: trimmed,
-        visibility: 'group',
+    // Fallback: the older, narrower direct paths from
+    // 0007_confess_via_group_messages.sql / 0005_confess_group_anon.sql.
+    // Only reached if the anon_confession insert itself was rejected —
+    // e.g. the migration above hasn't been applied yet to this project.
+    // Once it fails past the group_messages insert, at least the
+    // confessions-direct fallback still reaches Stories (StoriesBar.jsx
+    // reads confessions directly).
+    if (anonConfessionError && !anonConfessionError.message?.includes('rate_limited')) {
+      console.error('anon_confession insert failed, falling back to group_messages:', anonConfessionError);
+      const messageFallback = await supabase.from('group_messages').insert({
         group_id: group.id,
+        user_id: null,
         is_anon: true,
-        author_id: null,
+        is_confession: true,
+        sender_name: 'Anonymous',
+        text: trimmed,
         visitor_id: visitorId,
       });
-      error = fallback.error;
+      error = messageFallback.error;
+
+      if (error && !error.message?.includes('rate_limited')) {
+        console.error('group_messages confession insert failed, falling back to confessions table:', error);
+        const confessionsFallback = await supabase.from('confessions').insert({
+          text: trimmed,
+          visibility: 'group',
+          group_id: group.id,
+          is_anon: true,
+          author_id: null,
+          visitor_id: visitorId,
+        });
+        error = confessionsFallback.error;
+      }
     }
 
     if (error) {

@@ -654,6 +654,16 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
       .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'group_messages', filter: `group_id=eq.${group.id}` }, (payload) => {
         setMessages((prev) => prev.filter((m) => m.id !== payload.old.id));
       })
+      // Without this, an admin's Pin/Unpin (handleTogglePinSelected above)
+      // only ever updated their own optimistic local state — every OTHER
+      // viewer of the group never learned the row changed at all, since
+      // this channel previously only listened for INSERT/DELETE. That's a
+      // second, independent reason "pin isn't working" could show up: the
+      // admin who pinned it sees it pinned, but nobody else does until they
+      // happen to reload.
+      .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'group_messages', filter: `group_id=eq.${group.id}` }, (payload) => {
+        setMessages((prev) => prev.map((m) => (m.id === payload.new.id ? { ...m, ...payload.new } : m)));
+      })
       .on('broadcast', { event: 'typing' }, ({ payload }) => {
         setTypingName(payload?.name || null);
         if (typingTimeoutRef.current) clearTimeout(typingTimeoutRef.current);
@@ -851,10 +861,22 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
     setPinning(true);
     setSelectedMessages([]);
     setMessages((prev) => prev.map((m) => (m.id === msg.id ? { ...m, is_pinned: nextPinned } : m)));
-    const { error } = await supabase.from('group_messages').update({ is_pinned: nextPinned }).eq('id', msg.id);
+    // Same footgun as handleDeleteSelected above: an UPDATE blocked by RLS
+    // (e.g. profiles.is_admin not actually true server-side, or a stale
+    // client-side session) returns success with zero rows affected, NOT an
+    // error — so without checking the returned row(s), a blocked pin looked
+    // "successful" in the optimistic UI and then silently reverted on the
+    // next fetch, which is exactly what "pin isn't working" looks like.
+    // Requesting the row back and checking it actually came back turns that
+    // silent no-op into a real, visible failure instead.
+    const { data: updatedRows, error } = await supabase
+      .from('group_messages')
+      .update({ is_pinned: nextPinned })
+      .eq('id', msg.id)
+      .select('id, is_pinned');
     setPinning(false);
-    if (error) {
-      console.error('Failed to toggle pin:', error);
+    if (error || !updatedRows || updatedRows.length === 0) {
+      console.error('Failed to toggle pin:', error || 'update matched 0 rows (blocked by RLS)');
       showToast(friendlyDbError(), 'error');
       setMessages((prev) => prev.map((m) => (m.id === msg.id ? { ...m, is_pinned: !nextPinned } : m)));
       return;
