@@ -16,6 +16,51 @@ if (Capacitor.isNativePlatform()) {
   StatusBar.setOverlaysWebView({ overlay: false }).catch(() => {});
 }
 
+// Some in-app browsers (Instagram, Facebook, LinkedIn) don't resize the
+// layout viewport when the on-screen keyboard opens the way Chrome/Safari
+// do — so anything pinned via CSS `position: fixed` + full-height containers
+// (our chat screens) stays anchored behind the keyboard instead of sitting
+// above it. Compensate by measuring the actual visible area via the
+// VisualViewport API and exposing it as a CSS variable + a class on <html>,
+// which any fixed-bottom composer can use as a bottom offset.
+if (window.visualViewport) {
+  const vv = window.visualViewport;
+  const applyViewportOffset = () => {
+    const keyboardInset = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
+    document.documentElement.style.setProperty('--keyboard-inset', `${keyboardInset}px`);
+    document.documentElement.classList.toggle('keyboard-open', keyboardInset > 60);
+  };
+  vv.addEventListener('resize', applyViewportOffset);
+  vv.addEventListener('scroll', applyViewportOffset);
+  applyViewportOffset();
+
+  // Same fix as useViewportHeight.js (see that file's comment for the full
+  // explanation): Instagram's in-app browser updates vv.height correctly
+  // but often never fires the 'resize'/'scroll' event that triggers the
+  // recompute above, which is why the composer bar sits fixed behind the
+  // keyboard there while Chrome handles it fine. Force a re-check on
+  // window resize and on every text-field focus/blur so a missing event
+  // can't leave --keyboard-inset stuck at a stale value.
+  window.addEventListener('resize', applyViewportOffset);
+  let keyboardPollTimers = [];
+  const pollAfterFocusChange = () => {
+    keyboardPollTimers.forEach(clearTimeout);
+    keyboardPollTimers = [];
+    for (let elapsed = 0; elapsed <= 1500; elapsed += 100) {
+      keyboardPollTimers.push(setTimeout(applyViewportOffset, elapsed));
+    }
+  };
+  const isTextField = (el) => el && (el.tagName === 'INPUT' || el.tagName === 'TEXTAREA' || el.isContentEditable);
+  document.addEventListener('focusin', (e) => { if (isTextField(e.target)) pollAfterFocusChange(); });
+  document.addEventListener('focusout', (e) => { if (isTextField(e.target)) pollAfterFocusChange(); });
+}
+
+// Instagram's in-app browser (and Facebook's/LinkedIn's) has long-standing,
+// Meta-side keyboard/viewport bugs that the fix above can't fully paper
+// over in every case. Flag it so the UI can optionally nudge people to open
+// the link in their real browser instead.
+export const isInAppBrowser = /Instagram|FBAN|FBAV|LinkedInApp/.test(navigator.userAgent);
+
 // Safety-net redirect: administrator.<root domain> is supposed to be served
 // admin.html directly at the host level (see vercel.json's host-based
 // rewrite), so this main app (index.html -> main.jsx -> App.jsx) should

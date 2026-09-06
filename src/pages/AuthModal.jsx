@@ -19,7 +19,7 @@ import { createPortal } from 'react-dom';
 import supabase from '../lib/supabaseClient';
 import { useAuth } from '../lib/authContext';
 import GlassToggle from '../components/shared/GlassToggle';
-import { getResetPasswordPath } from '../lib/subdomain';
+import { getResetPasswordPath, getCanonicalOrigin } from '../lib/subdomain';
 import { hapticTap, hapticSend, hapticSuccess, hapticError } from '../lib/haptics';
 import { playTap, playSend, playRefreshComplete, playError } from '../lib/soundManager';
 
@@ -226,7 +226,11 @@ if (data?.session) {
       // ConfirmationURL/redirectTo route was dropped as the primary path.
       const { error: resetError } = await supabase.auth.resetPasswordForEmail(
         email.trim(),
-        { redirectTo: `${window.location.origin}${getResetPasswordPath()}` }
+        // getCanonicalOrigin() instead of window.location.origin — from the
+        // native app this would otherwise bake a `https://localhost/...`
+        // link into the password-reset EMAIL itself, which is unopenable
+        // anywhere but that one device. See subdomain.js.
+        { redirectTo: `${getCanonicalOrigin()}${getResetPasswordPath()}` }
       );
       if (resetError) throw resetError;
       playRefreshComplete(); hapticSuccess();

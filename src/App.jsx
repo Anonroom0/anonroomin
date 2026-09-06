@@ -49,10 +49,11 @@ import { AuthProvider } from './lib/authContext';
 import Home from './pages/Home';
 import QuestionThread from './pages/QuestionThread';
 import ConfessionsFeed from './pages/ConfessionsFeed';
+import ConfessToGroup from './pages/ConfessToGroup';
 import ResetPassword from './pages/ResetPassword';
 import supabase from './lib/supabaseClient';
 import ToastContainer from './components/ToastContainer';
-import { getQuestionIdFromPath, isConfessionsFeedPath, isResetPasswordPath, isGroupSubdomain, getGroupSlugFromRealSubdomain, getGroupUrl } from './lib/subdomain';
+import { getQuestionIdFromPath, isConfessionsFeedPath, isResetPasswordPath, isGroupSubdomain, getGroupSlugFromRealSubdomain, getGroupUrl, getConfessGroupSlugFromPath, isConfessPagePath } from './lib/subdomain';
 import { getCookie, setCookie, getOrCreateVisitorId } from './lib/visitorId';
 import './styles/tokens.css';
 
@@ -85,7 +86,11 @@ function LocationBanner() {
   useEffect(() => {
     // Never show this on a group subdomain — see isGroupSubdomain()'s
     // comment in subdomain.js for why. Root-domain visits are unaffected.
-    if (isGroupSubdomain()) {
+    // Same reasoning applies to /confess/<slug>: a visitor there almost by
+    // definition just clicked a shared link with zero prior context on the
+    // app, so hitting them with a location permission dialog before they've
+    // even posted anything is an even worse first impression than usual.
+    if (isGroupSubdomain() || isConfessPagePath()) {
       setVisible(false);
       return;
     }
@@ -255,6 +260,15 @@ function resolveTopLevelView() {
 
   if (isConfessionsFeedPath()) {
     return <ConfessionsFeed />;
+  }
+
+  // /confess/<slug> — the fully unauthenticated group confession drop box
+  // (see ConfessToGroup.jsx + 0005_confess_group_anon.sql). Checked here,
+  // at the same top level as /q/<id> and /confessions, so it never needs a
+  // session and never mounts inside Home's sidebar/chat chrome.
+  const confessGroupSlug = getConfessGroupSlugFromPath();
+  if (confessGroupSlug) {
+    return <ConfessToGroup groupSlug={confessGroupSlug} />;
   }
 
   // ✅ FIX: Commented out the manual override for `/q/<id>`. 

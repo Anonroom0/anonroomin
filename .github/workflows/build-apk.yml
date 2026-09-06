@@ -62,8 +62,15 @@ jobs:
             resources/splash.png
           npx @capacitor/assets generate --android
 
-      - name: Copy web build into Android project
-        run: npx cap copy android
+      - name: Sync web build + native plugins into Android project
+        # `cap sync` (not just `cap copy`) is required here: @capacitor/share
+        # and @capacitor/filesystem (added for the native Share-to-Instagram
+        # story flow — see src/lib/storyImageGenerator.js) are native
+        # plugins that need to be linked into the Android project's
+        # build.gradle/MainActivity, not just have their web JS copied in.
+        # `cap copy` alone would leave them unlinked and the native Share
+        # calls would fail at runtime even though the web bundle built fine.
+        run: npx cap sync android
 
       - uses: actions/setup-java@v5
         with:

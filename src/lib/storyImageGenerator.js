@@ -75,6 +75,7 @@
 
 import { BACKGROUND_STRUCTURES, ACCENT_COLORS, BODY_SHAPES, BODY_SCALES, mergeBodyPreset, getPresetById } from './storyStylePresets';
 import { shareToInstagramStories } from './instagramShare';
+import { Capacitor } from '@capacitor/core';
 
 export const CANVAS_WIDTH = 1080;
 export const CANVAS_HEIGHT = 1920;
@@ -1896,20 +1897,86 @@ function downloadBlob(blob, filename) {
   setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
+function blobToBase64(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onloadend = () => resolve(reader.result.split(',')[1] || '');
+    reader.onerror = reject;
+    reader.readAsDataURL(blob);
+  });
+}
+
+/**
+ * Native-app (Capacitor/Android) share path. `navigator.share` and the
+ * `<a download>` fallback below are both browser-only APIs — in the
+ * packaged app's WebView, `navigator.share` is frequently just undefined
+ * (many Android system WebViews never implemented the Web Share API), and
+ * even where present, an `<a download>` click on a blob: URL routinely
+ * no-ops silently inside a WebView with no real download manager attached
+ * — which is exactly what "the Share Story sheet's Share button does
+ * nothing" looks like from the outside: no error, no toast, just nothing.
+ *
+ * The actual native fix is to write the PNG to the app's cache directory
+ * via @capacitor/filesystem, then hand that file's real `file://` (or
+ * `content://`) URI to @capacitor/share's OS share sheet — the same sheet
+ * navigator.share would have opened on the real web, just reached through
+ * the plugin bridge instead of a browser API that isn't there.
+ *
+ * Dynamically imported (rather than a static top-of-file import) so the
+ * regular web/PWA bundle never pays for code it will never run — this
+ * branch is skipped entirely there.
+ */
+async function shareViaCapacitor(blob, title) {
+  const [{ Filesystem, Directory }, { Share }] = await Promise.all([
+    import('@capacitor/filesystem'),
+    import('@capacitor/share'),
+  ]);
+
+  const base64 = await blobToBase64(blob);
+  const fileName = `anonroom-story-${Date.now()}.png`;
+
+  const written = await Filesystem.writeFile({
+    path: fileName,
+    data: base64,
+    directory: Directory.Cache,
+  });
+
+  await Share.share({
+    title: title || 'Anonroom',
+    url: written.uri,
+  });
+}
+
 /**
  * Shares a generated story image. Tries, in order:
  *   1. Direct-to-Instagram-Stories (iOS only, best-effort — see
  *      instagramShare.js for exactly what this can and can't do, and why
  *      "skip the picker on every platform" and "auto-attach a trending
  *      song" aren't things any web app can actually do).
- *   2. The native OS share sheet (navigator.share) — Instagram shows up as
- *      one of the targets here on both iOS and Android.
- *   3. A plain PNG download, if neither is available.
+ *   2. Inside the native (Capacitor) app: the real OS share sheet via
+ *      @capacitor/share + @capacitor/filesystem — see shareViaCapacitor
+ *      above for why navigator.share/download can't be trusted there.
+ *   3. On the regular web/PWA: the native OS share sheet (navigator.share)
+ *      — Instagram shows up as one of the targets here on both iOS and
+ *      Android.
+ *   4. A plain PNG download, if none of the above are available.
  */
 export async function shareStoryImage(blob, { title, tryInstagramDirect = true } = {}) {
   if (tryInstagramDirect) {
     const handled = await shareToInstagramStories(blob);
     if (handled) return;
+  }
+
+  if (Capacitor.isNativePlatform()) {
+    try {
+      await shareViaCapacitor(blob, title);
+      return;
+    } catch (err) {
+      // ActivityNotFoundException / user-cancelled-share style errors land
+      // here too on some devices — fall through to the download below
+      // rather than leaving the person on a silent dead end.
+      console.error('Native share failed, falling back to download:', err);
+    }
   }
 
   const file = new File([blob], 'anonroom-story.png', { type: 'image/png' });

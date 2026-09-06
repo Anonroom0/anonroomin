@@ -42,7 +42,7 @@ import {
   CANVAS_HEIGHT,
 } from '../../lib/storyImageGenerator';
 import { BACKGROUND_STRUCTURES, ACCENT_COLORS, BODY_SHAPES, BODY_SCALES, getPresetById } from '../../lib/storyStylePresets';
-import { buildQuestionPath, toShortId } from '../../lib/subdomain';
+import { buildQuestionPath, toShortId, getCanonicalOrigin } from '../../lib/subdomain';
 import { showToast, friendlyDbError } from '../../lib/toast';
 import { hapticSelect, hapticImpact, hapticTap, hapticSheet } from '../../lib/haptics';
 import { playTap, playSend, playOpen, playClose } from '../../lib/soundManager';
@@ -115,7 +115,10 @@ function buildReplyUrl(questionId) {
 // already copies (see GroupChat.jsx), so both point at the same place.
 function buildMessageUrl(messageId) {
   if (typeof window === 'undefined' || !messageId) return '';
-  return `${window.location.origin}${window.location.pathname}#msg-${toShortId(messageId)}`;
+  // getCanonicalOrigin() instead of window.location.origin directly — the
+  // native app's WebView origin is a fake `https://localhost`, not
+  // anything a pasted link should ever point at. See subdomain.js.
+  return `${getCanonicalOrigin()}${window.location.pathname}#msg-${toShortId(messageId)}`;
 }
 
 // ---------------------------------------------------------------------------

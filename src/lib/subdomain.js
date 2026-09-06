@@ -4,7 +4,55 @@
  * ============================================================================
  */
 
+import { Capacitor } from '@capacitor/core';
+
 const RESERVED_SEGMENTS = ['www', 'anonroom', 'localhost', 'administrator'];
+
+// ----------------------------------------------------------------------------
+// CANONICAL ORIGIN (fixes "copies localhost" links in the packaged app)
+// ----------------------------------------------------------------------------
+// The wrapped native Android app (see .github/workflows/build-apk.yml ->
+// Capacitor) serves its WebView content from a fake internal origin —
+// typically `https://localhost` — that has nothing to do with the real
+// production domain. Every place in this app that built a shareable link,
+// a copy-link, or an auth redirect straight off `window.location.origin` /
+// `window.location.hostname` was therefore producing `https://localhost/...`
+// links when run from the native app: correct-looking in-browser, completely
+// broken the moment they're pasted anywhere else.
+//
+// getCanonicalOrigin() is the one place that decides "what origin should a
+// LINK meant to leave this device use" — every builder below (getGroupUrl,
+// getRootDomainUrl, getAdministratorUrl) and every direct
+// `window.location.origin` call site for a shareable link (ShareStorySheet,
+// StoryViewer, GroupChat's copy-link actions, AuthModal's password-reset
+// redirect) should go through this instead of reading the browser's own
+// location directly.
+//
+// VITE_APP_ORIGIN lets this be overridden per-environment (e.g. a staging
+// deploy) via the same .env mechanism supabaseClient.js already relies on;
+// it defaults to the real production domain so a native build with no env
+// override still produces correct, shareable links.
+const PRODUCTION_ORIGIN = (import.meta.env.VITE_APP_ORIGIN || 'https://anonroom.in').replace(/\/+$/, '');
+
+export function isNativeApp() {
+  try {
+    return Capacitor.isNativePlatform();
+  } catch {
+    return false;
+  }
+}
+
+// Returns the origin (protocol + host, no trailing slash) that a link meant
+// to be copied/shared/emailed should be built from. Inside the native app
+// this is ALWAYS the real production origin, never the WebView's own
+// `https://localhost` — there is no meaningful "subdomain" concept from
+// inside the native shell anyway, since it only ever loads the root app.
+// Everywhere else (real web/PWA, any browser), this is just
+// `window.location.origin`, unchanged from before.
+export function getCanonicalOrigin() {
+  if (isNativeApp()) return PRODUCTION_ORIGIN;
+  return window.location.origin;
+}
 
 // True ONLY for the real production admin-panel subdomain
 // (administrator.anonroom.in). Not currently read by App.jsx — that
@@ -39,8 +87,12 @@ export function isAdministratorSubdomain() {
 // Reserved as the FIRST path segment on the root domain, so they never get
 // mistaken for a username in the /<username> DM route. 'g' is reserved
 // because groups now route through /g/<slug> (see buildGroupPath /
-// getGroupSlugFromPath below) instead of their own subdomain.
-const RESERVED_PATH_SEGMENTS = ['api', 'assets', 'static', 'favicon.ico', 'g'];
+// getGroupSlugFromPath below) instead of their own subdomain. 'confess' is
+// reserved for the same reason /confess/<slug> exists (see
+// getConfessGroupSlugFromPath below) — without this, a bare /confess (no
+// slug) would fall through and be misread as "open a DM with the user
+// named confess".
+const RESERVED_PATH_SEGMENTS = ['api', 'assets', 'static', 'favicon.ico', 'g', 'confess'];
 
 export const ROOT_PATH = '/';
 
@@ -184,6 +236,12 @@ export function getGroupSlugFromRealSubdomain() {
 // this just drops the ?group= param instead of trying to rewrite a
 // subdomain that doesn't really exist there.
 export function getRootDomainUrl() {
+  // Inside the native app there's no real subdomain to strip — it only ever
+  // loads the root app — and window.location is the WebView's fake
+  // localhost origin, not anything worth building a link from. See
+  // getCanonicalOrigin()'s banner above.
+  if (isNativeApp()) return `${PRODUCTION_ORIGIN}/`;
+
   const { protocol, hostname, port } = window.location;
   const parts = hostname.split('.');
 
@@ -207,6 +265,13 @@ export function getRootDomainUrl() {
 // ?admin=1 fallback isAdministratorSubdomain() already understands, since
 // wildcard subdomains don't resolve there.
 export function getAdministratorUrl() {
+  // Native app: derive administrator.<host> from the real production
+  // origin, never from the WebView's fake localhost host.
+  if (isNativeApp()) {
+    const prod = new URL(PRODUCTION_ORIGIN);
+    return `${prod.protocol}//administrator.${prod.host}/`;
+  }
+
   const { protocol, hostname, port } = window.location;
   const parts = hostname.split('.');
 
@@ -243,6 +308,14 @@ export function getAdministratorUrl() {
 // both work the same way there — kept for continuity with any existing
 // bookmarked dev links.
 export function getGroupUrl(slug) {
+  // Native app: always the real production origin — there is no subdomain
+  // concept from inside the native shell, and window.location here is the
+  // WebView's fake localhost host, not something worth building a
+  // shareable "Copy Link" URL from. See getCanonicalOrigin()'s banner.
+  if (isNativeApp()) {
+    return `${PRODUCTION_ORIGIN}${buildGroupPath(slug)}`;
+  }
+
   const { protocol, hostname, port } = window.location;
   const parts = hostname.split('.');
 
@@ -367,6 +440,33 @@ export function getConfessionsFeedPath() {
 
 export function isConfessionsFeedPath() {
   return window.location.pathname.replace(/^\/+|\/+$/g, '') === 'confessions';
+}
+
+// ----------------------------------------------------------------------------
+// UNAUTHENTICATED GROUP CONFESSION ROUTING (root domain, /confess/<slug>)
+// ----------------------------------------------------------------------------
+// A fully signed-out, no-account drop box for a specific group — see
+// src/pages/ConfessToGroup.jsx + supabase/migrations/0005_confess_group_anon.sql.
+// Deliberately its own top-level route (checked in App.jsx exactly like
+// /q/<id>, /confessions, and /reset-password/<token>) rather than nested
+// inside Home/GroupChat, so it never needs a session, never mounts the
+// sidebar/chat UI, and can't accidentally end up behind any auth gate.
+
+export function buildConfessPath(slug) {
+  return `/confess/${encodeURIComponent(slug)}`;
+}
+
+// Returns the slug for the root-level confession-drop route
+// (anonroom.in/confess/<slug>), or null if the current path doesn't match
+// that shape. Mirrors getGroupSlugFromPath's simple two-segment parse.
+export function getConfessGroupSlugFromPath() {
+  const segments = normalizedPathSegments();
+  if (segments[0] !== 'confess' || !segments[1]) return null;
+  return decodeURIComponent(segments[1]);
+}
+
+export function isConfessPagePath() {
+  return getConfessGroupSlugFromPath() !== null;
 }
 
 // ----------------------------------------------------------------------------

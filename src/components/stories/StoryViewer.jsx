@@ -6,7 +6,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import supabase from '../../lib/supabaseClient';
 import ConfessionBubble from '../shared/ConfessionBubble';
-import { buildQuestionPath, toShortId, getGroupUrl } from '../../lib/subdomain';
+import { buildQuestionPath, toShortId, getGroupUrl, getCanonicalOrigin } from '../../lib/subdomain';
 import ReactionBar from '../shared/ReactionBar';
 import MediaViewer from '../../pages/MediaViewer';
 import { hapticTap, hapticSelect } from '../../lib/haptics';
@@ -112,7 +112,7 @@ function buildShareUrl(channel, item) {
   if (channel.type === 'group' && channel.slug) {
     return `${getGroupUrl(channel.slug)}#story-${toShortId(item.id)}`;
   }
-  return `${window.location.origin}/#story-${toShortId(item.id)}`;
+  return `${getCanonicalOrigin()}/#story-${toShortId(item.id)}`;
 }
 
 // "Share as Story" (three-dots menu) → ShareStorySheet, in read-only/
