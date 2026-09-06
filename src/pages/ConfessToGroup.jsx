@@ -94,6 +94,16 @@ export default function ConfessToGroup({ groupSlug }) {
       .maybeSingle()
       .then(({ data, error }) => {
         if (cancelled) return;
+        if (error) {
+          // Logged rather than silently swallowed — a missing/incorrect
+          // anon SELECT policy on public.groups (see
+          // groups_select_public_confess in 0005_confess_group_anon.sql)
+          // shows up here as an RLS/permission error, not as "no data",
+          // and previously left no trace at all, making "the page just
+          // says not found" impossible to tell apart from an actually
+          // deleted/renamed group.
+          console.error('Failed to resolve group for /confess page:', error);
+        }
         if (error || !data) {
           setStage('not-found');
           return;
@@ -112,21 +122,55 @@ export default function ConfessToGroup({ groupSlug }) {
     if (!canSend || stage === 'posting') return;
     setStage('posting');
 
-    const { error } = await supabase.from('confessions').insert({
-      text: trimmed,
-      visibility: 'group',
+    const visitorId = getOrCreateVisitorId();
+
+    // Preferred path: insert into group_messages (is_confession: true), the
+    // exact same table the authenticated "New Confession" sheet in
+    // GroupChat.jsx writes to — sync_group_confession_to_confessions()
+    // (see 0001/0003) then automatically mirrors it into public.confessions
+    // for the Stories bar, same as it always has. This is what makes an
+    // unauthenticated submission show up in the live chat, not just as a
+    // Story. See 0007_confess_via_group_messages.sql for the RLS behind
+    // this.
+    const { error: messageError } = await supabase.from('group_messages').insert({
       group_id: group.id,
+      user_id: null,
       is_anon: true,
-      author_id: null,
-      visitor_id: getOrCreateVisitorId(),
+      is_confession: true,
+      sender_name: 'Anonymous',
+      text: trimmed,
+      visitor_id: visitorId,
     });
+
+    let error = messageError;
+
+    // Fallback: the older, narrower direct-to-confessions path from
+    // 0005_confess_group_anon.sql. Only reached if the group_messages
+    // insert above was rejected — e.g. an unforeseen NOT NULL column on
+    // group_messages that 0007's migration didn't know to satisfy, since
+    // that table's full definition predates this feature and isn't fully
+    // visible from the app's own migrations. This still reaches Stories
+    // (StoriesBar.jsx reads confessions directly); it just won't show up
+    // in the chat feed itself the way the primary path does.
+    if (messageError && !messageError.message?.includes('rate_limited')) {
+      console.error('group_messages confession insert failed, falling back to confessions table:', messageError);
+      const fallback = await supabase.from('confessions').insert({
+        text: trimmed,
+        visibility: 'group',
+        group_id: group.id,
+        is_anon: true,
+        author_id: null,
+        visitor_id: visitorId,
+      });
+      error = fallback.error;
+    }
 
     if (error) {
       hapticError();
       playError();
-      // The rate-limit trigger (see 0005_confess_group_anon.sql) raises a
-      // plain Postgres exception with this message prefix — surface it as
-      // a friendly, specific toast instead of a generic error.
+      // The rate-limit trigger (see 0005/0007's migrations) raises a plain
+      // Postgres exception with this message prefix — surface it as a
+      // friendly, specific toast instead of a generic error.
       if (error.message?.includes('rate_limited')) {
         showToast("Slow down — you can post again in a few seconds.", 'error');
       } else {
