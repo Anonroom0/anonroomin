@@ -754,7 +754,6 @@ const [sharingReply, setSharingReply] = useState(null); // NEW — { question, r
                 initialTarget={initialStoryTarget}
                 onConsumeInitialTarget={() => setInitialStoryTarget(null)}
               />
-            </div>
             {/* Segmented Control - Elevated Z-Index */}
             <div style={{ padding: '8px 16px 12px', borderBottom: '1px solid var(--separator)', position: 'relative', zIndex: 40 }}>
               <div style={{ display: 'flex', background: 'var(--tab-track)', borderRadius: 20, padding: 4, boxShadow: 'inset 0 0 0 1px var(--separator)' }}>
