@@ -3,11 +3,21 @@ name: Build Android APK
 on:
   workflow_dispatch: {}
 
+# The commit-the-APK-back-into-the-repo step below needs push access —
+# the default GITHUB_TOKEN is read-only unless this is declared.
+permissions:
+  contents: write
+
 jobs:
   build:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          # Full history (not the default shallow clone) so the later
+          # `git pull --rebase` before pushing the APK commit doesn't choke
+          # on a shallow repo if main has moved since this run started.
+          fetch-depth: 0
 
       - uses: actions/setup-node@v5
         with:
@@ -86,3 +96,30 @@ jobs:
         with:
           name: anonroom-debug-apk
           path: android/app/build/outputs/apk/debug/app-debug.apk
+
+      - name: Copy APK into repo for the /download page
+        run: |
+          mkdir -p downloads
+          cp android/app/build/outputs/apk/debug/app-debug.apk downloads/anonroom-latest.apk
+
+      - name: Point the /download page at this repo's raw APK URL
+        # Self-configuring: works for whatever repo/branch this workflow
+        # actually runs in, no owner/repo name needs to be hardcoded here
+        # or in public/download/index.html. A no-op on every run after the
+        # first, since by then the placeholder's already been replaced.
+        run: |
+          APK_URL="https://raw.githubusercontent.com/${{ github.repository }}/${{ github.ref_name }}/downloads/anonroom-latest.apk"
+          sed -i "s#%%APK_URL%%#$APK_URL#g" public/download/index.html
+
+      - name: Commit and push the updated APK
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add downloads/anonroom-latest.apk public/download/index.html
+          if git diff --cached --quiet; then
+            echo "APK unchanged since the last build — nothing to commit."
+          else
+            git commit -m "chore: update downloadable APK [skip ci]"
+            git pull --rebase origin "${{ github.ref_name }}"
+            git push origin "HEAD:${{ github.ref_name }}"
+          fi
