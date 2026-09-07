@@ -61,7 +61,10 @@ const Vectors = {
   Instagram: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="2" width="20" height="20" rx="5" ry="5" /><path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z" /><line x1="17.5" y1="6.5" x2="17.51" y2="6.5" /></svg>,
   ReplyAction: <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 17 4 12 9 7" /><path d="M20 18v-2a4 4 0 0 0-4-4H4" /></svg>,
   Photo: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2" /><circle cx="8.5" cy="8.5" r="1.5" /><polyline points="21 15 16 10 5 21" /></svg>,
-  Palette: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2a10 10 0 1 0 0 20c1.1 0 2-.9 2-2 0-.5-.2-1-.5-1.4-.3-.4-.5-.9-.5-1.4 0-1.1.9-2 2-2h2.3c1.9 0 3.4-1.6 3.2-3.5C20 6.6 16.4 2 12 2z" /><circle cx="7.5" cy="11.5" r="1" fill="currentColor" stroke="none" /><circle cx="10" cy="7" r="1" fill="currentColor" stroke="none" /><circle cx="15" cy="7.5" r="1" fill="currentColor" stroke="none" /></svg>
+  Palette: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2a10 10 0 1 0 0 20c1.1 0 2-.9 2-2 0-.5-.2-1-.5-1.4-.3-.4-.5-.9-.5-1.4 0-1.1.9-2 2-2h2.3c1.9 0 3.4-1.6 3.2-3.5C20 6.6 16.4 2 12 2z" /><circle cx="7.5" cy="11.5" r="1" fill="currentColor" stroke="none" /><circle cx="10" cy="7" r="1" fill="currentColor" stroke="none" /><circle cx="15" cy="7.5" r="1" fill="currentColor" stroke="none" /></svg>,
+  Plus: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>,
+  GhostSm: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M9 10h.01" /><path d="M15 10h.01" /><path d="M12 2a8 8 0 0 0-8 8v12l3-3 2.5 2.5L12 19l2.5 2.5L17 19l3 3V10a8 8 0 0 0-8-8z" /></svg>,
+  PinSm: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 17v5" /><path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V17a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 1 1 0 0 0 0-2H8a1 1 0 0 0 0 2 1 1 0 0 1 1 1z" /></svg>
 };
 
 function isSenderAdmin(message) { return message.sender_name === ADMIN_DISPLAY_NAME || message.is_admin === true; }
@@ -368,11 +371,32 @@ function InstagramModal({ open, onClose, onSubmit, loading }) {
   );
 }
 
-function useLongPress(callback, ms = 500) {
-  const timerRef = useRef();
-  const start = useCallback((e, msg) => { timerRef.current = setTimeout(() => callback(msg), ms); }, [callback, ms]);
-  const stop = useCallback(() => clearTimeout(timerRef.current), []);
-  return { onTouchStart: start, onTouchEnd: stop, onTouchMove: stop };
+function useLongPress(callback, ms = 480) {
+  const timerRef = useRef(null);
+  const firedRef = useRef(false);
+  const start = useCallback((e) => {
+    firedRef.current = false;
+    if (timerRef.current) clearTimeout(timerRef.current);
+    timerRef.current = setTimeout(() => {
+      firedRef.current = true;
+      callback();
+    }, ms);
+  }, [callback, ms]);
+  const stop = useCallback(() => {
+    if (timerRef.current) clearTimeout(timerRef.current);
+    timerRef.current = null;
+  }, []);
+  const wasLongPress = useCallback(() => firedRef.current, []);
+  return {
+    onTouchStart: start,
+    onTouchEnd: stop,
+    onTouchMove: stop,
+    onMouseDown: start,
+    onMouseUp: stop,
+    onMouseLeave: stop,
+    onContextMenu: (e) => { e.preventDefault(); },
+    wasLongPress,
+  };
 }
 
 function usePullToRefresh(onRefresh, scrollRef) {
@@ -437,6 +461,26 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
   // type="search"/autoComplete="off-nope"/data-lpignore anti-autofill hack.
   const [composerLocked, setComposerLocked] = useState(true);
   const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef(null);
+  // Close the 3-dot header menu when clicking/tapping outside it.
+  useEffect(() => {
+    if (!menuOpen) return undefined;
+    function handleOutside(e) {
+      if (menuRef.current && !menuRef.current.contains(e.target)) {
+        setMenuOpen(false);
+      }
+    }
+    // pointerdown captures both mouse and touch; use capture so it runs
+    // before other stopPropagation handlers in the chat tree.
+    const timer = window.setTimeout(() => {
+      document.addEventListener('pointerdown', handleOutside, true);
+    }, 0);
+    return () => {
+      window.clearTimeout(timer);
+      document.removeEventListener('pointerdown', handleOutside, true);
+    };
+  }, [menuOpen]);
+
 
   const [isSearching, setIsSearching] = useState(false);
   const [chatSearchQuery, setChatSearchQuery] = useState('');
@@ -807,8 +851,16 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
   }, [messages]);
 
   const toggleSelection = (msgId) => { if (!isAdmin) return; hapticSelect(); setSelectedMessages((prev) => (prev.includes(msgId) ? prev.filter((id) => id !== msgId) : [...prev, msgId])); };
-  const handleLongPress = (msg) => { if (isAdmin) toggleSelection(msg.id); };
-  const longPressHook = useLongPress(handleLongPress, 500);
+  // Long-press opens the reaction tray only. Selection is available from the
+  // tray's "Select" action (admin), not from long-press itself.
+  const longPressTargetRef = useRef(null);
+  const handleLongPressOpenReaction = useCallback(() => {
+    const msgId = longPressTargetRef.current;
+    if (!msgId) return;
+    hapticSelect();
+    setActiveReactionMsgId(msgId);
+  }, []);
+  const longPressHook = useLongPress(handleLongPressOpenReaction, 480);
 
   // Deletes one or more group_messages rows *and* everything that would
   // otherwise block or orphan that delete:
@@ -1109,7 +1161,15 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
     return messageText.split(/(@[a-zA-Z0-9_]+)/g).map((part, i) => {
       if (part.startsWith('@') && part.length > 1) {
         return (
-          <button key={i} onClick={async () => { const { data } = await supabase.from('profiles').select('id').eq('username', part.substring(1).toLowerCase()).maybeSingle(); if (data?.id) setProfileCardUserId(data.id); }} style={{ color: (isOwn || isAnonMsg) ? '#fff' : 'var(--ember)', textDecoration: 'underline', background: 'none', border: 'none', padding: 0, fontWeight: 700, cursor: 'pointer', fontSize: 'inherit' }}>{part}</button>
+          <button key={i} onClick={async (e) => {
+            e.stopPropagation();
+            const uname = part.substring(1).toLowerCase();
+            const { data } = await supabase.from('profiles').select('id').eq('username', uname).maybeSingle();
+            if (data?.id) { setProfileCardUserId(data.id); return; }
+            // Bots share the same @name surface as real users
+            const { data: bot } = await supabase.from('bots').select('id').ilike('name', uname).eq('active', true).maybeSingle();
+            if (bot?.id) setProfileCardUserId(bot.id);
+          }} style={{ color: (isOwn || isAnonMsg) ? 'var(--bubble-own-text)' : 'var(--ember)', textDecoration: 'underline', background: 'none', border: 'none', padding: 0, fontWeight: 700, cursor: 'pointer', fontSize: 'inherit' }}>{part}</button>
         );
       }
       return <span key={i}>{part}</span>;
@@ -1143,23 +1203,23 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
           </div>
         </header>
       ) : (
-        <header style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: 14, padding: '12px 20px', background: 'var(--header-bg)', borderBottom: '1px solid var(--separator)', backdropFilter: 'blur(20px) saturate(140%)', WebkitBackdropFilter: 'blur(20px) saturate(140%)', zIndex: 20 }}>
-          <button onClick={onBack} style={{ border: 'none', background: 'transparent', color: 'var(--paper)', cursor: 'pointer', padding: '4px', marginLeft: '-8px' }}>{Vectors.Back}</button>
-          <button onClick={() => setGroupCardOpen(true)} style={{ border: 'none', background: 'transparent', padding: 0, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 14, flex: 1, textAlign: 'left' }}>
-            <LiquidAvatar identity={{ name: group.name, avatar_url: group.cover_url, is_admin: false }} size={42} kind="group" />
-            <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
-              <span style={{ fontWeight: 700, fontSize: 16, color: 'var(--paper)' }}>{group.name}</span>
-              <span style={{ fontSize: 13, color: 'var(--dim)' }}>{group.description || 'Public Group'}</span>
+        <header style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', background: 'var(--header-bg)', borderBottom: '1px solid var(--separator)', backdropFilter: 'blur(24px) saturate(160%)', WebkitBackdropFilter: 'blur(24px) saturate(160%)', zIndex: 20 }}>
+          <button onClick={onBack} style={{ border: 'none', background: 'transparent', color: 'var(--paper)', cursor: 'pointer', padding: '4px', marginLeft: '-4px', flexShrink: 0 }}>{Vectors.Back}</button>
+          <button onClick={() => setGroupCardOpen(true)} style={{ border: 'none', background: 'transparent', padding: 0, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 0, textAlign: 'left' }}>
+            <LiquidAvatar identity={{ name: group.name, avatar_url: group.cover_url, is_admin: false }} size={36} kind="group" />
+            <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', minWidth: 0, flex: 1 }}>
+              <span style={{ fontWeight: 700, fontSize: 15, color: 'var(--paper)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{group.name}</span>
+              <span style={{ fontSize: 12, color: 'var(--dim)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{group.description || 'Public Group'}</span>
             </div>
           </button>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-            <button onClick={() => setIsAnonMode(!isAnonMode)} style={{ border: 'none', background: isAnonMode ? 'var(--ink-2)' : 'transparent', color: isAnonMode ? 'var(--ember)' : 'var(--dim)', cursor: 'pointer', padding: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '50%', transition: 'all 0.2s' }}>{Vectors.Ghost}</button>
-            <div style={{ position: 'relative' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 2, flexShrink: 0 }}>
+            <button onClick={() => setIsAnonMode(!isAnonMode)} style={{ border: 'none', background: isAnonMode ? 'rgba(59,130,246,0.18)' : 'transparent', color: isAnonMode ? 'var(--ember)' : 'var(--dim)', cursor: 'pointer', padding: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '50%', transition: 'all 0.2s', backdropFilter: isAnonMode ? 'blur(8px)' : undefined }}>{Vectors.Ghost}</button>
+            <div ref={menuRef} style={{ position: 'relative' }}>
               <button onClick={() => setMenuOpen((v) => !v)} style={{ border: 'none', background: 'transparent', color: 'var(--paper)', cursor: 'pointer', padding: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '50%' }}>{Vectors.ThreeDots}</button>
               {menuOpen && (
-                <div style={{ position: 'absolute', right: 0, top: '100%', marginTop: 4, zIndex: 30, minWidth: 160, padding: 6, background: 'var(--ink-2)', borderRadius: 16, border: '1px solid var(--separator)', boxShadow: '0 10px 40px rgba(0,0,0,0.5)' }}>
-                  <button onClick={() => { setIsSearching(true); setMenuOpen(false); }} style={{ width: '100%', padding: '10px 14px', border: 'none', background: 'transparent', color: 'var(--paper)', textAlign: 'left', borderRadius: 8, cursor: 'pointer', fontSize: 14, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8 }}>{Vectors.SearchSmall} Search Chat</button>
-                  <button onClick={() => { navigator.clipboard.writeText(`${getCanonicalOrigin()}${window.location.pathname}`); setMenuOpen(false); showToast('Link copied to clipboard!', 'info'); }} style={{ width: '100%', padding: '10px 14px', border: 'none', background: 'transparent', color: 'var(--paper)', textAlign: 'left', borderRadius: 8, cursor: 'pointer', fontSize: 14, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8 }}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg> Share link</button>
+                <div style={{ position: 'absolute', right: 0, top: '100%', marginTop: 4, zIndex: 30, minWidth: 160, padding: 6, background: 'var(--menu-bg)', borderRadius: 16, border: '1px solid var(--glass-border)', boxShadow: 'var(--shadow-card)', backdropFilter: 'blur(20px) saturate(140%)', WebkitBackdropFilter: 'blur(20px) saturate(140%)' }}>
+                  <button onClick={() => { setIsSearching(true); setMenuOpen(false); }} style={{ width: '100%', padding: '10px 14px', border: 'none', background: 'transparent', color: 'var(--paper)', textAlign: 'left', borderRadius: 10, cursor: 'pointer', fontSize: 14, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8 }}>{Vectors.SearchSmall} Search Chat</button>
+                  <button onClick={() => { navigator.clipboard.writeText(`${getCanonicalOrigin()}${window.location.pathname}`); setMenuOpen(false); showToast('Link copied to clipboard!', 'info'); }} style={{ width: '100%', padding: '10px 14px', border: 'none', background: 'transparent', color: 'var(--paper)', textAlign: 'left', borderRadius: 10, cursor: 'pointer', fontSize: 14, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8 }}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg> Share link</button>
                 </div>
               )}
             </div>
@@ -1179,122 +1239,112 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
       )}
 
       {(() => {
+        // Hide confession/pin strip entirely on channels.
+        if (group?.is_channel) return null;
         const confessionMessages = messages.filter((m) => m.is_confession);
         const hasConfessions = confessionMessages.length > 0;
         const pinnedMessages = messages.filter((m) => m.is_pinned);
         const hasPinned = pinnedMessages.length > 0;
-        // Always visible whenever the composer itself would be (not just
-        // once a confession exists) — "Post Confession" here is a
-        // persistent shortcut to the same ConfessionModal the
-        // attachments sheet's "Confession" option opens (see
-        // onPickConfession below), so it needs to be reachable even in an
-        // empty chat with nothing to navigate to yet. "Previous
-        // Confession" and "Pin" only render once there's actually
-        // something to jump to.
-        const showBar = !isSearching && !!session && !isChannelLocked;
+        const showBar = !isSearching && !!session;
+        if (!showBar) return null;
+        const chipBase = {
+          width: 34, height: 34, borderRadius: '50%', flexShrink: 0,
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          border: '1px solid var(--glass-border)',
+          background: 'var(--glass-white)',
+          color: 'var(--paper)', cursor: 'pointer',
+          transition: 'transform 0.12s ease-out, background 0.15s ease',
+          padding: 0,
+        };
+        // Connected to header bottom edge — left-aligned only so the right
+        // side never covers the message list background.
+        // Zero-height row: no layout strip across the chat. Notch hangs
+        // into the message area via overflow visible + absolute child.
         return (
           <div
             style={{
-              maxHeight: showBar ? 56 : 0,
-              opacity: showBar ? 1 : 0,
-              overflow: 'hidden',
+              position: 'relative',
+              height: 0,
               flexShrink: 0,
-              background: 'var(--ink-2)',
-              borderBottom: showBar ? '1px solid var(--separator)' : 'none',
               zIndex: 19,
-              transition: 'max-height 0.32s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.24s ease, border-color 0.24s ease',
+              overflow: 'visible',
+              pointerEvents: 'none',
             }}
           >
-            <div style={{ padding: '10px 16px', display: 'flex', gap: 8, overflowX: 'auto' }} className="custom-scrollbar">
-              {hasConfessions && (
-                <button
-                  onClick={() => {
-                    if (confessionMessages.length === 0) return;
-                    const nextIdx = confessionNavIndex + 1 >= confessionMessages.length ? 0 : confessionNavIndex + 1;
-                    setConfessionNavIndex(nextIdx);
-                    const el = document.getElementById(`msg-${confessionMessages[nextIdx].id}`);
-                    if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); setHighlightedMsgId(confessionMessages[nextIdx].id); setTimeout(() => setHighlightedMsgId(null), 2000); }
-                  }}
-                  style={{
-                    display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0,
-                    background: 'linear-gradient(180deg, rgba(47,111,255,0.16), rgba(47,111,255,0.08))',
-                    border: '1px solid rgba(47,111,255,0.28)',
-                    color: 'var(--paper)', borderRadius: 22, padding: '7px 14px 7px 8px',
-                    fontSize: 13, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap',
-                    transition: 'transform 0.12s ease-out, background 0.15s ease',
-                  }}
-                  onMouseDown={(e) => { e.currentTarget.style.transform = 'scale(0.96)'; }}
-                  onMouseUp={(e) => { e.currentTarget.style.transform = 'scale(1)'; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.transform = 'scale(1)'; }}
-                >
-                  <span style={{ width: 24, height: 24, borderRadius: '50%', background: 'rgba(47,111,255,0.2)', color: 'var(--ember)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                    {Vectors.Ghost}
-                  </span>
-                  Previous Confession
-                  {confessionMessages.length > 1 && (
-                    <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--dim)', background: 'rgba(255,255,255,0.06)', borderRadius: 10, padding: '2px 7px' }}>
-                      {(confessionNavIndex % confessionMessages.length) + 1}/{confessionMessages.length}
-                    </span>
-                  )}
-                </button>
-              )}
-
-              {/* Same target as the attachments sheet's "Confession" option
-                  (onPickConfession -> setConfessionModalOpen(true)) — this
-                  is just a second, always-visible door to it. */}
+          <div
+            style={{
+              position: 'absolute',
+              top: 0,
+              left: 10,
+              display: 'inline-flex',
+              width: 'auto',
+              maxWidth: 'max-content',
+            }}
+          >
+            <div
+              style={{
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+                padding: '6px 8px 8px',
+                borderRadius: '0 0 18px 18px',
+                background: 'var(--header-bg)',
+                border: '1px solid var(--separator)',
+                borderTop: 'none',
+                backdropFilter: 'blur(24px) saturate(160%)',
+                WebkitBackdropFilter: 'blur(24px) saturate(160%)',
+                pointerEvents: 'auto',
+                boxShadow: 'var(--shadow-float)',
+              }}
+            >
               <button
-                onClick={() => setConfessionModalOpen(true)}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0,
-                  background: 'rgba(63,120,255,0.06)',
-                  border: '1px solid rgba(120,170,255,0.16)',
-                  color: 'var(--paper)', borderRadius: 22, padding: '7px 14px 7px 8px',
-                  fontSize: 13, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap',
-                  transition: 'transform 0.12s ease-out, background 0.15s ease',
+                title="Previous Confession"
+                disabled={!hasConfessions}
+                onClick={() => {
+                  if (confessionMessages.length === 0) return;
+                  const nextIdx = confessionNavIndex + 1 >= confessionMessages.length ? 0 : confessionNavIndex + 1;
+                  setConfessionNavIndex(nextIdx);
+                  const el = document.getElementById(`msg-${confessionMessages[nextIdx].id}`);
+                  if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); setHighlightedMsgId(confessionMessages[nextIdx].id); setTimeout(() => setHighlightedMsgId(null), 2000); }
                 }}
-                onMouseDown={(e) => { e.currentTarget.style.transform = 'scale(0.96)'; }}
+                style={{ ...chipBase, opacity: hasConfessions ? 1 : 0.4, color: hasConfessions ? 'var(--ember)' : 'var(--dim)' }}
+                onMouseDown={(e) => { e.currentTarget.style.transform = 'scale(0.92)'; }}
                 onMouseUp={(e) => { e.currentTarget.style.transform = 'scale(1)'; }}
                 onMouseLeave={(e) => { e.currentTarget.style.transform = 'scale(1)'; }}
               >
-                <span style={{ width: 24, height: 24, borderRadius: '50%', background: 'rgba(255,255,255,0.08)', color: 'var(--paper)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                  {Vectors.Ghost}
-                </span>
-                Post Confession
+                {Vectors.GhostSm}
               </button>
 
-              {hasPinned && (
-                <button
-                  onClick={() => {
-                    if (pinnedMessages.length === 0) return;
-                    const nextIdx = pinNavIndex + 1 >= pinnedMessages.length ? 0 : pinNavIndex + 1;
-                    setPinNavIndex(nextIdx);
-                    const el = document.getElementById(`msg-${pinnedMessages[nextIdx].id}`);
-                    if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); setHighlightedMsgId(pinnedMessages[nextIdx].id); setTimeout(() => setHighlightedMsgId(null), 2000); }
-                  }}
-                  style={{
-                    display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0,
-                    background: 'linear-gradient(180deg, rgba(120,170,255,0.16), rgba(255,255,255,0.04))',
-                    border: '1px solid rgba(90,150,255,0.20)',
-                    color: 'var(--paper)', borderRadius: 22, padding: '7px 14px 7px 8px',
-                    fontSize: 13, fontWeight: 600, cursor: 'pointer', whiteSpace: 'nowrap',
-                    transition: 'transform 0.12s ease-out, background 0.15s ease',
-                  }}
-                  onMouseDown={(e) => { e.currentTarget.style.transform = 'scale(0.96)'; }}
-                  onMouseUp={(e) => { e.currentTarget.style.transform = 'scale(1)'; }}
-                  onMouseLeave={(e) => { e.currentTarget.style.transform = 'scale(1)'; }}
-                >
-                  <span style={{ width: 24, height: 24, borderRadius: '50%', background: 'rgba(120,170,255,0.16)', color: 'var(--paper)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0 }}>
-                    {Vectors.Pin}
-                  </span>
-                  Pinned
-                  {pinnedMessages.length > 1 && (
-                    <span style={{ fontSize: 11, fontWeight: 700, color: 'var(--dim)', background: 'rgba(255,255,255,0.06)', borderRadius: 10, padding: '2px 7px' }}>
-                      {(pinNavIndex % pinnedMessages.length) + 1}/{pinnedMessages.length}
-                    </span>
-                  )}
-                </button>
-              )}
+              <button
+                title="Post Confession"
+                onClick={() => setConfessionModalOpen(true)}
+                style={{ ...chipBase, background: 'var(--ember-soft)', border: '1px solid color-mix(in srgb, var(--ember) 35%, transparent)', color: 'var(--ember)' }}
+                onMouseDown={(e) => { e.currentTarget.style.transform = 'scale(0.92)'; }}
+                onMouseUp={(e) => { e.currentTarget.style.transform = 'scale(1)'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.transform = 'scale(1)'; }}
+              >
+                {Vectors.Plus}
+              </button>
+
+              <button
+                title="Pinned"
+                disabled={!hasPinned}
+                onClick={() => {
+                  if (pinnedMessages.length === 0) return;
+                  const nextIdx = pinNavIndex + 1 >= pinnedMessages.length ? 0 : pinNavIndex + 1;
+                  setPinNavIndex(nextIdx);
+                  const el = document.getElementById(`msg-${pinnedMessages[nextIdx].id}`);
+                  if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); setHighlightedMsgId(pinnedMessages[nextIdx].id); setTimeout(() => setHighlightedMsgId(null), 2000); }
+                }}
+                style={{ ...chipBase, opacity: hasPinned ? 1 : 0.4 }}
+                onMouseDown={(e) => { e.currentTarget.style.transform = 'scale(0.92)'; }}
+                onMouseUp={(e) => { e.currentTarget.style.transform = 'scale(1)'; }}
+                onMouseLeave={(e) => { e.currentTarget.style.transform = 'scale(1)'; }}
+              >
+                {Vectors.PinSm}
+              </button>
             </div>
+          </div>
           </div>
         );
       })()}
@@ -1308,7 +1358,7 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
       <div
         ref={scrollRef} onTouchStart={handleTouchStart} onTouchMove={handleTouchMove} onTouchEnd={handleTouchEnd}
         className="custom-scrollbar"
-        style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', overscrollBehavior: 'contain', WebkitOverflowScrolling: 'touch', padding: '20px 16px', display: 'flex', flexDirection: 'column-reverse', zIndex: 10, minHeight: 0, background: 'transparent', transform: `translateY(${pullDistance}px)`, transition: isRefreshing || pullDistance === 0 ? 'transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1)' : 'none' }}
+        style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', overscrollBehavior: 'contain', WebkitOverflowScrolling: 'touch', padding: '28px 8px 12px', display: 'flex', flexDirection: 'column-reverse', zIndex: 10, minHeight: 0, background: 'transparent', transform: `translateY(${pullDistance}px)`, transition: isRefreshing || pullDistance === 0 ? 'transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1)' : 'none' }}
       >
         {messagesLoading && messages.length === 0 && <MessageSkeleton variant="message" count={4} />}
 
@@ -1352,16 +1402,24 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
             : (isAnonMsg
                 ? '1px solid var(--bubble-border-anon)'
                 : (isOwn ? '1px solid var(--bubble-border-own)' : '1px solid var(--bubble-border-other)'));
+          const bubbleGlass = isStickerOrGif ? undefined : 'blur(10px) saturate(140%)';
 
           return (
             <React.Fragment key={message.id}>
               <div 
-                {...longPressHook} 
+                onTouchStart={(e) => { longPressTargetRef.current = message.id; longPressHook.onTouchStart(e); }}
+                onTouchEnd={longPressHook.onTouchEnd}
+                onTouchMove={longPressHook.onTouchMove}
+                onMouseDown={(e) => { longPressTargetRef.current = message.id; longPressHook.onMouseDown(e); }}
+                onMouseUp={longPressHook.onMouseUp}
+                onMouseLeave={longPressHook.onMouseLeave}
+                onContextMenu={longPressHook.onContextMenu}
                 onClick={() => { 
+                  if (longPressHook.wasLongPress()) return;
                   if (selectedMessages.length > 0) toggleSelection(message.id); 
-                  else setActiveReactionMsgId(activeReactionMsgId === message.id ? null : message.id); 
+                  else if (activeReactionMsgId === message.id) setActiveReactionMsgId(null);
                 }}
-                style={{ position: 'relative', width: '100%', padding: '0 8px', cursor: 'pointer', WebkitTapHighlightColor: 'transparent' }} 
+                style={{ position: 'relative', width: '100%', padding: '0 4px', cursor: 'pointer', WebkitTapHighlightColor: 'transparent' }} 
               >
                 <SwipeableMessage onSwipe={() => { if (selectedMessages.length === 0) startReply(message); }} disabled={isSearching || selectedMessages.length > 0}>
                   
@@ -1434,32 +1492,28 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
                        </div>
                      </div>
                   ) : (
-                    <div id={`msg-${message.id}`} className={isHighlighted ? 'highlight-flash' : ''} style={{ display: 'flex', flexDirection: 'column', width: '100%', marginBottom: 16, borderRadius: 16, padding: '4px 8px', background: isSelected ? 'rgba(47,111,255, 0.15)' : 'transparent', animation: 'slideUpFade 0.3s cubic-bezier(0.2, 0.8, 0.2, 1) both', transition: 'background 0.2s' }}>
+                    <div id={`msg-${message.id}`} className={isHighlighted ? 'highlight-flash' : ''} style={{ display: 'flex', flexDirection: 'column', width: '100%', marginBottom: 10, borderRadius: 16, padding: '2px 2px', background: isSelected ? 'rgba(47,111,255, 0.15)' : 'transparent', animation: 'slideUpFade 0.3s cubic-bezier(0.2, 0.8, 0.2, 1) both', transition: 'background 0.2s' }}>
                       {selectedMessages.length > 0 && isAdmin && (
-                        <div style={{ display: 'flex', justifyContent: isOwn ? 'flex-end' : 'flex-start', margin: '0 0 8px', color: isSelected ? 'var(--ember)' : 'rgba(255,255,255,0.1)' }}>
-                          {isSelected ? Vectors.CheckCircle : <div style={{ width: 20, height: 20, borderRadius: '50%', border: '2px solid currentColor' }} />}
+                        <div style={{ display: 'flex', justifyContent: isOwn ? 'flex-end' : 'flex-start', margin: '0 0 6px', color: isSelected ? 'var(--ember)' : 'rgba(255,255,255,0.1)' }}>
+                          {isSelected ? Vectors.CheckCircle : <div style={{ width: 18, height: 18, borderRadius: '50%', border: '2px solid currentColor' }} />}
                         </div>
                       )}
 
-                      {/* Sender pfp + username rendered in their own row,
-                          completely above the bubble, instead of sharing
-                          vertical space with it via a negative-margin hack —
-                          so they never overlap message content regardless
-                          of how tall the bubble/reply-preview/reactions end
-                          up being. */}
+                      {/* Sender pfp + username — bots open like normal users */}
                       {!isOwn && (
-                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6, paddingLeft: 2 }}>
-                          <button onClick={(e) => { e.stopPropagation(); if (!isAnonMsg && !message.is_bot && selectedMessages.length === 0) setProfileCardUserId(message.user_id); }} disabled={isAnonMsg || message.is_bot || selectedMessages.length > 0} style={{ border: 'none', background: 'transparent', padding: 0, display: 'flex', cursor: (isAnonMsg || message.is_bot) ? 'default' : 'pointer' }}>
-                            <LiquidAvatar identity={{ name: message.sender_name, avatar_url: senderAvatarUrl, is_admin: isAdminMsg }} size={26} isAnon={isAnonMsg} />
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 4, paddingLeft: isOwn ? 0 : 2 }}>
+                          <button onClick={(e) => { e.stopPropagation(); if (!isAnonMsg && selectedMessages.length === 0) setProfileCardUserId(message.is_bot ? (message.bot_id || message.user_id) : message.user_id); }} disabled={isAnonMsg || selectedMessages.length > 0 || (!message.user_id && !message.bot_id)} style={{ border: 'none', background: 'transparent', padding: 0, display: 'flex', cursor: isAnonMsg ? 'default' : 'pointer' }}>
+                            <LiquidAvatar identity={{ name: message.sender_name, avatar_url: senderAvatarUrl, is_admin: isAdminMsg }} size={24} isAnon={isAnonMsg} />
                           </button>
-                          <button onClick={(e) => { e.stopPropagation(); if (!isAnonMsg && !message.is_bot && selectedMessages.length === 0) setProfileCardUserId(message.user_id); }} disabled={isAnonMsg || message.is_bot || selectedMessages.length > 0} style={{ fontSize: 13, fontWeight: 700, color: isAdminMsg ? 'var(--admin-1)' : (isAnonMsg ? 'var(--dim)' : 'var(--paper)'), display: 'flex', alignItems: 'center', gap: 4, border: 'none', background: 'transparent', padding: 0, cursor: (isAnonMsg || message.is_bot) ? 'default' : 'pointer' }}>
+                          <button onClick={(e) => { e.stopPropagation(); if (!isAnonMsg && selectedMessages.length === 0) setProfileCardUserId(message.is_bot ? (message.bot_id || message.user_id) : message.user_id); }} disabled={isAnonMsg || selectedMessages.length > 0 || (!message.user_id && !message.bot_id)} style={{ fontSize: 12, fontWeight: 700, color: isAdminMsg ? 'var(--admin-1)' : (isAnonMsg ? 'var(--dim)' : 'var(--paper)'), display: 'flex', alignItems: 'center', gap: 4, border: 'none', background: 'transparent', padding: 0, cursor: isAnonMsg ? 'default' : 'pointer' }}>
                             {isAnonMsg ? 'Anonymous' : (isAdminMsg ? ADMIN_DISPLAY_NAME : message.sender_name)} {isAdminMsg && !isAnonMsg && Vectors.AdminShield}
                           </button>
                         </div>
                       )}
 
-                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: isOwn ? 'flex-end' : 'flex-start', maxWidth: '85%', marginLeft: isOwn ? 0 : 34, alignSelf: isOwn ? 'flex-end' : 'flex-start' }}>
-                        <div style={{ maxWidth: '100%', padding: isInstagram ? '4px' : ((message.media_url && !isStickerOrGif) ? '4px' : (isStickerOrGif ? 0 : '10px 16px')), borderRadius: isStickerOrGif ? 0 : 20, borderBottomRightRadius: isStickerOrGif ? 0 : (isOwn ? 4 : 20), borderBottomLeftRadius: isStickerOrGif ? 0 : (isOwn ? 20 : 4), background: bubbleBackground, color: bubbleColor, border: bubbleBorder, boxShadow: isStickerOrGif ? 'none' : 'var(--shadow-bubble)' }}>
+                      {/* Tight edge margin on the near side; larger opposite gap (ratio ~1:4) */}
+                      <div style={{ display: 'flex', flexDirection: 'column', alignItems: isOwn ? 'flex-end' : 'flex-start', maxWidth: '78%', marginLeft: isOwn ? 0 : 28, marginRight: isOwn ? 0 : 'auto', alignSelf: isOwn ? 'flex-end' : 'flex-start' }}>
+                        <div style={{ maxWidth: '100%', padding: isInstagram ? '3px' : ((message.media_url && !isStickerOrGif) ? '3px' : (isStickerOrGif ? 0 : '8px 12px')), borderRadius: isStickerOrGif ? 0 : 18, borderBottomRightRadius: isStickerOrGif ? 0 : (isOwn ? 5 : 18), borderBottomLeftRadius: isStickerOrGif ? 0 : (isOwn ? 18 : 5), background: bubbleBackground, color: bubbleColor, border: bubbleBorder, boxShadow: isStickerOrGif ? 'none' : '0 2px 8px rgba(0,0,0,0.18)', backdropFilter: bubbleGlass, WebkitBackdropFilter: bubbleGlass, fontSize: 14, lineHeight: 1.35, wordBreak: 'break-word' }}>
                           {message.reply_to_id && (
                             <div 
                               onClick={(e) => {
@@ -1592,8 +1646,8 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
               </div>
 
               {showDayDivider && !isSearching && (
-                <div style={{ textAlign: 'center', margin: '24px 0 16px', position: 'sticky', top: 16, zIndex: 15 }}>
-                  <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--dim)', background: 'var(--ink-2)', padding: '6px 14px', borderRadius: 14, border: '1px solid var(--separator)', boxShadow: '0 4px 12px rgba(0,0,0,0.2)' }}>
+                <div style={{ textAlign: 'center', margin: '14px 0 10px', position: 'relative', zIndex: 1 }}>
+                  <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--dim)', background: 'var(--glass-white)', padding: '4px 12px', borderRadius: 12, border: '1px solid var(--glass-border)' }}>
                     {formatDayLabel(message.created_at)}
                   </span>
                 </div>
@@ -1628,7 +1682,7 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
           match either color. Setting the same solid color here removes the
           seam by making the padding area indistinguishable from the bar
           it's padding. */}
-      <div className="safe-bottom" style={{ flexShrink: 0, zIndex: 20, position: 'sticky', bottom: 0, background: 'var(--ink-2)' }}>
+      <div className="safe-bottom" style={{ flexShrink: 0, zIndex: 20, position: 'sticky', bottom: 0, background: 'var(--composer-bg)' }}>
         {!session ? (
           <div style={{ padding: '16px', background: 'var(--ink-2)', borderTop: '1px solid var(--separator)' }}>
             <button onClick={() => setAuthOpen(true)} style={{ width: '100%', padding: '14px 0', borderRadius: 20, border: 'none', background: 'var(--ember)', color: '#fff', fontWeight: 700, fontSize: 15, cursor: 'pointer', boxShadow: 'var(--shadow-float)' }}>Sign in to send message</button>
@@ -1703,25 +1757,61 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
                    visibly ballooned to swallow most of the remaining
                    screen the moment the keyboard opened. One source of
                    truth (the outer resize) is enough. */}
-               <form onSubmit={handleSend} autoComplete="off-nope" data-form-type="other" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px', background: 'var(--ink-2)', borderTop: replyingTo ? 'none' : '1px solid var(--separator)', position: 'relative', zIndex: 20 }}>
+               <form onSubmit={handleSend} autoComplete="off-nope" data-form-type="other" style={{ display: 'flex', alignItems: 'flex-end', gap: 8, padding: '8px 10px', background: 'var(--composer-bg)', borderTop: replyingTo ? 'none' : '1px solid var(--separator)', position: 'relative', zIndex: 20, backdropFilter: 'blur(20px) saturate(150%)', WebkitBackdropFilter: 'blur(20px) saturate(150%)', boxSizing: 'border-box', width: '100%', maxWidth: '100%' }}>
               <EmojiGifPicker open={pickerOpen} onClose={() => setPickerOpen(false)} onEmoji={(char) => setText(p=>p+char)} onMedia={handleMediaPicked} />
-              <button type="button" onClick={() => setAttachSheetOpen(true)} disabled={uploading || cooldownPercent > 0 || selectedMessages.length > 0} style={{ width: 36, height: 36, borderRadius: '50%', border: 'none', background: 'transparent', color: 'var(--dim)', cursor: 'pointer', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{uploading ? Vectors.Spinner : Vectors.Attach}</button>
+              <button type="button" onClick={() => setAttachSheetOpen(true)} disabled={uploading || cooldownPercent > 0 || selectedMessages.length > 0} style={{ width: 34, height: 34, borderRadius: '50%', border: 'none', background: 'transparent', color: 'var(--dim)', cursor: 'pointer', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 2 }}>{uploading ? Vectors.Spinner : Vectors.Attach}</button>
               <input ref={fileInputRef} type="file" onChange={handleAttachmentSelected} style={{ position: 'absolute', width: 1, height: 1, padding: 0, margin: -1, overflow: 'hidden', clip: 'rect(0,0,0,0)', whiteSpace: 'nowrap', border: 0, opacity: 0, pointerEvents: 'none' }} />
               <input ref={cameraInputRef} type="file" accept="image/*,video/*" onChange={handleAttachmentSelected} style={{ position: 'absolute', width: 1, height: 1, padding: 0, margin: -1, overflow: 'hidden', clip: 'rect(0,0,0,0)', whiteSpace: 'nowrap', border: 0, opacity: 0, pointerEvents: 'none' }} />
-              <button type="button" onClick={() => setPickerOpen((v) => !v)} disabled={uploading || selectedMessages.length > 0} style={{ width: 36, height: 36, borderRadius: '50%', border: 'none', background: pickerOpen ? 'rgba(255,255,255,0.06)' : 'transparent', color: pickerOpen ? 'var(--paper)' : 'var(--dim)', cursor: 'pointer', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{Vectors.Smiley}</button>
-              {/* type="search" is kept (not "text") purely as the anti-autofill
-                  hack this codebase uses throughout — see LiquidInput in
-                  EditProfile.jsx for the same trick. Left alone, that type
-                  makes mobile keyboards show a magnifying-glass "search" key
-                  instead of "send", and some mobile browsers don't submit the
-                  enclosing form on that key for a type="search" input. 
-                  enterKeyHint="send" fixes the key's icon/label without
-                  touching the anti-autofill type, and the onKeyDown gives an
-                  explicit, guaranteed send path (calling the same handleSend
-                  used by the form's onSubmit/the send button) so Enter always
-                  works even on keyboards that ignore enterKeyHint. */}
-              <input ref={messageInputRef} type="search" enterKeyHint="send" name="group-chat-message-f" autoComplete="off-nope" autoCorrect="off" autoCapitalize="off" spellCheck="false" data-lpignore="true" data-1p-ignore data-form-type="other" readOnly={composerLocked} value={text} onChange={(e) => setText(e.target.value.slice(0, MAX_TEXT_LENGTH))} maxLength={MAX_TEXT_LENGTH} onFocus={() => { setComposerLocked(false); setPickerOpen(false); }} onBlur={() => setComposerLocked(true)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); if (!uploading && selectedMessages.length === 0) { handleSend(e); /* Some mobile on-screen keyboards auto-dismiss on the search/enter action key even with preventDefault() above (it's an IME-level decision, not a cancellable DOM default). Re-focusing right here, synchronously inside this same keydown handler, keeps it counted as part of the user's own gesture so the keyboard stays up for the next message. */ e.currentTarget.focus(); } } }} placeholder={uploading ? 'Uploading media...' : 'Message'} disabled={uploading || selectedMessages.length > 0} style={{ flex: 1, border: '1px solid var(--separator)', outline: 'none', background: 'var(--surface)', borderRadius: 24, padding: '12px 18px', fontSize: 15, color: 'var(--paper)', transition: 'border-color 0.2s' }} />
-              <SendButton canSend={!!text.trim()} sending={sending || uploading} cooldownPercent={cooldownPercent} />
+              <button type="button" onClick={() => setPickerOpen((v) => !v)} disabled={uploading || selectedMessages.length > 0} style={{ width: 34, height: 34, borderRadius: '50%', border: 'none', background: pickerOpen ? 'rgba(255,255,255,0.06)' : 'transparent', color: pickerOpen ? 'var(--paper)' : 'var(--dim)', cursor: 'pointer', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 2 }}>{Vectors.Smiley}</button>
+              <textarea
+                ref={messageInputRef}
+                name="group-chat-message-f"
+                enterKeyHint="send"
+                autoComplete="off"
+                autoCorrect="off"
+                autoCapitalize="off"
+                spellCheck="false"
+                data-lpignore="true"
+                data-1p-ignore
+                data-form-type="other"
+                readOnly={composerLocked}
+                value={text}
+                rows={1}
+                onChange={(e) => {
+                  const v = e.target.value.slice(0, MAX_TEXT_LENGTH);
+                  setText(v);
+                  const el = e.target;
+                  el.style.height = 'auto';
+                  const maxH = 3 * 20 + 16; // ~3 lines
+                  el.style.height = `${Math.min(el.scrollHeight, maxH)}px`;
+                }}
+                onFocus={() => { setComposerLocked(false); setPickerOpen(false); }}
+                onBlur={() => setComposerLocked(true)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey) {
+                    e.preventDefault();
+                    if (!uploading && selectedMessages.length === 0) {
+                      handleSend(e);
+                      e.currentTarget.focus();
+                    }
+                  }
+                }}
+                placeholder={uploading ? 'Uploading media...' : 'Message'}
+                disabled={uploading || selectedMessages.length > 0}
+                style={{
+                  flex: 1, minWidth: 0, border: '1px solid var(--glass-border)', outline: 'none',
+                  background: 'var(--input-bg)', borderRadius: 20,
+                  padding: '8px 14px', fontSize: 14, color: 'var(--paper)',
+                  lineHeight: '20px', resize: 'none', overflowY: 'auto',
+                  maxHeight: 76, minHeight: 36,
+                  backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)',
+                  transition: 'border-color 0.2s', boxSizing: 'border-box',
+                  fontFamily: 'inherit',
+                }}
+              />
+              <div style={{ flexShrink: 0, marginBottom: 2 }}>
+                <SendButton canSend={!!text.trim()} sending={sending || uploading} cooldownPercent={cooldownPercent} />
+              </div>
             </form>
           </>
         )}

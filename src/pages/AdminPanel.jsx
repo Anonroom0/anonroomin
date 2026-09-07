@@ -1544,6 +1544,7 @@ function BotsTab({ actor }) {
   async function handleSave() {
     const name = form.name.trim();
     if (!name) { showToast('Bot needs a name.', 'error'); return; }
+    if (/\s/.test(name)) { showToast('Bot name cannot contain spaces.', 'error'); return; }
     if (!form.group_ids.length) { showToast('Select at least one group for this bot.', 'error'); return; }
 
     setSaving(true);
@@ -1676,7 +1677,7 @@ function BotsTab({ actor }) {
             </div>
 
             <label style={{ fontSize: 12.5, color: 'var(--dim)', display: 'block', marginBottom: 4 }}>Name</label>
-            <input style={{ ...inputStyle, marginBottom: 12 }} value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} placeholder="e.g. Riya" />
+            <input style={{ ...inputStyle, marginBottom: 12 }} value={form.name} onChange={(e) => setForm((f) => ({ ...f, name: e.target.value.replace(/\s/g, '') }))} placeholder="e.g. Riya" autoComplete="off" />
 
             <label style={{ fontSize: 12.5, color: 'var(--dim)', display: 'block', marginBottom: 6 }}>Groups (select any number)</label>
             <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 14 }}>

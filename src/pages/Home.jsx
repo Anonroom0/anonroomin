@@ -340,26 +340,43 @@ const [sharingReply, setSharingReply] = useState(null); // NEW — { question, r
           return { ...g, unread_mention: count > 0 };
         }));
 
-        const { data: threadRows, error: threadsError } = await supabase.from('dm_threads').select('id, user_a, user_b, created_at').or(`user_a.eq.${userId},user_b.eq.${userId}`).order('created_at', { ascending: false });
+        // Include bot DMs (user_b null, bot_id set) as well as normal user threads.
+        const { data: threadRows, error: threadsError } = await supabase
+          .from('dm_threads')
+          .select('id, user_a, user_b, bot_id, created_at')
+          .or(`user_a.eq.${userId},user_b.eq.${userId}`)
+          .order('created_at', { ascending: false });
         if (threadsError) throw threadsError;
 
         const { data: dmReceipts } = await supabase.from('dm_read_receipts').select('thread_id, last_read_at').eq('user_id', userId);
         const dmReceiptsMap = Object.fromEntries((dmReceipts || []).map(r => [r.thread_id, r.last_read_at]));
 
-        const otherIds = (threadRows || []).map((t) => (t.user_a === userId ? t.user_b : t.user_a));
+        const otherIds = (threadRows || [])
+          .map((t) => (t.bot_id ? null : (t.user_a === userId ? t.user_b : t.user_a)))
+          .filter(Boolean);
+        const botIds = (threadRows || []).map((t) => t.bot_id).filter(Boolean);
         let profilesById = {};
-        
+        let botsById = {};
+
         if (otherIds.length > 0) {
           const { data: profileRows, error: profilesError } = await supabase.from('profiles').select('id, username, avatar_url, is_admin').in('id', otherIds);
           if (profilesError) throw profilesError;
           profilesById = Object.fromEntries((profileRows || []).map((p) => [p.id, p]));
         }
-        
+        if (botIds.length > 0) {
+          const { data: botRows } = await supabase.from('bots').select('id, name, avatar_url').in('id', botIds);
+          botsById = Object.fromEntries((botRows || []).map((b) => [b.id, { id: b.id, username: b.name, avatar_url: b.avatar_url, is_admin: false, is_bot: true }]));
+        }
+
         finalThreads = await Promise.all((threadRows || []).map(async (t) => {
-          const otherId = t.user_a === userId ? t.user_b : t.user_a;
+          const isBotThread = !!t.bot_id;
+          const otherId = isBotThread ? t.bot_id : (t.user_a === userId ? t.user_b : t.user_a);
           const lastRead = dmReceiptsMap[t.id] || '1970-01-01T00:00:00.000Z';
           const { count } = await supabase.from('dm_messages').select('*', { count: 'exact', head: true }).eq('thread_id', t.id).contains('mentioned_user_ids', [userId]).gt('created_at', lastRead);
-          return { ...t, otherUser: profilesById[otherId] || { id: otherId, username: 'Unknown User' }, unread_mention: count > 0 };
+          const otherUser = isBotThread
+            ? (botsById[t.bot_id] || { id: t.bot_id, username: 'Bot', is_bot: true })
+            : (profilesById[otherId] || { id: otherId, username: 'Unknown User' });
+          return { ...t, otherUser, unread_mention: count > 0 };
         }));
 
         const { data: questionsData, error: questionsError } = await supabase.from('questions').select('*').eq('author_id', userId).order('created_at', { ascending: false });
@@ -421,10 +438,30 @@ const [sharingReply, setSharingReply] = useState(null); // NEW — { question, r
 
       const dmUsername = getDmUsernameFromPath();
       if (dmUsername) {
-        const { data, error } = await supabase.from('profiles').select('id, username').eq('username', dmUsername.toLowerCase()).maybeSingle();
+        const uname = dmUsername.toLowerCase();
+        // Real profiles first, then bots treated as real usernames so
+        // /botname opens a DM the same way /username does.
+        const { data, error } = await supabase.from('profiles').select('id, username').eq('username', uname).maybeSingle();
         if (cancelled) return;
-        if (!error && data) { setActiveChatId(data.id); setActiveChatType('dm'); setActiveChatSource('path'); } 
-        else { window.history.replaceState({}, '', ROOT_PATH); setActiveChatId(null); setActiveChatType(null); setActiveChatSource(null); }
+        if (!error && data) {
+          // Own profile path should not open a self-DM
+          const myId = (await supabase.auth.getSession()).data?.session?.user?.id;
+          if (myId && data.id === myId) {
+            showToast("Messaging yourself isn't available.", 'info');
+            window.history.replaceState({}, '', ROOT_PATH);
+            setActiveChatId(null); setActiveChatType(null); setActiveChatSource(null);
+          } else {
+            setActiveChatId(data.id); setActiveChatType('dm'); setActiveChatSource('path');
+          }
+        } else {
+          const { data: botRow } = await supabase.from('bots').select('id, name, active, dm_enabled').ilike('name', uname).eq('active', true).maybeSingle();
+          if (cancelled) return;
+          if (botRow && botRow.dm_enabled !== false) {
+            setActiveChatId(botRow.id); setActiveChatType('dm'); setActiveChatSource('path');
+          } else {
+            window.history.replaceState({}, '', ROOT_PATH); setActiveChatId(null); setActiveChatType(null); setActiveChatSource(null);
+          }
+        }
       }
     }
     resolveInitialRoute();
@@ -476,6 +513,11 @@ const [sharingReply, setSharingReply] = useState(null); // NEW — { question, r
 
   function handleOpenChat(id, type, metaContext) {
     if (type === 'dm' && !userId) { setAuthOpen(true); return; }
+    // Messaging yourself is not available
+    if (type === 'dm' && id && userId && String(id) === String(userId)) {
+      showToast("Messaging yourself isn't available.", 'info');
+      return;
+    }
     setActiveChatId(id); setActiveChatType(type); setActiveChatSource('path'); setSearchQuery('');
     if (type === 'dm') window.history.pushState({}, '', metaContext ? buildDmPath(metaContext) : ROOT_PATH);
     else if (type === 'question') window.history.pushState({}, '', buildQuestionPath(id));
@@ -640,7 +682,7 @@ const [sharingReply, setSharingReply] = useState(null); // NEW — { question, r
                             <>
                               <div style={{ fontSize: 13, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5, color: 'var(--dim)', padding: '24px 24px 6px' }}>Direct Messages</div>
                               {threads.map((thread, index) => {
-                                const otherId = thread.user_a === userId ? thread.user_b : thread.user_a;
+                                const otherId = thread.bot_id || (thread.user_a === userId ? thread.user_b : thread.user_a);
                                 const isActive = activeChatId === otherId && activeChatType === 'dm';
                                 const identity = displayIdentity(thread.otherUser); 
                                 return (

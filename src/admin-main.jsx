@@ -34,16 +34,24 @@ import { AuthProvider } from './lib/authContext';
 import ToastContainer from './components/ToastContainer';
 import ErrorBoundary from './components/shared/ErrorBoundary';
 import AdminPanel from './pages/AdminPanel';
+import { isAdministratorSubdomain, getRootDomainUrl } from './lib/subdomain';
 import './styles/tokens.css';
 import './styles/animations.css';
 
-ReactDOM.createRoot(document.getElementById('root')).render(
-  <React.StrictMode>
-    <ErrorBoundary>
-      <ToastContainer />
-      <AuthProvider>
-        <AdminPanel />
-      </AuthProvider>
-    </ErrorBoundary>
-  </React.StrictMode>
-);
+// Admin panel is host-locked: administrator.anonroom.in only (plus local
+// ?admin=1 for dev). Opening /admin.html or any path on the main domain
+// must never mount AdminPanel.
+if (!isAdministratorSubdomain()) {
+  window.location.replace(getRootDomainUrl() || '/');
+} else {
+  ReactDOM.createRoot(document.getElementById('root')).render(
+    <React.StrictMode>
+      <ErrorBoundary>
+        <ToastContainer />
+        <AuthProvider>
+          <AdminPanel />
+        </AuthProvider>
+      </ErrorBoundary>
+    </React.StrictMode>
+  );
+}

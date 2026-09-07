@@ -172,6 +172,21 @@ export default function AuthModal({ open, onClose, initialTab = 'signin', onVeri
       return setError('This username is already taken. Please choose another.');
     }
 
+    // Block usernames that collide with bot names — same surface message as
+    // a taken username so bots stay invisible to end users.
+    const { data: existingBot, error: botLookupError } = await supabase
+      .from('bots').select('id').ilike('name', normalizedUsername).maybeSingle();
+    if (botLookupError && botLookupError.code !== 'PGRST116') {
+      setSubmitting(false);
+      playError(); hapticError();
+      return setError('Service temporarily unavailable. Please try again.');
+    }
+    if (existingBot) {
+      setSubmitting(false);
+      playError(); hapticError();
+      return setError('This username is not available. Please choose another.');
+    }
+
    const { data, error: signUpError } = await supabase.auth.signUp({
   email, password, options: { data: { username: normalizedUsername, accepted_terms: true } },
 });

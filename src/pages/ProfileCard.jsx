@@ -21,6 +21,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import { createPortal } from 'react-dom'; // <--- MAGIC FIX FOR RENDERING LOCATION
 import supabase from '../lib/supabaseClient';
+import { useAuth } from '../lib/authContext';
 import { getRootDomainUrl } from '../lib/subdomain';
 import { playSend } from '../lib/soundManager';
 import { hapticSend } from '../lib/haptics';
@@ -67,6 +68,17 @@ function relativeTime(dateString) {
 
 function resolveProfileIdentity(profile) {
   if (!profile) return null;
+  if (profile.is_bot) {
+    return {
+      name: profile.username || profile.name || 'Bot',
+      avatar_url: profile.avatar_url || null,
+      is_admin: false,
+      is_bot: true,
+      bio: profile.bio || profile.persona || null,
+      joined: relativeTime(profile.created_at),
+      social: {},
+    };
+  }
   if (profile.is_admin) {
     return {
       name: ADMIN_DISPLAY_NAME, avatar_url: profile.avatar_url || null, is_admin: true,
@@ -148,6 +160,8 @@ function SocialLinkRow({ icon, iconColor, label, href }) {
 // ============================================================================
 
 export default function ProfileCard({ userId, open, onClose, onMessage }) {
+  const { session } = useAuth();
+  const ownUserId = session?.user?.id;
   const [status, setStatus] = useState('idle');
   const [profile, setProfile] = useState(null);
   const [isVisible, setIsVisible] = useState(false);
@@ -159,14 +173,39 @@ export default function ProfileCard({ userId, open, onClose, onMessage }) {
       setIsVisible(true);
       setStatus('loading');
 
-      supabase.from('profiles').select('*').eq('id', userId).maybeSingle()
-        .then(({ data, error }) => {
-          if (!isMounted) return;
-          if (error) { setStatus('error'); return; }
-          if (!data) { setStatus('not-found'); return; }
-          setProfile(data);
+      (async () => {
+        const { data: profileData, error: profileError } = await supabase
+          .from('profiles').select('*').eq('id', userId).maybeSingle();
+        if (!isMounted) return;
+        if (profileData) {
+          setProfile(profileData);
           setStatus('ready');
-        });
+          return;
+        }
+        // Bots are real profiles in the UI — fall back to bots table by id
+        const { data: botData, error: botError } = await supabase
+          .from('bots').select('*').eq('id', userId).maybeSingle();
+        if (!isMounted) return;
+        if (botData) {
+          setProfile({
+            id: botData.id,
+            username: botData.name,
+            name: botData.name,
+            avatar_url: botData.avatar_url,
+            bio: botData.persona || botData.bio || null,
+            persona: botData.persona || null,
+            created_at: botData.created_at,
+            is_bot: true,
+            dm_enabled: botData.dm_enabled !== false,
+            active: botData.active,
+            social_links: {},
+          });
+          setStatus('ready');
+          return;
+        }
+        if (profileError || botError) setStatus('error');
+        else setStatus('not-found');
+      })();
     } else {
       setIsVisible(false);
       const timer = setTimeout(() => {
@@ -225,10 +264,10 @@ export default function ProfileCard({ userId, open, onClose, onMessage }) {
           position: 'relative', zIndex: 2, pointerEvents: 'auto',
           width: '100%', maxWidth: 560, margin: '0 auto',
           height: '90dvh',
-          background: 'linear-gradient(180deg, #1E1F27 0%, var(--ink-2) 100%)',
+          background: 'var(--sheet-bg)',
           borderTopLeftRadius: 32, borderTopRightRadius: 32,
           border: '1px solid var(--glass-border)', borderBottom: 'none',
-          boxShadow: '0 -18px 50px rgba(0,0,0,0.55)',
+          boxShadow: 'var(--shadow-sheet)',
           display: 'flex', flexDirection: 'column',
           overflow: 'hidden',
           transform: isVisible ? 'translateY(0)' : 'translateY(100%)',
@@ -274,7 +313,7 @@ export default function ProfileCard({ userId, open, onClose, onMessage }) {
 
                 {/* Big Avatar Rendering — gradient ring matches EditProfile's avatar treatment */}
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14 }}>
-                  <div style={{ width: 148, height: 148, borderRadius: '50%', padding: 4, background: ringGradient, boxShadow: '0 10px 30px rgba(47,111,255,0.20), 0 4px 14px rgba(0,0,0,0.35)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <div style={{ width: 148, height: 148, borderRadius: '50%', padding: 4, background: ringGradient, boxShadow: 'var(--shadow-avatar)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                     <div style={{ width: '100%', height: '100%', borderRadius: '50%', overflow: 'hidden', background: 'var(--ink-2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                       <LiquidAvatar identity={identity} size={140} kind="user" />
                     </div>
@@ -303,7 +342,7 @@ export default function ProfileCard({ userId, open, onClose, onMessage }) {
                     link, which every subdomain already shares a login
                     session with via cookies. Never shown for the site's own
                     ADMIN identity or for a profile viewing itself. */}
-                {!identity.is_admin && profile?.username && (
+                {!identity.is_admin && profile?.username && ownUserId !== userId && (
                   <button
                     onClick={() => {
                       playSend();
@@ -315,7 +354,7 @@ export default function ProfileCard({ userId, open, onClose, onMessage }) {
                         window.location.href = `${getRootDomainUrl()}${encodeURIComponent(profile.username)}`;
                       }
                     }}
-                    style={{ width: '100%', padding: '17px 0', borderRadius: 999, border: 'none', background: 'linear-gradient(135deg, var(--ember), #FF8A5C)', color: '#fff', fontWeight: 800, fontSize: 16, letterSpacing: 0.2, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, boxShadow: '0 10px 26px rgba(47,111,255,0.32)' }}
+                    style={{ width: '100%', padding: '17px 0', borderRadius: 999, border: 'none', background: 'linear-gradient(135deg, var(--ember), #FF8A5C)', color: '#fff', fontWeight: 800, fontSize: 16, letterSpacing: 0.2, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, boxShadow: 'var(--shadow-float)' }}
                   >
                     {Vectors.Message} Send Message
                   </button>

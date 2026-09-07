@@ -420,11 +420,32 @@ function InstagramModal({ open, onClose, onSubmit, loading }) {
   );
 }
 
-function useLongPress(callback, ms = 500) {
-  const timerRef = useRef();
-  const start = useCallback((e, msg) => { timerRef.current = setTimeout(() => callback(msg), ms); }, [callback, ms]);
-  const stop = useCallback(() => clearTimeout(timerRef.current), []);
-  return { onTouchStart: start, onTouchEnd: stop, onTouchMove: stop };
+function useLongPress(callback, ms = 480) {
+  const timerRef = useRef(null);
+  const firedRef = useRef(false);
+  const start = useCallback((e) => {
+    firedRef.current = false;
+    if (timerRef.current) clearTimeout(timerRef.current);
+    timerRef.current = setTimeout(() => {
+      firedRef.current = true;
+      callback();
+    }, ms);
+  }, [callback, ms]);
+  const stop = useCallback(() => {
+    if (timerRef.current) clearTimeout(timerRef.current);
+    timerRef.current = null;
+  }, []);
+  const wasLongPress = useCallback(() => firedRef.current, []);
+  return {
+    onTouchStart: start,
+    onTouchEnd: stop,
+    onTouchMove: stop,
+    onMouseDown: start,
+    onMouseUp: stop,
+    onMouseLeave: stop,
+    onContextMenu: (e) => { e.preventDefault(); },
+    wasLongPress,
+  };
 }
 
 function usePullToRefresh(onRefresh, scrollRef) {
@@ -552,6 +573,26 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
   // type="search"/autoComplete="off-nope"/data-lpignore anti-autofill hack.
   const [composerLocked, setComposerLocked] = useState(true);
   const [menuOpen, setMenuOpen] = useState(false);
+  const menuRef = useRef(null);
+  // Close the 3-dot header menu when clicking/tapping outside it.
+  useEffect(() => {
+    if (!menuOpen) return undefined;
+    function handleOutside(e) {
+      if (menuRef.current && !menuRef.current.contains(e.target)) {
+        setMenuOpen(false);
+      }
+    }
+    // pointerdown captures both mouse and touch; use capture so it runs
+    // before other stopPropagation handlers in the chat tree.
+    const timer = window.setTimeout(() => {
+      document.addEventListener('pointerdown', handleOutside, true);
+    }, 0);
+    return () => {
+      window.clearTimeout(timer);
+      document.removeEventListener('pointerdown', handleOutside, true);
+    };
+  }, [menuOpen]);
+
 
   const [hasUnreadMention, setHasUnreadMention] = useState(false);
   const [latestMentionId, setLatestMentionId] = useState(null);
@@ -607,6 +648,11 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
   useEffect(() => {
     if (!openThreadWithUserId) return;
     if (!userId) { setThreadStatus('error'); showToast("You must be logged in to view private direct messages.", 'error'); return; }
+    if (String(openThreadWithUserId) === String(userId)) {
+      setThreadStatus('error');
+      showToast("Messaging yourself isn't available.", 'info');
+      return;
+    }
 
     let isMounted = true;
     setThreadStatus('loading');
@@ -631,25 +677,78 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
 
     async function initializeThread() {
       try {
-        // Bots are indistinguishable from real users at this layer — any
-        // caller that already knows how to open a DM with a "user id" can
-        // open one with a bot's id the same way. Check bots first (cheap,
-        // small table) before assuming openThreadWithUserId is a profile.
-        const { data: botRow } = await supabase.from('bots').select('id, name, avatar_url, dm_enabled, active').eq('id', openThreadWithUserId).maybeSingle();
+        // Resolve bots by id OR by name so /botname and ProfileCard both work.
+        let botRow = null;
+        {
+          const byId = await supabase.from('bots').select('id, name, avatar_url, dm_enabled, active').eq('id', openThreadWithUserId).maybeSingle();
+          if (byId.data) botRow = byId.data;
+          else {
+            const byName = await supabase.from('bots').select('id, name, avatar_url, dm_enabled, active').ilike('name', String(openThreadWithUserId)).eq('active', true).maybeSingle();
+            if (byName.data) botRow = byName.data;
+          }
+        }
 
         if (botRow) {
-          if (!botRow.active || !botRow.dm_enabled) {
+          // dm_enabled null/undefined = allowed (only explicit false blocks)
+          if (botRow.active === false || botRow.dm_enabled === false) {
             if (isMounted) { setThreadStatus('error'); showToast('This chat is not available right now.', 'error'); }
             return;
           }
-          const { data: existingBotThread, error: findBotError } = await supabase.from('dm_threads').select('id, user_a, bot_id').eq('user_a', userId).eq('bot_id', botRow.id).limit(1);
-          if (findBotError) throw findBotError;
 
-          let botThreadRow = existingBotThread?.[0] || null;
+          // Helper: load existing (user, bot) thread. 409 on insert means it
+          // already exists (unique on user_a+bot_id) even if the first select
+          // raced or missed — always recover by re-selecting.
+          async function findBotThread() {
+            const { data, error } = await supabase
+              .from('dm_threads')
+              .select('id, user_a, bot_id')
+              .eq('user_a', userId)
+              .eq('bot_id', botRow.id)
+              .maybeSingle();
+            if (error) {
+              console.error('[DM] find bot thread', error);
+              throw error;
+            }
+            return data || null;
+          }
+
+          let botThreadRow = await findBotThread();
+
           if (!botThreadRow) {
-            const { data: createdBotThread, error: createBotError } = await supabase.from('dm_threads').insert({ user_a: userId, user_b: null, bot_id: botRow.id }).select('id, user_a, bot_id').single();
-            if (createBotError) throw createBotError;
-            botThreadRow = createdBotThread;
+            const { data: createdBotThread, error: createBotError } = await supabase
+              .from('dm_threads')
+              .insert({ user_a: userId, user_b: null, bot_id: botRow.id })
+              .select('id, user_a, bot_id')
+              .single();
+
+            if (createBotError) {
+              // 409 Conflict = unique violation → thread already exists
+              const code = createBotError.code || createBotError.status || createBotError.statusCode || '';
+              const msg = String(createBotError.message || createBotError.details || createBotError.hint || '');
+              console.error('[DM] create bot thread', createBotError);
+              // PostgREST unique violation → 409 / Postgres 23505
+              if (code === '23505' || code === 409 || String(code) === '409' || /duplicate|unique|conflict|already exists/i.test(msg)) {
+                botThreadRow = await findBotThread();
+                if (!botThreadRow) {
+                  // Last resort: list any thread with this bot_id for this user
+                  const { data: anyRows } = await supabase
+                    .from('dm_threads')
+                    .select('id, user_a, bot_id')
+                    .eq('bot_id', botRow.id)
+                    .eq('user_a', userId)
+                    .limit(1);
+                  botThreadRow = anyRows?.[0] || null;
+                }
+              } else {
+                throw createBotError;
+              }
+            } else {
+              botThreadRow = createdBotThread;
+            }
+          }
+
+          if (!botThreadRow?.id) {
+            throw new Error('Could not open or create bot DM thread');
           }
 
           if (isMounted) {
@@ -880,8 +979,14 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
     setSelectedMessages(prev => prev.includes(msgId) ? prev.filter(id => id !== msgId) : [...prev, msgId]);
   };
 
-  const handleLongPress = (msg) => { if (isAdmin) toggleSelection(msg.id); };
-  const longPressHook = useLongPress(handleLongPress, 500);
+  const longPressTargetRef = useRef(null);
+  const handleLongPressOpenReaction = useCallback(() => {
+    const msgId = longPressTargetRef.current;
+    if (!msgId) return;
+    hapticSelect();
+    setActiveReactionMsgId(msgId);
+  }, []);
+  const longPressHook = useLongPress(handleLongPressOpenReaction, 480);
 
   // Same "delete cleanly" logic as GroupChat.jsx's deleteMessagesSafely:
   // clear reply_to_id on anything replying to a message being deleted
@@ -937,8 +1042,11 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
   }
 
   async function handleMentionClick(username) {
-    const { data } = await supabase.from('profiles').select('id').eq('username', username.toLowerCase()).maybeSingle();
-    if (data?.id) setProfileCardUserId(data.id);
+    const uname = username.toLowerCase();
+    const { data } = await supabase.from('profiles').select('id').eq('username', uname).maybeSingle();
+    if (data?.id) { setProfileCardUserId(data.id); return; }
+    const { data: bot } = await supabase.from('bots').select('id').ilike('name', uname).eq('active', true).maybeSingle();
+    if (bot?.id) setProfileCardUserId(bot.id);
   }
 
   const renderMessageTextWithMentions = (messageText, isOwn) => {
@@ -1111,23 +1219,23 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
           <button onClick={handleDeleteSelected} style={{ border: 'none', background: 'transparent', color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontWeight: 600 }}>{Vectors.Trash} Delete</button>
         </header>
       ) : (
-        <header style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: 14, padding: '12px 20px', background: 'var(--header-bg)', borderBottom: '1px solid var(--separator)', backdropFilter: 'blur(20px) saturate(140%)', WebkitBackdropFilter: 'blur(20px) saturate(140%)', zIndex: 20 }}>
-          <button onClick={onBack} style={{ border: 'none', background: 'transparent', color: 'var(--paper)', cursor: 'pointer', padding: '4px', marginLeft: '-8px' }}>{Vectors.Back}</button>
-          <button onClick={() => setProfileCardUserId(activeThread.otherUser.id)} style={{ border: 'none', background: 'transparent', padding: 0, cursor: 'pointer' }}>
-            <DMLiquidAvatar identity={otherIdentity} size={42} />
+        <header style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', background: 'var(--header-bg)', borderBottom: '1px solid var(--separator)', backdropFilter: 'blur(24px) saturate(160%)', WebkitBackdropFilter: 'blur(24px) saturate(160%)', zIndex: 20 }}>
+          <button onClick={onBack} style={{ border: 'none', background: 'transparent', color: 'var(--paper)', cursor: 'pointer', padding: '4px', marginLeft: '-4px', flexShrink: 0 }}>{Vectors.Back}</button>
+          <button onClick={() => setProfileCardUserId(activeThread.otherUser.id)} style={{ border: 'none', background: 'transparent', padding: 0, cursor: 'pointer', flexShrink: 0 }}>
+            <DMLiquidAvatar identity={otherIdentity} size={36} />
           </button>
-          <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', flex: 1 }}>
-            <button onClick={() => setProfileCardUserId(activeThread.otherUser.id)} style={{ fontWeight: 700, fontSize: 16, color: otherIdentity.isAdmin ? 'var(--admin-1)' : 'var(--paper)', background: 'transparent', border: 'none', padding: 0, cursor: 'pointer', textAlign: 'left', display: 'flex', alignItems: 'center', gap: 6 }}>
-              {otherIdentity.name}
+          <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', flex: 1, minWidth: 0 }}>
+            <button onClick={() => setProfileCardUserId(activeThread.otherUser.id)} style={{ fontWeight: 700, fontSize: 15, color: otherIdentity.isAdmin ? 'var(--admin-1)' : 'var(--paper)', background: 'transparent', border: 'none', padding: 0, cursor: 'pointer', textAlign: 'left', display: 'flex', alignItems: 'center', gap: 6, minWidth: 0, maxWidth: '100%' }}>
+              <span style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{otherIdentity.name}</span>
               {otherIdentity.isAdmin && Vectors.AdminShield}
             </button>
-            <span style={{ fontSize: 13, color: 'var(--dim)' }}>Online</span>
+            <span style={{ fontSize: 12, color: 'var(--dim)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>Online</span>
           </div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-            <div style={{ position: 'relative' }}>
+            <div ref={menuRef} style={{ position: 'relative' }}>
               <button onClick={() => setMenuOpen((v) => !v)} style={{ border: 'none', background: 'transparent', color: 'var(--paper)', cursor: 'pointer', padding: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '50%' }}>{Vectors.ThreeDots}</button>
               {menuOpen && (
-                <div style={{ position: 'absolute', right: 0, top: '100%', marginTop: 4, background: 'var(--ink-2)', border: '1px solid var(--separator)', borderRadius: 12, boxShadow: 'var(--shadow-card)', zIndex: 30, minWidth: 160, padding: 6 }}>
+                <div style={{ position: 'absolute', right: 0, top: '100%', marginTop: 4, background: 'var(--menu-bg)', border: '1px solid var(--glass-border)', borderRadius: 12, boxShadow: 'var(--shadow-card)', zIndex: 30, minWidth: 160, padding: 6, backdropFilter: 'blur(20px)', WebkitBackdropFilter: 'blur(20px)' }}>
                   <button onClick={() => { setIsSearching(true); setMenuOpen(false); }} style={{ width: '100%', padding: '10px 14px', border: 'none', background: 'transparent', color: 'var(--paper)', textAlign: 'left', borderRadius: 8, cursor: 'pointer', fontSize: 14, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8 }}>{Vectors.SearchSmall} Search Chat</button>
                 </div>
               )}
@@ -1153,7 +1261,7 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
       <div
         ref={scrollRef} onTouchStart={handleTouchStart} onTouchMove={handleTouchMove} onTouchEnd={handleTouchEnd}
         className="custom-scrollbar"
-        style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', overscrollBehavior: 'contain', WebkitOverflowScrolling: 'touch', padding: '20px 16px', display: 'flex', flexDirection: 'column-reverse', zIndex: 10, minHeight: 0, background: 'transparent', transform: `translateY(${pullDistance}px)`, transition: isRefreshing || pullDistance === 0 ? 'transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1)' : 'none' }}
+        style={{ flex: 1, overflowY: 'auto', overflowX: 'hidden', overscrollBehavior: 'contain', WebkitOverflowScrolling: 'touch', padding: '12px 8px', display: 'flex', flexDirection: 'column-reverse', zIndex: 10, minHeight: 0, background: 'transparent', transform: `translateY(${pullDistance}px)`, transition: isRefreshing || pullDistance === 0 ? 'transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1)' : 'none' }}
       >
         {messagesLoading && <MessageSkeleton />}
 
@@ -1189,26 +1297,39 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
             : (isAnonMsg
                 ? 'var(--bubble-anon-text)'
                 : (isOwn ? 'var(--bubble-own-text)' : 'var(--bubble-other-text)'));
+          const bubbleBorder = isStickerOrGif
+            ? 'none'
+            : (isAnonMsg
+                ? '1px solid var(--bubble-border-anon)'
+                : (isOwn ? '1px solid var(--bubble-border-own)' : '1px solid var(--bubble-border-other)'));
+          const bubbleGlass = isStickerOrGif ? undefined : 'blur(10px) saturate(140%)';
 
           return (
             <React.Fragment key={message.id}>
               <div 
-                {...longPressHook} 
+                onTouchStart={(e) => { longPressTargetRef.current = message.id; longPressHook.onTouchStart(e); }}
+                onTouchEnd={longPressHook.onTouchEnd}
+                onTouchMove={longPressHook.onTouchMove}
+                onMouseDown={(e) => { longPressTargetRef.current = message.id; longPressHook.onMouseDown(e); }}
+                onMouseUp={longPressHook.onMouseUp}
+                onMouseLeave={longPressHook.onMouseLeave}
+                onContextMenu={longPressHook.onContextMenu}
                 onClick={() => { 
+                  if (longPressHook.wasLongPress()) return;
                   if (selectedMessages.length > 0) toggleSelection(message.id); 
-                  else setActiveReactionMsgId(activeReactionMsgId === message.id ? null : message.id);
+                  else if (activeReactionMsgId === message.id) setActiveReactionMsgId(null);
                 }}
-                style={{ position: 'relative', width: '100%', padding: '0 8px', cursor: 'pointer', WebkitTapHighlightColor: 'transparent' }}
+                style={{ position: 'relative', width: '100%', padding: '0 4px', cursor: 'pointer', WebkitTapHighlightColor: 'transparent' }}
               >
                 <SwipeableMessage onSwipe={() => { if (selectedMessages.length === 0) startReply(message); }} disabled={isSearching || selectedMessages.length > 0}>
                   <div
                     id={`dm-msg-${message.id}`}
                     className={isHighlighted ? 'highlight-flash' : ''}
-                    style={{ display: 'flex', flexDirection: 'column', width: '100%', marginBottom: 16, borderRadius: 16, padding: '4px 8px', background: isSelected ? 'var(--ember-soft)' : 'transparent', animation: 'slideUpFade 0.3s cubic-bezier(0.2, 0.8, 0.2, 1) both', transition: 'background 0.2s' }}
+                    style={{ display: 'flex', flexDirection: 'column', width: '100%', marginBottom: 10, borderRadius: 16, padding: '2px 2px', background: isSelected ? 'var(--ember-soft)' : 'transparent', animation: 'slideUpFade 0.3s cubic-bezier(0.2, 0.8, 0.2, 1) both', transition: 'background 0.2s' }}
                   >
                     {selectedMessages.length > 0 && isAdmin && (
-                       <div style={{ display: 'flex', justifyContent: isOwn ? 'flex-end' : 'flex-start', margin: '0 0 8px', color: isSelected ? 'var(--ember)' : 'rgba(255,255,255,0.1)' }}>
-                         {isSelected ? Vectors.CheckCircle : <div style={{ width: 20, height: 20, borderRadius: '50%', border: '2px solid currentColor' }} />}
+                       <div style={{ display: 'flex', justifyContent: isOwn ? 'flex-end' : 'flex-start', margin: '0 0 6px', color: isSelected ? 'var(--ember)' : 'rgba(255,255,255,0.1)' }}>
+                         {isSelected ? Vectors.CheckCircle : <div style={{ width: 18, height: 18, borderRadius: '50%', border: '2px solid currentColor' }} />}
                        </div>
                     )}
 
@@ -1217,14 +1338,14 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
                         vertical space with it via a negative-margin hack —
                         so it never overlaps message content. */}
                     {!isOwn && (
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 6, paddingLeft: 2 }}>
-                        <DMLiquidAvatar identity={otherIdentity} isAnon={isAnonMsg} size={26} />
-                        {isAnonMsg && <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--dim)' }}>Anonymous</span>}
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 7, marginBottom: 4, paddingLeft: 2 }}>
+                        <DMLiquidAvatar identity={otherIdentity} isAnon={isAnonMsg} size={24} />
+                        {isAnonMsg && <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--dim)' }}>Anonymous</span>}
                       </div>
                     )}
 
-                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: isOwn ? 'flex-end' : 'flex-start', maxWidth: '75%', marginLeft: isOwn ? 0 : 34, alignSelf: isOwn ? 'flex-end' : 'flex-start' }}>
-                      <div style={{ maxWidth: '100%', padding: isInstagram ? '4px' : ((message.media_url && !isStickerOrGif) ? '4px' : (isStickerOrGif ? 0 : '10px 16px')), borderRadius: isStickerOrGif ? 0 : 20, borderBottomRightRadius: isStickerOrGif ? 0 : (isOwn ? 4 : 20), borderBottomLeftRadius: isStickerOrGif ? 0 : (isOwn ? 20 : 4), background: bubbleBackground, color: bubbleColor, border: isStickerOrGif ? 'none' : (isOwn ? '1px solid var(--bubble-border-own)' : '1px solid var(--bubble-border-other)'), boxShadow: isStickerOrGif ? 'none' : 'var(--shadow-bubble)' }}>
+                    <div style={{ display: 'flex', flexDirection: 'column', alignItems: isOwn ? 'flex-end' : 'flex-start', maxWidth: '78%', marginLeft: isOwn ? 0 : 28, marginRight: isOwn ? 0 : 'auto', alignSelf: isOwn ? 'flex-end' : 'flex-start' }}>
+                      <div style={{ maxWidth: '100%', padding: isInstagram ? '3px' : ((message.media_url && !isStickerOrGif) ? '3px' : (isStickerOrGif ? 0 : '8px 12px')), borderRadius: isStickerOrGif ? 0 : 18, borderBottomRightRadius: isStickerOrGif ? 0 : (isOwn ? 5 : 18), borderBottomLeftRadius: isStickerOrGif ? 0 : (isOwn ? 18 : 5), background: bubbleBackground, color: bubbleColor, border: bubbleBorder, boxShadow: isStickerOrGif ? 'none' : '0 2px 8px rgba(0,0,0,0.18)', backdropFilter: bubbleGlass, WebkitBackdropFilter: bubbleGlass, fontSize: 14, lineHeight: 1.35, wordBreak: 'break-word' }}>
                         {message.reply_to_id && (
                           <div 
                             onClick={(e) => {
@@ -1336,7 +1457,7 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
           var(--ink-2) — see the matching comment in GroupChat.jsx for why this
           wrapper being transparent produced a mismatched-color strip at
           the bottom edge. */}
-      <div className="safe-bottom" style={{ flexShrink: 0, zIndex: 20, position: 'sticky', bottom: 0, background: 'var(--ink-2)' }}>
+      <div className="safe-bottom" style={{ flexShrink: 0, zIndex: 20, position: 'sticky', bottom: 0, background: 'var(--composer-bg)' }}>
         {!session ? (
           <div style={{ padding: '16px', background: 'var(--ink-2)', borderTop: '1px solid var(--separator)' }}>
             <button onClick={() => setAuthOpen(true)} style={{ width: '100%', padding: '14px 0', borderRadius: 20, border: 'none', background: 'var(--ember)', color: '#fff', fontWeight: 700, fontSize: 15, cursor: 'pointer', boxShadow: 'var(--shadow-float)' }}>Sign in to send message</button>
@@ -1390,28 +1511,64 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
             visible viewport up in Home.jsx, so also padding the form's own
             bottom by the keyboard height double-compensated and made the
             composer balloon to fill most of the screen on keyboard open. */}
-        <form onSubmit={handleSend} autoComplete="off-nope" data-form-type="other" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px', background: 'var(--ink-2)', borderTop: replyingTo ? 'none' : '1px solid var(--separator)', position: 'relative', zIndex: 20 }}>
+        <form onSubmit={handleSend} autoComplete="off-nope" data-form-type="other" style={{ display: 'flex', alignItems: 'flex-end', gap: 8, padding: '8px 10px', background: 'var(--composer-bg)', borderTop: replyingTo ? 'none' : '1px solid var(--separator)', position: 'relative', zIndex: 20, backdropFilter: 'blur(20px) saturate(150%)', WebkitBackdropFilter: 'blur(20px) saturate(150%)', boxSizing: 'border-box', width: '100%', maxWidth: '100%' }}>
           <EmojiGifPicker open={pickerOpen} onClose={() => setPickerOpen(false)} onEmoji={handleEmojiPicked} onMedia={handleMediaPicked} />
-          <button type="button" onClick={() => setAttachSheetOpen(true)} disabled={uploading || cooldownPercent > 0 || selectedMessages.length > 0} style={{ width: 36, height: 36, borderRadius: '50%', border: 'none', background: 'transparent', color: 'var(--dim)', cursor: 'pointer', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{uploading ? Vectors.Spinner : Vectors.Attach}</button>
+          <button type="button" onClick={() => setAttachSheetOpen(true)} disabled={uploading || cooldownPercent > 0 || selectedMessages.length > 0} style={{ width: 34, height: 34, borderRadius: '50%', border: 'none', background: 'transparent', color: 'var(--dim)', cursor: 'pointer', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 2 }}>{uploading ? Vectors.Spinner : Vectors.Attach}</button>
           
           <input ref={fileInputRef} type="file" accept="*/*" onChange={handleAttachmentSelected} style={{ position: 'absolute', width: 1, height: 1, padding: 0, margin: -1, overflow: 'hidden', clip: 'rect(0,0,0,0)', whiteSpace: 'nowrap', border: 0, opacity: 0, pointerEvents: 'none' }} />
           <input ref={photoInputRef} type="file" accept="image/*" onChange={handleAttachmentSelected} style={{ position: 'absolute', width: 1, height: 1, padding: 0, margin: -1, overflow: 'hidden', clip: 'rect(0,0,0,0)', whiteSpace: 'nowrap', border: 0, opacity: 0, pointerEvents: 'none' }} />
           <input ref={cameraInputRef} type="file" accept="image/*,video/*" onChange={handleAttachmentSelected} style={{ position: 'absolute', width: 1, height: 1, padding: 0, margin: -1, overflow: 'hidden', clip: 'rect(0,0,0,0)', whiteSpace: 'nowrap', border: 0, opacity: 0, pointerEvents: 'none' }} />
           
-          <button type="button" onClick={() => setPickerOpen((v) => !v)} disabled={uploading || selectedMessages.length > 0} style={{ width: 36, height: 36, borderRadius: '50%', border: 'none', background: pickerOpen ? 'rgba(255,255,255,0.06)' : 'transparent', color: pickerOpen ? 'var(--paper)' : 'var(--dim)', cursor: 'pointer', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{Vectors.Smiley}</button>
-          {/* type="search" is kept (not "text") purely as the anti-autofill
-              hack this codebase uses throughout — see LiquidInput in
-              EditProfile.jsx for the same trick. Left alone, that type makes
-              mobile keyboards show a magnifying-glass "search" key instead
-              of "send", and some mobile browsers don't submit the enclosing
-              form on that key for a type="search" input. enterKeyHint="send"
-              fixes the key's icon/label without touching the anti-autofill
-              type, and the onKeyDown gives an explicit, guaranteed send path
-              (calling the same handleSend used by the form's onSubmit/the
-              send button) so Enter always works even on keyboards that
-              ignore enterKeyHint. */}
-          <input ref={messageInputRef} type="search" enterKeyHint="send" name="dm-message-f" autoComplete="off-nope" autoCorrect="off" autoCapitalize="off" spellCheck="false" data-lpignore="true" data-1p-ignore data-form-type="other" readOnly={composerLocked} value={text} onChange={(e) => setText(e.target.value.slice(0, MAX_TEXT_LENGTH))} maxLength={MAX_TEXT_LENGTH} onFocus={() => { setComposerLocked(false); setPickerOpen(false); }} onBlur={() => setComposerLocked(true)} onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); if (!uploading && selectedMessages.length === 0) { handleSend(e); /* Some mobile keyboards auto-dismiss on the search/enter action key even with preventDefault() above — see GroupChat.jsx's composer for the full explanation. Re-focusing synchronously here keeps it open for the next message. */ e.currentTarget.focus(); } } }} placeholder={uploading ? 'Uploading media...' : 'Message'} disabled={uploading || selectedMessages.length > 0} style={{ flex: 1, border: '1px solid var(--separator)', outline: 'none', background: 'var(--surface)', borderRadius: 24, padding: '12px 18px', fontSize: 15, color: 'var(--paper)', transition: 'border-color 0.2s' }} />
-          <SendButton canSend={!!text.trim()} sending={sending || uploading} cooldownPercent={cooldownPercent} />
+          <button type="button" onClick={() => setPickerOpen((v) => !v)} disabled={uploading || selectedMessages.length > 0} style={{ width: 34, height: 34, borderRadius: '50%', border: 'none', background: pickerOpen ? 'rgba(255,255,255,0.06)' : 'transparent', color: pickerOpen ? 'var(--paper)' : 'var(--dim)', cursor: 'pointer', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 2 }}>{Vectors.Smiley}</button>
+          <textarea
+            ref={messageInputRef}
+            name="dm-message-f"
+            enterKeyHint="send"
+            autoComplete="off"
+            autoCorrect="off"
+            autoCapitalize="off"
+            spellCheck="false"
+            data-lpignore="true"
+            data-1p-ignore
+            data-form-type="other"
+            readOnly={composerLocked}
+            value={text}
+            rows={1}
+            onChange={(e) => {
+              const v = e.target.value.slice(0, MAX_TEXT_LENGTH);
+              setText(v);
+              const el = e.target;
+              el.style.height = 'auto';
+              const maxH = 3 * 20 + 16;
+              el.style.height = `${Math.min(el.scrollHeight, maxH)}px`;
+            }}
+            onFocus={() => { setComposerLocked(false); setPickerOpen(false); }}
+            onBlur={() => setComposerLocked(true)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                if (!uploading && selectedMessages.length === 0) {
+                  handleSend(e);
+                  e.currentTarget.focus();
+                }
+              }
+            }}
+            placeholder={uploading ? 'Uploading media...' : 'Message'}
+            disabled={uploading || selectedMessages.length > 0}
+            style={{
+              flex: 1, minWidth: 0, border: '1px solid var(--glass-border)', outline: 'none',
+              background: 'var(--input-bg)', borderRadius: 20,
+              padding: '8px 14px', fontSize: 14, color: 'var(--paper)',
+              lineHeight: '20px', resize: 'none', overflowY: 'auto',
+              maxHeight: 76, minHeight: 36,
+              backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)',
+              transition: 'border-color 0.2s', boxSizing: 'border-box',
+              fontFamily: 'inherit',
+            }}
+          />
+          <div style={{ flexShrink: 0, marginBottom: 2 }}>
+            <SendButton canSend={!!text.trim()} sending={sending || uploading} cooldownPercent={cooldownPercent} />
+          </div>
         </form>
         </>
         )}

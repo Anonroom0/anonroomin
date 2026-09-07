@@ -129,16 +129,36 @@ export default function SearchUsers({ externalTerm, onSelectUser }) {
       try {
         // Execute fast, indexed ilike query on Supabase 'profiles' table.
         // Postgres ILIKE is case-insensitive, perfectly handling vansh vs VANSH.
-        const { data, error } = await supabase
-          .from('profiles')
-          .select('id, username, avatar_url, is_admin')
-          .ilike('username', `%${trimmed}%`)
-          .order('username')
-          .limit(25); // Hard limit to keep rendering butter-smooth
+        const [{ data, error }, { data: botsData }] = await Promise.all([
+          supabase
+            .from('profiles')
+            .select('id, username, avatar_url, is_admin')
+            .ilike('username', `%${trimmed}%`)
+            .order('username')
+            .limit(25),
+          supabase
+            .from('bots')
+            .select('id, name, avatar_url, active, dm_enabled')
+            .ilike('name', `%${trimmed}%`)
+            .eq('active', true)
+            .limit(15),
+        ]);
 
         if (error) throw error;
-        
-        setResults(data || []);
+
+        // Bots appear as normal users so DMing them works via username.
+        const botRows = (botsData || [])
+          .filter((b) => b.dm_enabled !== false)
+          .map((b) => ({
+            id: b.id,
+            username: b.name,
+            avatar_url: b.avatar_url,
+            is_admin: false,
+            is_bot: true,
+          }));
+        const profileIds = new Set((data || []).map((u) => u.id));
+        const merged = [...(data || []), ...botRows.filter((b) => !profileIds.has(b.id))];
+        setResults(merged);
       } catch (err) {
         console.warn('User search failed:', err.message);
         setResults([]);

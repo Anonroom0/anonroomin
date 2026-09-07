@@ -1034,6 +1034,15 @@ function ShareStorySheetContent({ mode, question, reply, message, customizable, 
         <StandardStyleField value={standardStyle} onChange={setStandardStyle} tagInfo={tagInfo} />
       )}
 
+      <button
+        type="button"
+        onClick={handleCopyLink}
+        style={{ width: '100%', marginBottom: 12, padding: '12px 16px', borderRadius: 16, border: '1px solid var(--glass-border)', background: 'var(--glass-white)', color: 'var(--paper)', fontSize: 14, display: 'flex', alignItems: 'center', justifyContent: 'space-between', flexShrink: 0 }}
+      >
+        <span style={{ fontWeight: 700 }}>Copy Link</span>
+        <span style={{ color: 'var(--dim)', fontSize: 12, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '55%' }}>{replyUrl}</span>
+      </button>
+
       <div style={{ position: 'relative', width: '100%', maxWidth: 240, margin: '0 auto', flexShrink: 0 }}>
         <div
           style={{
@@ -1158,15 +1167,6 @@ function ShareStorySheetContent({ mode, question, reply, message, customizable, 
         <p style={{ margin: '8px 0 16px', fontSize: 12, color: 'var(--dim)', lineHeight: 1.4, textAlign: 'center' }}>
           On iPhone this can open Instagram Stories directly with the photo loaded. Everywhere else, pick Instagram from your share sheet — add the link sticker and music yourself once you're in Instagram.
         </p>
-
-        <button
-          type="button"
-          onClick={handleCopyLink}
-          style={{ width: '100%', marginBottom: 10, padding: '14px 16px', borderRadius: 20, border: '1px solid var(--glass-border)', background: 'var(--glass-white)', color: 'var(--paper)', fontSize: 15, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}
-        >
-          <span style={{ fontWeight: 700 }}>Copy Link</span>
-          <span style={{ color: 'var(--dim)', fontSize: 13, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: '60%' }}>{replyUrl}</span>
-        </button>
 
         <button
           type="button"

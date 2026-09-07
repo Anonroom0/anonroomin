@@ -234,10 +234,10 @@ export default function GroupCard({ groupSlug, open, onClose }) {
           position: 'relative', zIndex: 2, pointerEvents: 'auto',
           width: '100%', maxWidth: 560, margin: '0 auto',
           height: '90dvh',
-          background: 'linear-gradient(180deg, #1E1F27 0%, var(--ink-2) 100%)',
+          background: 'var(--sheet-bg)',
           borderTopLeftRadius: 32, borderTopRightRadius: 32,
           border: '1px solid var(--glass-border)', borderBottom: 'none',
-          boxShadow: '0 -18px 50px rgba(0,0,0,0.55)',
+          boxShadow: 'var(--shadow-sheet)',
           display: 'flex', flexDirection: 'column',
           overflow: 'hidden',
           transform: isVisible ? 'translateY(0)' : 'translateY(100%)',
@@ -287,7 +287,7 @@ export default function GroupCard({ groupSlug, open, onClose }) {
               <>
                 {/* Big Avatar Rendering — gradient ring matches EditProfile's avatar treatment */}
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 14 }}>
-                  <div style={{ width: 148, height: 148, borderRadius: '50%', padding: 4, background: 'linear-gradient(135deg, var(--ember), #FFB199)', boxShadow: '0 10px 30px rgba(47,111,255,0.20), 0 4px 14px rgba(0,0,0,0.35)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                  <div style={{ width: 148, height: 148, borderRadius: '50%', padding: 4, background: 'linear-gradient(135deg, var(--ember), #FFB199)', boxShadow: 'var(--shadow-avatar)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                     <div style={{ width: '100%', height: '100%', borderRadius: '50%', overflow: 'hidden', background: 'var(--ink-2)', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
                       <LiquidAvatar
                         identity={{ name: group.name, avatar_url: group.cover_url, is_admin: false }}

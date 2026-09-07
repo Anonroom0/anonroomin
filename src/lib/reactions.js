@@ -10,6 +10,15 @@
 
 import supabase from './supabaseClient';
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/** Optimistic messages use ids like `temp-…` which are not UUIDs — querying
+ *  reactions with those causes Postgres 400 (invalid input syntax for type uuid). */
+export function isValidReactionTargetId(targetId) {
+  return typeof targetId === 'string' && UUID_RE.test(targetId);
+}
+
+
 /**
  * Adds, changes, or removes the current user's reaction on a target.
  * - No existing row for (target_type, target_id, user_id) -> insert.
@@ -17,6 +26,9 @@ import supabase from './supabaseClient';
  * - Existing row with a DIFFERENT emoji -> update to the new emoji.
  */
 export async function toggleReaction({ targetType, targetId, userId, emoji }) {
+  if (!isValidReactionTargetId(targetId)) {
+    return { action: 'skipped' };
+  }
   const { data: existing, error: selectError } = await supabase
     .from('reactions')
     .select('id, emoji')
@@ -79,6 +91,9 @@ export async function toggleReaction({ targetType, targetId, userId, emoji }) {
  * Returns e.g. [{ emoji: '🔥', count: 3, reactedByMe: true }, ...].
  */
 export async function fetchReactionSummary(targetType, targetId) {
+  if (!isValidReactionTargetId(targetId)) {
+    return [];
+  }
   const [{ data: rows, error }, { data: sessionData }] = await Promise.all([
     supabase
       .from('reactions')

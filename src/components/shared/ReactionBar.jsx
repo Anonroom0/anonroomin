@@ -1,6 +1,6 @@
 import React, { useCallback, useEffect, useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { fetchReactionSummary, toggleReaction } from '../../lib/reactions';
+import { fetchReactionSummary, toggleReaction, isValidReactionTargetId } from '../../lib/reactions';
 import supabase from '../../lib/supabaseClient';
 import { hapticSelect } from '../../lib/haptics';
 import EmojiGifPicker from '../../pages/EmojiGifPicker';
@@ -17,12 +17,21 @@ export default function ReactionBar({ targetType, targetId, userId, showTray, on
   const togglePendingRef = useRef(false);
 
   const refresh = useCallback(() => {
+    if (!isValidReactionTargetId(targetId)) {
+      setReactions([]);
+      return;
+    }
     fetchReactionSummary(targetType, targetId)
       .then(setReactions)
       .catch((err) => console.error('Failed to load reactions:', err));
   }, [targetType, targetId]);
 
   useEffect(() => {
+    // Skip network + realtime for optimistic temp-* ids (not UUIDs).
+    if (!isValidReactionTargetId(targetId)) {
+      setReactions([]);
+      return undefined;
+    }
     refresh();
     const uniqueId = Math.random().toString(36).substring(2, 10);
     const uniqueChannelName = `reactions_${targetType}_${targetId}_${uniqueId}`;
@@ -147,7 +156,7 @@ export default function ReactionBar({ targetType, targetId, userId, showTray, on
             padding: '3px 8px', // Tighter padding
             borderRadius: 12, // Smoother modern curve
             border: r.reactedByMe ? '1px solid var(--ember)' : '1px solid var(--separator)',
-            backgroundColor: r.reactedByMe ? 'rgba(47,111,255,0.16)' : 'var(--ink-2)',
+            backgroundColor: r.reactedByMe ? 'var(--ember-soft)' : 'var(--surface)',
             color: 'var(--paper)',
             fontSize: 12, fontWeight: 700, // Smaller font
             cursor: userId ? 'pointer' : 'default', lineHeight: 1,
@@ -185,10 +194,10 @@ export default function ReactionBar({ targetType, targetId, userId, showTray, on
               display: 'flex', alignItems: 'center', gap: 2, // Tighter gap
               padding: '6px 10px', // Tighter padding
               borderRadius: 32,
-              backgroundColor: 'rgba(28, 29, 36, 0.90)', // Subtly transparent for sleekness
+              backgroundColor: 'var(--menu-bg)',
               backdropFilter: 'blur(16px)',
               WebkitBackdropFilter: 'blur(16px)',
-              border: '1px solid rgba(255,255,255,0.1)',
+              border: '1px solid var(--glass-border)',
               boxShadow: 'var(--shadow-card)',
               width: 'max-content',
               flexWrap: 'wrap',
@@ -241,10 +250,10 @@ export default function ReactionBar({ targetType, targetId, userId, showTray, on
               style={{
                 display: 'flex', flexDirection: 'column',
                 width: 190, borderRadius: 16, overflow: 'hidden',
-                backgroundColor: 'rgba(28, 29, 36, 0.95)',
+                backgroundColor: 'var(--menu-bg)',
                 backdropFilter: 'blur(16px)',
                 WebkitBackdropFilter: 'blur(16px)',
-                border: '1px solid rgba(255,255,255,0.1)',
+                border: '1px solid var(--glass-border)',
                 boxShadow: 'var(--shadow-card)',
               }}
             >
