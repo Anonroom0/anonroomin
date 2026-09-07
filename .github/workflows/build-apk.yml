@@ -133,6 +133,28 @@ jobs:
           printf '%s\n' "{\"version\": \"${APP_VERSION}\", \"apkUrl\": \"${APK_URL}\"}" > public/apk/version.json
           echo "Wrote version ${APP_VERSION} -> ${APK_URL}"
 
+      - name: Publish version to Supabase app_releases
+        # Requires repo secrets SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY.
+        # Soft-skips if missing so local forks still build.
+        env:
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          if [ -z "$SUPABASE_URL" ] || [ -z "$SUPABASE_SERVICE_ROLE_KEY" ]; then
+            echo "Skipping DB publish (SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY not set)"
+            exit 0
+          fi
+          APK_URL="https://raw.githubusercontent.com/${{ github.repository }}/${{ github.ref_name }}/downloads/anonroom-latest.apk"
+          VER="${BUILD_VERSION}"
+          BODY=$(printf '{"id":"android","version":"%s","apk_url":"%s","updated_at":"%s"}' "$VER" "$APK_URL" "$(date -u +%Y-%m-%dT%H:%M:%SZ)")
+          curl -sS -f -X POST "${SUPABASE_URL}/rest/v1/app_releases?on_conflict=id" \
+            -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" \
+            -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
+            -H "Content-Type: application/json" \
+            -H "Prefer: resolution=merge-duplicates,return=minimal" \
+            -d "$BODY"
+          echo "Upserted app_releases android -> $VER"
+
       - name: Commit and push the updated APK
         run: |
           git config user.name "github-actions[bot]"

@@ -1,57 +1,42 @@
 /**
- * App version helpers for the Capacitor Android build and the
- * remote /apk/version.json check used by Edit Profile → Check for update.
+ * App version helpers for the Capacitor Android build.
+ * Latest release is stored in public.app_releases (Supabase), not a static file.
  *
  * APP_VERSION is baked in at Vite build time via VITE_APP_VERSION
- * (set by CI to e.g. 0.1.0.42). Falls back to package default.
- *
- * On native (Capacitor), fetch must hit the live website — a relative
- * /apk/version.json would only read the copy bundled into the APK.
+ * (CI sets e.g. 0.1.0.42). Falls back to the string below.
  */
+
+import supabase from './supabaseClient';
 
 export const APP_VERSION =
   (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_APP_VERSION) ||
   '0.1.1';
 
-const PRODUCTION_VERSION_URL =
-  (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_VERSION_JSON_URL) ||
-  'https://anonroom.in/apk/version.json';
+const PLATFORM_ID = 'android';
 
+/**
+ * @returns {Promise<{ version: string, apkUrl: string }>}
+ */
 export async function fetchLatestAppVersion() {
-  // Prefer absolute production URL so the APK always checks the live site.
-  // Fall back to same-origin for local web dev.
-  const candidates = [
-    PRODUCTION_VERSION_URL,
-    '/apk/version.json',
-  ];
+  const { data, error } = await supabase
+    .from('app_releases')
+    .select('version, apk_url')
+    .eq('id', PLATFORM_ID)
+    .maybeSingle();
 
-  let lastErr = null;
-  for (const url of candidates) {
-    try {
-      const res = await fetch(`${url}${url.includes('?') ? '&' : '?'}t=${Date.now()}`, {
-        cache: 'no-store',
-      });
-      if (!res.ok) {
-        lastErr = new Error(`HTTP ${res.status} for ${url}`);
-        continue;
-      }
-      const data = await res.json();
-      if (!data || typeof data.version !== 'string') {
-        lastErr = new Error('Invalid version payload');
-        continue;
-      }
-      return {
-        version: data.version,
-        apkUrl:
-          typeof data.apkUrl === 'string' && data.apkUrl
-            ? data.apkUrl
-            : 'https://anonroom.in/apk/download/',
-      };
-    } catch (err) {
-      lastErr = err;
-    }
+  if (error) {
+    throw new Error(error.message || 'Could not check for updates');
   }
-  throw lastErr || new Error('Could not check for updates');
+  if (!data || typeof data.version !== 'string' || !data.version.trim()) {
+    throw new Error('No release row found');
+  }
+
+  return {
+    version: data.version.trim(),
+    apkUrl:
+      (typeof data.apk_url === 'string' && data.apk_url.trim()) ||
+      'https://anonroom.in/apk/download/',
+  };
 }
 
 /** True when remote is strictly newer than local (semver-ish dotted ints). */
