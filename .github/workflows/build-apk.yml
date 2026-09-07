@@ -97,76 +97,35 @@ jobs:
           name: anonroom-debug-apk
           path: android/app/build/outputs/apk/debug/app-debug.apk
 
-      - name: Copy APK into repo for the /download page
+      - name: Copy APK into repo for the download page
         run: |
           mkdir -p downloads
           cp android/app/build/outputs/apk/debug/app-debug.apk downloads/anonroom-latest.apk
 
-      - name: Point the download pages at this repo's raw APK URL
-        # Self-configuring for whatever repo/branch this runs in.
-        # Legacy public/download is optional — missing file must NOT fail the job.
-        # Canonical page: public/apk/download + public/apk/version.json.
+      - name: Update /apk/download page and version.json
+        # Canonical path is public/apk/download (legacy public/download removed).
+        # Expects public/apk/download/index.html committed with href="%%APK_URL%%".
         run: |
           APK_URL="https://raw.githubusercontent.com/${{ github.repository }}/${{ github.ref_name }}/downloads/anonroom-latest.apk"
           APP_VERSION=$(node -p "require('./package.json').version")
 
-          if [ -f public/download/index.html ]; then
-            sed -i "s#%%APK_URL%%#$APK_URL#g" public/download/index.html || true
-          else
-            echo "Skipping public/download/index.html (not in repo)"
+          if [ ! -f public/apk/download/index.html ]; then
+            echo "ERROR: public/apk/download/index.html is missing from the repo."
+            echo "Commit that file with href=\"%%APK_URL%%\" and re-run."
+            exit 1
           fi
 
-          mkdir -p public/apk/download
-          if [ -f public/apk/download/index.html ]; then
-            sed -i "s#%%APK_URL%%#$APK_URL#g" public/apk/download/index.html || true
-            sed -i -E "s#href=\"[^\"]+\"([^>]*download)#href=\"$APK_URL\"\1#g" public/apk/download/index.html || true
-          else
-            cat > public/apk/download/index.html <<EOF
-<!doctype html>
-<html lang="en">
-<head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>Download Anonroom</title>
-  <link rel="icon" href="/favicon.ico" />
-  <style>
-    :root { color-scheme: dark; }
-    * { box-sizing: border-box; }
-    body {
-      margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center;
-      padding: 24px; background: #0c0d10; color: #f5f5f7;
-      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
-    }
-    .card {
-      width: 100%; max-width: 380px; text-align: center; background: #16171c;
-      border: 1px solid rgba(255,255,255,0.08); border-radius: 24px; padding: 36px 28px;
-    }
-    .icon { width: 72px; height: 72px; border-radius: 20px; margin: 0 auto 20px; display: block; }
-    h1 { font-size: 20px; margin: 0 0 8px; }
-    p { font-size: 14px; line-height: 1.5; color: rgba(245,245,247,0.6); margin: 0 0 28px; }
-    a.download-btn {
-      display: block; width: 100%; padding: 14px 20px; border-radius: 14px;
-      background: #ff5a3c; color: #fff; font-weight: 600; font-size: 15px; text-decoration: none;
-    }
-    .note { margin-top: 18px; font-size: 12px; color: rgba(245,245,247,0.4); }
-  </style>
-</head>
-<body>
-  <div class="card">
-    <img class="icon" src="/android-chrome-512x512.png" alt="Anonroom" />
-    <h1>Download Anonroom</h1>
-    <p>Get the Android app (.apk). You may need to allow "install from unknown sources" the first time.</p>
-    <a class="download-btn" href="$APK_URL" download>Download APK</a>
-    <div class="note">Debug build, updated automatically on each release.</div>
-  </div>
-</body>
-</html>
-EOF
-          fi
+          sed -i "s#%%APK_URL%%#${APK_URL}#g" public/apk/download/index.html
+          sed -i -E 's#(class="download-btn" href=")[^"]*(")#\1'"${APK_URL}"'\2#g' public/apk/download/index.html
 
-          mkdir -p public/apk
-          printf '%s\n' "{\"version\": \"$APP_VERSION\", \"apkUrl\": \"$APK_URL\"}" > public/apk/version.json
+          printf '%s\n' "{\"version\": \"${APP_VERSION}\", \"apkUrl\": \"${APK_URL}\"}" > public/apk/version.json
+          echo "Wrote version ${APP_VERSION} -> ${APK_URL}"
 
+      - name: Commit and push the updated APK
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          git add downloads/anonroom-latest.apk public/apk/download/index.html public/apk/version.json
           if git diff --cached --quiet; then
             echo "APK unchanged since the last build — nothing to commit."
           else
