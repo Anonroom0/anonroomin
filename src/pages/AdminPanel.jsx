@@ -1488,7 +1488,7 @@ function BotsTab({ actor }) {
       behaviors: bot.behaviors || [], mode: bot.mode, self_chat_style: bot.self_chat_style,
       min_interval_seconds: bot.min_interval_seconds, max_interval_seconds: bot.max_interval_seconds,
       active: bot.active, dm_enabled: !!bot.dm_enabled,
-      ai_model: bot.ai_model || '', ai_prefix_prompt: bot.ai_prefix_prompt || '', groq_api_key: bot.groq_api_key || '',
+      ai_model: bot.model || '', ai_prefix_prompt: bot.ai_prefix_prompt || '', groq_api_key: bot.groq_api_key || '',
     });
     setCustomBehaviorInput('');
     setEditing(bot);
@@ -1552,7 +1552,7 @@ function BotsTab({ actor }) {
       behaviors: form.behaviors, mode: form.mode, self_chat_style: form.self_chat_style,
       min_interval_seconds: Number(form.min_interval_seconds) || 60, max_interval_seconds: Number(form.max_interval_seconds) || 240,
       active: form.active, dm_enabled: form.dm_enabled,
-      ai_model: form.ai_model.trim() || null,
+      model: form.ai_model.trim() || null,
       ai_prefix_prompt: form.ai_prefix_prompt.trim() || null,
       groq_api_key: form.groq_api_key.trim() || null,
     };
@@ -1646,7 +1646,7 @@ function BotsTab({ actor }) {
                 {!bot.active && <span style={badgeStyle('var(--dim)')}>Inactive</span>}
               </div>
               <div style={{ fontSize: 12.5, color: 'var(--dim)', marginTop: 3 }}>
-                {groupNames(bot.id).join(', ') || 'no groups assigned'} · {bot.gender} · {bot.ai_model || 'default model'}
+                {groupNames(bot.id).join(', ') || 'no groups assigned'} · {bot.gender} · {bot.model || 'default model'}
               </div>
               {!!(bot.behaviors || []).length && (
                 <div style={{ fontSize: 12, color: 'var(--dim)', marginTop: 2 }}>{bot.behaviors.join(', ')}</div>
