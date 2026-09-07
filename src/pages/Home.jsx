@@ -1,3 +1,4 @@
+import { Capacitor } from '@capacitor/core';
 /**
  * ============================================================================
  * MASTER LAYOUT (PROFESSIONAL MATTE UI)
@@ -296,6 +297,20 @@ export default function Home() {
 
   const [authOpen, setAuthOpen] = useState(false);
   const [editProfileOpen, setEditProfileOpen] = useState(false);
+  // Website + phone/tablet only — never on desktop layout or native APK.
+  const [isMobileWeb, setIsMobileWeb] = useState(false);
+  useEffect(() => {
+    if (typeof window === 'undefined') return undefined;
+    if (Capacitor.isNativePlatform()) {
+      setIsMobileWeb(false);
+      return undefined;
+    }
+    const mq = window.matchMedia('(max-width: 768px)');
+    const update = () => setIsMobileWeb(mq.matches);
+    update();
+    mq.addEventListener('change', update);
+    return () => mq.removeEventListener('change', update);
+  }, []);
   const [profileCardUserId, setProfileCardUserId] = useState(null);
   const [showPushPrompt, setShowPushPrompt] = useState(false);
   
@@ -607,6 +622,27 @@ const [sharingReply, setSharingReply] = useState(null); // NEW — { question, r
                   style={{ width: '100%', border: '1px solid var(--separator)', background: 'var(--ink-2)', padding: '10px 36px 10px 42px', borderRadius: 14, fontSize: 16, color: 'var(--paper)', outline: 'none', transition: 'background 0.2s', boxSizing: 'border-box' }} 
                 />
               </div>
+              {isMobileWeb && (
+                <button
+                  type="button"
+                  className="touch-bounce"
+                  title="Download app"
+                  aria-label="Download app"
+                  onClick={() => { window.location.href = '/apk/download/'; }}
+                  style={{
+                    width: 44, height: 44, borderRadius: '50%', border: '1px solid var(--glass-border)',
+                    padding: 0, flexShrink: 0, background: 'var(--glass-white)', color: 'var(--paper)',
+                    display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
+                    backdropFilter: 'blur(14px)', WebkitBackdropFilter: 'blur(14px)',
+                  }}
+                >
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                    <polyline points="7 10 12 15 17 10" />
+                    <line x1="12" y1="15" x2="12" y2="3" />
+                  </svg>
+                </button>
+              )}
               <button className="touch-bounce" onClick={() => session ? setEditProfileOpen(true) : setAuthOpen(true)} style={{ width: 44, height: 44, borderRadius: '50%', border: 'none', padding: 0, flexShrink: 0, background: 'transparent' }}>
                 {session ? <LiquidAvatar identity={profileIdentity} size={44} /> : <div style={{ width: '100%', height: '100%', background: 'var(--ember)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '50%' }}>{Icons.Menu}</div>}
               </button>

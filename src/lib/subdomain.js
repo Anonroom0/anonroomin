@@ -92,7 +92,7 @@ export function isAdministratorSubdomain() {
 // getConfessGroupSlugFromPath below) — without this, a bare /confess (no
 // slug) would fall through and be misread as "open a DM with the user
 // named confess".
-const RESERVED_PATH_SEGMENTS = ['api', 'assets', 'static', 'favicon.ico', 'g', 'confess', 'admin', 'admin.html'];
+const RESERVED_PATH_SEGMENTS = ['api', 'assets', 'static', 'favicon.ico', 'g', 'confess', 'admin', 'admin.html', 'apk', 'download'];
 
 export const ROOT_PATH = '/';
 

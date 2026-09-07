@@ -1,3 +1,5 @@
+import { Capacitor } from '@capacitor/core';
+import { APP_VERSION, fetchLatestAppVersion, isNewerVersion } from '../lib/appVersion';
 import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { createPortal } from 'react-dom'; // <--- ADDED PORTAL
 import supabase from '../lib/supabaseClient';
@@ -138,6 +140,9 @@ export default function EditProfile({ open, onClose }) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState('');
+  const isNativeApp = typeof window !== 'undefined' && Capacitor.isNativePlatform();
+  const [updateStatus, setUpdateStatus] = useState('idle'); // idle | checking | current | available | error
+  const [latestInfo, setLatestInfo] = useState(null);
   const fileInputRef = useRef(null);
 
   useEffect(() => {
@@ -195,6 +200,24 @@ export default function EditProfile({ open, onClose }) {
     playTap();
   }
 
+
+  
+  async function handleCheckForUpdate() {
+    setUpdateStatus('checking');
+    setLatestInfo(null);
+    try {
+      const latest = await fetchLatestAppVersion();
+      setLatestInfo(latest);
+      if (isNewerVersion(latest.version, APP_VERSION)) {
+        setUpdateStatus('available');
+      } else {
+        setUpdateStatus('current');
+      }
+    } catch (err) {
+      console.error(err);
+      setUpdateStatus('error');
+    }
+  }
 
   async function handleSave() {
     if (!userId || !hasChanges) return;
@@ -393,6 +416,51 @@ export default function EditProfile({ open, onClose }) {
                     </div>
                     <div style={{ color: 'var(--dim)' }}>{Vectors.ExternalLink}</div>
                   </button>
+                </div>
+              </div>
+            )}
+
+
+            {isNativeApp && (
+              <div style={{ marginBottom: 18 }}>
+                <SectionLabel icon={Vectors.User}>App</SectionLabel>
+                <div className="glass-panel" style={{ padding: 12, background: 'rgba(255,255,255,0.02)', display: 'flex', flexDirection: 'column', gap: 10 }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 10 }}>
+                    <div>
+                      <div style={{ fontSize: 14, fontWeight: 700, color: 'var(--paper)' }}>Version {APP_VERSION}</div>
+                      <div style={{ fontSize: 12.5, color: 'var(--dim)', marginTop: 2 }}>
+                        {updateStatus === 'checking' && 'Checking for updates…'}
+                        {updateStatus === 'current' && "You're up to date"}
+                        {updateStatus === 'available' && latestInfo && `Update available: v${latestInfo.version}`}
+                        {updateStatus === 'error' && 'Could not check right now'}
+                        {updateStatus === 'idle' && 'Check whether a newer build is available'}
+                      </div>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={handleCheckForUpdate}
+                      disabled={updateStatus === 'checking'}
+                      style={{
+                        border: '1px solid var(--glass-border)', background: 'var(--glass-white)', color: 'var(--paper)',
+                        borderRadius: 12, padding: '10px 14px', fontWeight: 700, fontSize: 13, cursor: updateStatus === 'checking' ? 'default' : 'pointer',
+                        opacity: updateStatus === 'checking' ? 0.6 : 1, whiteSpace: 'nowrap',
+                      }}
+                    >
+                      {updateStatus === 'checking' ? 'Checking…' : 'Check for update'}
+                    </button>
+                  </div>
+                  {updateStatus === 'available' && latestInfo && (
+                    <button
+                      type="button"
+                      onClick={() => { window.open(latestInfo.apkUrl || '/apk/download/', '_blank', 'noopener,noreferrer'); }}
+                      style={{
+                        width: '100%', border: 'none', background: 'var(--ember)', color: '#fff',
+                        borderRadius: 14, padding: '12px 16px', fontWeight: 800, fontSize: 14, cursor: 'pointer',
+                      }}
+                    >
+                      Download updated version
+                    </button>
+                  )}
                 </div>
               </div>
             )}

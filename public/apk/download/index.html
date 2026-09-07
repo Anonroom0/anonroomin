@@ -5,7 +5,7 @@
   This is a plain static HTML file, not a route inside src/App.jsx's
   router. Vite copies everything under public/ to dist/ untouched, so this
   file ships as dist/download/index.html and is served directly by the
-  host at /download — it never touches the SPA's JS bundle, App.jsx's
+  host at /apk/download — it never touches the SPA's JS bundle, App.jsx's
   routing/subdomain logic, or the catch-all "/((?!api/).*) -> /index.html"
   rewrite in vercel.json (that rewrite only applies when no real static
   file exists at the requested path — see e.g. /admin.html, which relies
@@ -13,7 +13,7 @@
 
   The href below is filled in automatically by
   .github/workflows/build-apk.yml every time it builds a new APK — see the
-  "Point the /download page at this repo's raw APK URL" step. Left as the
+  "Point the /apk/download page at this repo's raw APK URL" step. Left as the
   %%APK_URL%% placeholder here until the first workflow run.
 -->
 <html lang="en">
