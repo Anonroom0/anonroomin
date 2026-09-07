@@ -1560,11 +1560,22 @@ function BotsTab({ actor }) {
     let botId = editing?.id;
     if (botId) {
       const { error } = await supabase.from('bots').update(payload).eq('id', botId);
-      if (error) { playError(); hapticError(); showToast(friendlyDbError(), 'error'); setSaving(false); return; }
+      if (error) {
+        // The generic friendlyDbError() toast was swallowing the real
+        // Postgres/PostgREST error (message/details/hint/code) with nothing
+        // logged anywhere — the only way to see why a save failed was to go
+        // dig through Supabase's own dashboard logs. Logging it here means
+        // it shows up immediately in the browser console next time.
+        console.error('[AdminPanel] bots.update failed:', error);
+        playError(); hapticError(); showToast(error?.message || friendlyDbError(), 'error'); setSaving(false); return;
+      }
       logAdminAction(actor, 'bot.updated', 'bot', botId, { name });
     } else {
       const { data, error } = await supabase.from('bots').insert({ ...payload, created_by: actor.id }).select('id').single();
-      if (error) { playError(); hapticError(); showToast(friendlyDbError(), 'error'); setSaving(false); return; }
+      if (error) {
+        console.error('[AdminPanel] bots.insert failed:', error);
+        playError(); hapticError(); showToast(error?.message || friendlyDbError(), 'error'); setSaving(false); return;
+      }
       botId = data.id;
       logAdminAction(actor, 'bot.created', 'bot', botId, { name });
     }
