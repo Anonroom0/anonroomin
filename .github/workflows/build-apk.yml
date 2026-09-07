@@ -121,7 +121,7 @@ jobs:
           printf '%s\n' "{\"version\": \"${APP_VERSION}\", \"apkUrl\": \"${APK_URL}\"}" > public/apk/version.json
           echo "Wrote version ${APP_VERSION} -> ${APK_URL}"
 
-      -       - name: Commit and push the updated APK
+      - name: Commit and push the updated APK
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
@@ -130,6 +130,9 @@ jobs:
             echo "APK unchanged since the last build — nothing to commit."
           else
             git commit -m "chore: update downloadable APK [skip ci]"
-            git pull --rebase origin "${{ github.ref_name }}"
+            # Build steps leave unstaged/untracked noise (android/, dist/, etc.).
+            # --autostash lets pull --rebase proceed; drop the stash after push.
+            git pull --rebase --autostash origin "${{ github.ref_name }}"
             git push origin "HEAD:${{ github.ref_name }}"
+            git stash drop 2>/dev/null || true
           fi
