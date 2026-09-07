@@ -26,11 +26,23 @@ jobs:
       - name: Install project dependencies
         run: npm install
 
+      - name: Resolve app version for this build
+        # package.json base + GitHub run number so every CI APK is a new
+        # version (e.g. 0.1.0.58). Without this, Check for update always
+        # reports up-to-date because APK and version.json stay at 0.1.0.
+        run: |
+          BASE=$(node -p "require('./package.json').version")
+          BUILD_VERSION="${BASE}.${{ github.run_number }}"
+          echo "BUILD_VERSION=${BUILD_VERSION}" >> "$GITHUB_ENV"
+          echo "Using BUILD_VERSION=${BUILD_VERSION}"
+
       - name: Build web app (Vite)
         run: npm run build
         env:
           VITE_SUPABASE_URL: ${{ secrets.VITE_SUPABASE_URL }}
           VITE_SUPABASE_ANON_KEY: ${{ secrets.VITE_SUPABASE_ANON_KEY }}
+          VITE_APP_VERSION: ${{ env.BUILD_VERSION }}
+          VITE_VERSION_JSON_URL: https://anonroom.in/apk/version.json
 
       - name: Install Capacitor CLI + Android platform
         run: npm install @capacitor/cli@^6.2.0 @capacitor/android@^6.2.0
@@ -107,7 +119,7 @@ jobs:
         # Expects public/apk/download/index.html committed with href="%%APK_URL%%".
         run: |
           APK_URL="https://raw.githubusercontent.com/${{ github.repository }}/${{ github.ref_name }}/downloads/anonroom-latest.apk"
-          APP_VERSION=$(node -p "require('./package.json').version")
+          APP_VERSION="${BUILD_VERSION:-$(node -p "require('./package.json').version")}"
 
           if [ ! -f public/apk/download/index.html ]; then
             echo "ERROR: public/apk/download/index.html is missing from the repo."

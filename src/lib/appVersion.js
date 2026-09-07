@@ -1,26 +1,57 @@
 /**
  * App version helpers for the Capacitor Android build and the
- * /apk/version.json remote check used by Edit Profile → Check for update.
+ * remote /apk/version.json check used by Edit Profile → Check for update.
  *
- * Keep APP_VERSION in sync with package.json "version" when you cut a release.
- * CI can overwrite public/apk/version.json (and the download page APK href)
- * without touching this constant — the installed app compares itself to
- * whatever version.json reports.
+ * APP_VERSION is baked in at Vite build time via VITE_APP_VERSION
+ * (set by CI to e.g. 0.1.0.42). Falls back to package default.
+ *
+ * On native (Capacitor), fetch must hit the live website — a relative
+ * /apk/version.json would only read the copy bundled into the APK.
  */
 
-export const APP_VERSION = '0.1.0';
+export const APP_VERSION =
+  (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_APP_VERSION) ||
+  '0.1.0';
+
+const PRODUCTION_VERSION_URL =
+  (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_VERSION_JSON_URL) ||
+  'https://anonroom.in/apk/version.json';
 
 export async function fetchLatestAppVersion() {
-  const res = await fetch(`/apk/version.json?t=${Date.now()}`, { cache: 'no-store' });
-  if (!res.ok) throw new Error('Could not check for updates');
-  const data = await res.json();
-  if (!data || typeof data.version !== 'string') {
-    throw new Error('Invalid version payload');
+  // Prefer absolute production URL so the APK always checks the live site.
+  // Fall back to same-origin for local web dev.
+  const candidates = [
+    PRODUCTION_VERSION_URL,
+    '/apk/version.json',
+  ];
+
+  let lastErr = null;
+  for (const url of candidates) {
+    try {
+      const res = await fetch(`${url}${url.includes('?') ? '&' : '?'}t=${Date.now()}`, {
+        cache: 'no-store',
+      });
+      if (!res.ok) {
+        lastErr = new Error(`HTTP ${res.status} for ${url}`);
+        continue;
+      }
+      const data = await res.json();
+      if (!data || typeof data.version !== 'string') {
+        lastErr = new Error('Invalid version payload');
+        continue;
+      }
+      return {
+        version: data.version,
+        apkUrl:
+          typeof data.apkUrl === 'string' && data.apkUrl
+            ? data.apkUrl
+            : 'https://anonroom.in/apk/download/',
+      };
+    } catch (err) {
+      lastErr = err;
+    }
   }
-  return {
-    version: data.version,
-    apkUrl: typeof data.apkUrl === 'string' && data.apkUrl ? data.apkUrl : '/apk/download/',
-  };
+  throw lastErr || new Error('Could not check for updates');
 }
 
 /** True when remote is strictly newer than local (semver-ish dotted ints). */
