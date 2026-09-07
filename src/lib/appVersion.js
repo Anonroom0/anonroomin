@@ -11,7 +11,7 @@
 
 export const APP_VERSION =
   (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_APP_VERSION) ||
-  '0.1.0';
+  '0.1.1';
 
 const PRODUCTION_VERSION_URL =
   (typeof import.meta !== 'undefined' && import.meta.env && import.meta.env.VITE_VERSION_JSON_URL) ||

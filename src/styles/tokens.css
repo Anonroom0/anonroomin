@@ -80,10 +80,10 @@
 
 [data-theme="light"] {
   /* Apple-like: grey page, slightly lifted panels — avoid pure white glare */
-  --ink: #E5E5EA;              /* page / chat background (system grey) */
-  --ink-2: #F2F2F7;            /* sidebar / elevated track */
-  --surface: #EBEBF0;          /* cards */
-  --surface-2: #E1E1E6;        /* inputs / secondary */
+  --ink: #E8E8ED;              /* page background — soft grey */
+  --ink-2: #F2F2F7;            /* sidebar / header elevated */
+  --surface: #FFFFFF;          /* cards / rows sit on grey page */
+  --surface-2: #E8E8ED;        /* inputs / search field */
   --paper: #1C1C1E;            /* primary text */
   --dim: #6C6C70;              /* muted text */
 
@@ -96,7 +96,7 @@
   --bubble-own-text: #FFFFFF;
   --bubble-anon: #5856D6;
   --bubble-anon-text: #F2F2F7;
-  --bubble-other: #E5E5EA;     /* received: grey, not pure white */
+  --bubble-other: #FFFFFF;     /* received: white card on grey page */
   --bubble-other-text: #1C1C1E;
   --bubble-border-own: transparent;
   --bubble-border-anon: rgba(88, 86, 214, 0.28);

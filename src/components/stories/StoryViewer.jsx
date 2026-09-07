@@ -568,7 +568,7 @@ export default function StoryViewer({ channels, startIndex = 0, initialItemId, o
 
   // Story Auto-Advance (Pauses when MediaViewer is opened)
   useEffect(() => {
-    if (!item || paused || menuOpen || viewerMedia) {
+    if (!item || paused || menuOpen || viewerMedia || shareStoryTarget) {
       progressStartRef.current = null;
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
       return undefined;
@@ -592,7 +592,7 @@ export default function StoryViewer({ channels, startIndex = 0, initialItemId, o
       if (rafRef.current) cancelAnimationFrame(rafRef.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [item, chIndex, itemIndex, paused, menuOpen, viewerMedia]);
+  }, [item, chIndex, itemIndex, paused, menuOpen, viewerMedia, shareStoryTarget]);
 
   function handlePressStart() {
     holdTimerRef.current = setTimeout(() => setPaused(true), 180);

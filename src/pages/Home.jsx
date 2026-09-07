@@ -66,6 +66,12 @@ const MOBILE_BREAKPOINT_PX = 768;
 // 2. INLINE SVG ICONS
 // ============================================================================
 const Icons = {
+  Profile: (
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
+      <circle cx="12" cy="7" r="4" />
+    </svg>
+  ),
   Menu: (
     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
       <line x1="3" y1="12" x2="21" y2="12" />
@@ -611,43 +617,136 @@ const [sharingReply, setSharingReply] = useState(null); // NEW — { question, r
               zIndex: 10, background: 'var(--ink-2)', position: 'relative'
             }}
           >
-            {/* Header */}
-            <div style={{ padding: '14px 16px', display: 'flex', alignItems: 'center', gap: 12, borderBottom: '1px solid var(--separator)', zIndex: 50, position: 'relative' }}>
-              <div style={{ position: 'relative', flex: 1 }}>
-                <span style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--dim)', pointerEvents: 'none' }}>{Icons.Search}</span>
-                <input 
-                  type="search" name="home-search-field" autoComplete="off-nope" autoCorrect="off" autoCapitalize="off" spellCheck="false" data-lpignore="true" data-1p-ignore data-form-type="other" value={searchQuery} onChange={(e) => setSearchQuery(e.target.value)} 
-                  onFocus={() => setSearchFocused(true)} onBlur={() => setTimeout(() => setSearchFocused(false), 200)} 
-                  placeholder="Search..." 
-                  style={{ width: '100%', border: '1px solid var(--separator)', background: 'var(--ink-2)', padding: '10px 36px 10px 42px', borderRadius: 14, fontSize: 16, color: 'var(--paper)', outline: 'none', transition: 'background 0.2s', boxSizing: 'border-box' }} 
-                />
-              </div>
-              {isMobileWeb && (
-                <button
-                  type="button"
-                  className="touch-bounce"
-                  title="Download app"
-                  aria-label="Download app"
-                  onClick={() => { window.location.href = '/apk/download/'; }}
-                  style={{
-                    width: 44, height: 44, borderRadius: '50%', border: '1px solid var(--glass-border)',
-                    padding: 0, flexShrink: 0, background: 'var(--glass-white)', color: 'var(--paper)',
-                    display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
-                    backdropFilter: 'blur(14px)', WebkitBackdropFilter: 'blur(14px)',
-                  }}
-                >
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
-                    <polyline points="7 10 12 15 17 10" />
-                    <line x1="12" y1="15" x2="12" y2="3" />
-                  </svg>
-                </button>
+            {/* Header — Apple-style: title + icon search; expands to full search */}
+            <div
+              style={{
+                padding: searchFocused || searchQuery.trim() ? '10px 12px' : '12px 16px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: 10,
+                borderBottom: '1px solid var(--separator)',
+                zIndex: 50,
+                position: 'relative',
+                background: 'var(--header-bg)',
+                backdropFilter: 'blur(20px) saturate(180%)',
+                WebkitBackdropFilter: 'blur(20px) saturate(180%)',
+                minHeight: 56,
+                boxSizing: 'border-box',
+              }}
+            >
+              {(searchFocused || searchQuery.trim().length > 0) ? (
+                <>
+                  <div style={{ position: 'relative', flex: 1, minWidth: 0 }}>
+                    <span style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--dim)', pointerEvents: 'none', display: 'flex' }}>{Icons.Search}</span>
+                    <input
+                      autoFocus
+                      type="search"
+                      name="home-search-field"
+                      autoComplete="off-nope"
+                      autoCorrect="off"
+                      autoCapitalize="off"
+                      spellCheck="false"
+                      data-lpignore="true"
+                      data-1p-ignore
+                      data-form-type="other"
+                      value={searchQuery}
+                      onChange={(e) => setSearchQuery(e.target.value)}
+                      onFocus={() => setSearchFocused(true)}
+                      onBlur={() => setTimeout(() => setSearchFocused(false), 200)}
+                      placeholder="Search"
+                      style={{
+                        width: '100%',
+                        border: 'none',
+                        background: 'var(--surface-2)',
+                        padding: '10px 12px 10px 40px',
+                        borderRadius: 12,
+                        fontSize: 16,
+                        color: 'var(--paper)',
+                        outline: 'none',
+                        boxSizing: 'border-box',
+                      }}
+                    />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => { setSearchQuery(''); setSearchFocused(false); }}
+                    style={{
+                      border: 'none', background: 'transparent', color: 'var(--ember)',
+                      fontWeight: 600, fontSize: 16, cursor: 'pointer', padding: '8px 4px', flexShrink: 0,
+                    }}
+                  >
+                    Cancel
+                  </button>
+                </>
+              ) : (
+                <>
+                  <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center' }}>
+                    <span
+                      style={{
+                        fontSize: 22,
+                        fontWeight: 800,
+                        letterSpacing: '-0.03em',
+                        color: 'var(--paper)',
+                        lineHeight: 1.1,
+                      }}
+                    >
+                      Anonroom
+                    </span>
+                  </div>
+                  <button
+                    type="button"
+                    className="touch-bounce"
+                    aria-label="Search"
+                    title="Search"
+                    onClick={() => setSearchFocused(true)}
+                    style={{
+                      width: 36, height: 36, borderRadius: '50%', border: 'none',
+                      background: 'var(--surface-2)', color: 'var(--paper)',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                      cursor: 'pointer', flexShrink: 0, padding: 0,
+                    }}
+                  >
+                    {Icons.Search}
+                  </button>
+                  {isMobileWeb && (
+                    <button
+                      type="button"
+                      className="touch-bounce"
+                      title="Download app"
+                      aria-label="Download app"
+                      onClick={() => { window.location.href = '/apk/download/'; }}
+                      style={{
+                        width: 36, height: 36, borderRadius: '50%', border: '1px solid var(--glass-border)',
+                        padding: 0, flexShrink: 0, background: 'var(--surface-2)', color: 'var(--paper)',
+                        display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer',
+                      }}
+                    >
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                        <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                        <polyline points="7 10 12 15 17 10" />
+                        <line x1="12" y1="15" x2="12" y2="3" />
+                      </svg>
+                    </button>
+                  )}
+                </>
               )}
-              <button className="touch-bounce" onClick={() => session ? setEditProfileOpen(true) : setAuthOpen(true)} style={{ width: 44, height: 44, borderRadius: '50%', border: 'none', padding: 0, flexShrink: 0, background: 'transparent' }}>
-                {session ? <LiquidAvatar identity={profileIdentity} size={44} /> : <div style={{ width: '100%', height: '100%', background: 'var(--ember)', color: '#fff', display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '50%' }}>{Icons.Menu}</div>}
+              <button
+                className="touch-bounce"
+                onClick={() => session ? setEditProfileOpen(true) : setAuthOpen(true)}
+                aria-label={session ? 'Profile' : 'Sign in'}
+                style={{
+                  width: 40, height: 40, borderRadius: '50%', border: '1px solid var(--glass-border)',
+                  padding: 0, flexShrink: 0, background: session ? 'transparent' : 'var(--surface-2)',
+                  color: 'var(--paper)', display: 'flex', alignItems: 'center', justifyContent: 'center',
+                  cursor: 'pointer', overflow: 'hidden',
+                }}
+              >
+                {session
+                  ? <LiquidAvatar identity={profileIdentity} size={40} />
+                  : Icons.Profile}
               </button>
             </div>
-            <div style={{ padding: '12px 0 4px', zIndex: 45, minWidth: 0, width: '100%' }}>
+
               <StoriesBar
                 groups={groups}
                 userId={userId}
