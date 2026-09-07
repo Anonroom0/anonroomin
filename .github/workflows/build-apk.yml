@@ -121,7 +121,7 @@ jobs:
           printf '%s\n' "{\"version\": \"${APP_VERSION}\", \"apkUrl\": \"${APK_URL}\"}" > public/apk/version.json
           echo "Wrote version ${APP_VERSION} -> ${APK_URL}"
 
-      - name: Commit and push the updated APK
+      -       - name: Commit and push the updated APK
         run: |
           git config user.name "github-actions[bot]"
           git config user.email "github-actions[bot]@users.noreply.github.com"
