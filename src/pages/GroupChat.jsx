@@ -43,6 +43,7 @@ const ADMIN_DISPLAY_NAME = 'ADMIN';
 const UPLOAD_TIMEOUT_MS = 60000;
 
 const Vectors = {
+  ChevronDown: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9" /></svg>,
   Lock: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" /></svg>,
   Back: <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M19 12H5" /><path d="M12 19l-7-7 7-7" /></svg>,
   Attach: <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21.44 11.05l-9.19 9.19a6 6 0 0 1-8.49-8.49l9.19-9.19a4 4 0 0 1 5.66 5.66l-9.2 9.19a2 2 0 0 1-2.83-2.83l8.49-8.48" /></svg>,
@@ -461,13 +462,14 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
   // type="search"/autoComplete="off-nope"/data-lpignore anti-autofill hack.
   const [composerLocked, setComposerLocked] = useState(true);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [notchOpen, setNotchOpen] = useState(false);
   const menuRef = useRef(null);
   // Close the 3-dot header menu when clicking/tapping outside it.
   useEffect(() => {
     if (!menuOpen) return undefined;
     function handleOutside(e) {
       if (menuRef.current && !menuRef.current.contains(e.target)) {
-        setMenuOpen(false);
+        setMenuOpen(false); setNotchOpen(false);
       }
     }
     // pointerdown captures both mouse and touch; use capture so it runs
@@ -569,6 +571,7 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
     setIsSearching(false);
     setChatSearchQuery('');
     setMenuOpen(false);
+    setNotchOpen(false);
 
     async function initializeGroup() {
       try {
@@ -1248,7 +1251,7 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
         const showBar = !isSearching && !!session;
         if (!showBar) return null;
         const chipBase = {
-          width: 34, height: 34, borderRadius: '50%', flexShrink: 0,
+          width: 28, height: 28, borderRadius: '50%', flexShrink: 0,
           display: 'flex', alignItems: 'center', justifyContent: 'center',
           border: '1px solid var(--glass-border)',
           background: 'var(--glass-white)',
@@ -1256,10 +1259,9 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
           transition: 'transform 0.12s ease-out, background 0.15s ease',
           padding: 0,
         };
-        // Connected to header bottom edge — left-aligned only so the right
-        // side never covers the message list background.
-        // Zero-height row: no layout strip across the chat. Notch hangs
-        // into the message area via overflow visible + absolute child.
+        // Collapsed: only a downward chevron tab. Expanded: the 3 action chips
+        // slide open under the header (zero-height layout row so messages
+        // aren't covered by a full-width strip).
         return (
           <div
             style={{
@@ -1271,80 +1273,121 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
               pointerEvents: 'none',
             }}
           >
-          <div
-            style={{
-              position: 'absolute',
-              top: 0,
-              left: 10,
-              display: 'inline-flex',
-              width: 'auto',
-              maxWidth: 'max-content',
-            }}
-          >
             <div
               style={{
+                position: 'absolute',
+                top: 0,
+                right: 10,
+                left: 'auto',
                 display: 'inline-flex',
-                alignItems: 'center',
-                gap: 6,
-                padding: '6px 8px 8px',
-                borderRadius: '0 0 18px 18px',
-                background: 'var(--header-bg)',
-                border: '1px solid var(--separator)',
-                borderTop: 'none',
-                backdropFilter: 'blur(24px) saturate(160%)',
-                WebkitBackdropFilter: 'blur(24px) saturate(160%)',
+                flexDirection: 'column',
+                alignItems: 'flex-end',
+                width: 'auto',
+                maxWidth: 'max-content',
                 pointerEvents: 'auto',
-                boxShadow: 'var(--shadow-float)',
               }}
             >
-              <button
-                title="Previous Confession"
-                disabled={!hasConfessions}
-                onClick={() => {
-                  if (confessionMessages.length === 0) return;
-                  const nextIdx = confessionNavIndex + 1 >= confessionMessages.length ? 0 : confessionNavIndex + 1;
-                  setConfessionNavIndex(nextIdx);
-                  const el = document.getElementById(`msg-${confessionMessages[nextIdx].id}`);
-                  if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); setHighlightedMsgId(confessionMessages[nextIdx].id); setTimeout(() => setHighlightedMsgId(null), 2000); }
+              <div
+                style={{
+                  display: 'inline-flex',
+                  alignItems: 'center',
+                  gap: notchOpen ? 5 : 0,
+                  padding: notchOpen ? '5px 6px 6px' : '2px 4px 3px',
+                  borderRadius: '0 0 14px 14px',
+                  background: 'var(--header-bg)',
+                  border: '1px solid var(--separator)',
+                  borderTop: 'none',
+                  backdropFilter: 'blur(24px) saturate(160%)',
+                  WebkitBackdropFilter: 'blur(24px) saturate(160%)',
+                  boxShadow: 'var(--shadow-float)',
+                  transition: 'padding 0.22s cubic-bezier(0.2, 0.8, 0.2, 1), gap 0.22s ease',
+                  lineHeight: 0,
                 }}
-                style={{ ...chipBase, opacity: hasConfessions ? 1 : 0.4, color: hasConfessions ? 'var(--ember)' : 'var(--dim)' }}
-                onMouseDown={(e) => { e.currentTarget.style.transform = 'scale(0.92)'; }}
-                onMouseUp={(e) => { e.currentTarget.style.transform = 'scale(1)'; }}
-                onMouseLeave={(e) => { e.currentTarget.style.transform = 'scale(1)'; }}
               >
-                {Vectors.GhostSm}
-              </button>
+                {/* Expandable chip row */}
+                <div
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: 6,
+                    maxWidth: notchOpen ? 120 : 0,
+                    opacity: notchOpen ? 1 : 0,
+                    overflow: 'hidden',
+                    transform: notchOpen ? 'translateY(0) scale(1)' : 'translateY(-6px) scale(0.92)',
+                    transformOrigin: 'top left',
+                    transition: 'max-width 0.28s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.2s ease, transform 0.28s cubic-bezier(0.2, 0.8, 0.2, 1)',
+                    pointerEvents: notchOpen ? 'auto' : 'none',
+                  }}
+                >
+                  <button
+                    title="Previous Confession"
+                    disabled={!hasConfessions}
+                    onClick={() => {
+                      if (confessionMessages.length === 0) return;
+                      const nextIdx = confessionNavIndex + 1 >= confessionMessages.length ? 0 : confessionNavIndex + 1;
+                      setConfessionNavIndex(nextIdx);
+                      const el = document.getElementById(`msg-${confessionMessages[nextIdx].id}`);
+                      if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); setHighlightedMsgId(confessionMessages[nextIdx].id); setTimeout(() => setHighlightedMsgId(null), 2000); }
+                    }}
+                    style={{ ...chipBase, opacity: hasConfessions ? 1 : 0.4, color: hasConfessions ? 'var(--ember)' : 'var(--dim)' }}
+                    onMouseDown={(e) => { e.currentTarget.style.transform = 'scale(0.92)'; }}
+                    onMouseUp={(e) => { e.currentTarget.style.transform = 'scale(1)'; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.transform = 'scale(1)'; }}
+                  >
+                    {Vectors.GhostSm}
+                  </button>
 
-              <button
-                title="Post Confession"
-                onClick={() => setConfessionModalOpen(true)}
-                style={{ ...chipBase, background: 'var(--ember-soft)', border: '1px solid color-mix(in srgb, var(--ember) 35%, transparent)', color: 'var(--ember)' }}
-                onMouseDown={(e) => { e.currentTarget.style.transform = 'scale(0.92)'; }}
-                onMouseUp={(e) => { e.currentTarget.style.transform = 'scale(1)'; }}
-                onMouseLeave={(e) => { e.currentTarget.style.transform = 'scale(1)'; }}
-              >
-                {Vectors.Plus}
-              </button>
+                  <button
+                    title="Post Confession"
+                    onClick={() => setConfessionModalOpen(true)}
+                    style={{ ...chipBase, background: 'var(--ember-soft)', border: '1px solid color-mix(in srgb, var(--ember) 35%, transparent)', color: 'var(--ember)' }}
+                    onMouseDown={(e) => { e.currentTarget.style.transform = 'scale(0.92)'; }}
+                    onMouseUp={(e) => { e.currentTarget.style.transform = 'scale(1)'; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.transform = 'scale(1)'; }}
+                  >
+                    {Vectors.Plus}
+                  </button>
 
-              <button
-                title="Pinned"
-                disabled={!hasPinned}
-                onClick={() => {
-                  if (pinnedMessages.length === 0) return;
-                  const nextIdx = pinNavIndex + 1 >= pinnedMessages.length ? 0 : pinNavIndex + 1;
-                  setPinNavIndex(nextIdx);
-                  const el = document.getElementById(`msg-${pinnedMessages[nextIdx].id}`);
-                  if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); setHighlightedMsgId(pinnedMessages[nextIdx].id); setTimeout(() => setHighlightedMsgId(null), 2000); }
-                }}
-                style={{ ...chipBase, opacity: hasPinned ? 1 : 0.4 }}
-                onMouseDown={(e) => { e.currentTarget.style.transform = 'scale(0.92)'; }}
-                onMouseUp={(e) => { e.currentTarget.style.transform = 'scale(1)'; }}
-                onMouseLeave={(e) => { e.currentTarget.style.transform = 'scale(1)'; }}
-              >
-                {Vectors.PinSm}
-              </button>
+                  <button
+                    title="Pinned"
+                    disabled={!hasPinned}
+                    onClick={() => {
+                      if (pinnedMessages.length === 0) return;
+                      const nextIdx = pinNavIndex + 1 >= pinnedMessages.length ? 0 : pinNavIndex + 1;
+                      setPinNavIndex(nextIdx);
+                      const el = document.getElementById(`msg-${pinnedMessages[nextIdx].id}`);
+                      if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); setHighlightedMsgId(pinnedMessages[nextIdx].id); setTimeout(() => setHighlightedMsgId(null), 2000); }
+                    }}
+                    style={{ ...chipBase, opacity: hasPinned ? 1 : 0.4 }}
+                    onMouseDown={(e) => { e.currentTarget.style.transform = 'scale(0.92)'; }}
+                    onMouseUp={(e) => { e.currentTarget.style.transform = 'scale(1)'; }}
+                    onMouseLeave={(e) => { e.currentTarget.style.transform = 'scale(1)'; }}
+                  >
+                    {Vectors.PinSm}
+                  </button>
+                </div>
+
+                {/* Toggle chevron — always visible */}
+                <button
+                  type="button"
+                  title={notchOpen ? 'Hide tools' : 'Show tools'}
+                  aria-expanded={notchOpen}
+                  onClick={() => setNotchOpen((v) => !v)}
+                  style={{
+                    width: 18, height: 14, borderRadius: 4, flexShrink: 0,
+                    display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                    border: 'none', background: 'transparent', color: 'var(--dim)',
+                    cursor: 'pointer', padding: 0, margin: 0, lineHeight: 0,
+                    transition: 'transform 0.28s cubic-bezier(0.2, 0.8, 0.2, 1), color 0.15s ease',
+                    transform: notchOpen ? 'rotate(180deg)' : 'rotate(0deg)',
+                  }}
+                >
+                  <span style={{ display: 'flex', width: 14, height: 14, alignItems: 'center', justifyContent: 'center' }}>
+                    {Vectors.ChevronDown}
+                  </span>
+                </button>
+              </div>
             </div>
-          </div>
           </div>
         );
       })()}

@@ -3,9 +3,9 @@ import { createPortal } from 'react-dom';
 import { fetchReactionSummary, toggleReaction, isValidReactionTargetId } from '../../lib/reactions';
 import supabase from '../../lib/supabaseClient';
 import { hapticSelect } from '../../lib/haptics';
-import EmojiGifPicker from '../../pages/EmojiGifPicker';
 
 const QUICK_EMOJI = ['❤️', '😂', '😮', '😢', '🙏', '🔥', '👍', '😡'];
+const MORE_EMOJI = ['❤️','😂','😮','😢','🙏','🔥','👍','😡','😍','🥰','😊','😎','🤔','😴','😭','🤣','😩','🙃','💯','✨','🎉','👏','🙌','💪','👀','💬','✅','❌','⭐','💡','🚀','🌸'];
 
 export default function ReactionBar({ targetType, targetId, userId, showTray, onCloseTray, align = 'center', actions = [], pullUp = 0 }) {
   const [reactions, setReactions] = useState([]);
@@ -15,6 +15,11 @@ export default function ReactionBar({ targetType, targetId, userId, showTray, on
   const containerRef = useRef(null);
   const trayRef = useRef(null);
   const togglePendingRef = useRef(false);
+
+  // Close emoji grid when the whole tray is dismissed
+  useEffect(() => {
+    if (!showTray) setFullPickerOpen(false);
+  }, [showTray]);
 
   const refresh = useCallback(() => {
     if (!isValidReactionTargetId(targetId)) {
@@ -52,9 +57,9 @@ export default function ReactionBar({ targetType, targetId, userId, showTray, on
     if (showTray && containerRef.current) {
       const rect = containerRef.current.getBoundingClientRect();
       
-      // We estimate the tray is roughly ~290px wide (8 emojis * ~30px + padding)
-      const estimatedTrayWidth = 290; 
-      const marginFromEdge = 12; // 12px safe area from screen edge
+      // Half-size tray (~8 emojis * ~16px + padding)
+      const estimatedTrayWidth = 150;
+      const marginFromEdge = 8;
       
       // Start by trying to perfectly center it above the tapped row
       let desiredLeft = rect.left + rect.width / 2;
@@ -66,8 +71,11 @@ export default function ReactionBar({ targetType, targetId, userId, showTray, on
       // Clamp the value so it NEVER bleeds off the left or right edge
       const safeLeft = Math.max(minLeft, Math.min(desiredLeft, maxLeft));
 
+      const desiredBottom = window.innerHeight - rect.top + 6;
+      // Keep tray within the viewport (never hang above the screen top)
+      const safeBottom = Math.max(8, Math.min(desiredBottom, window.innerHeight - 120));
       setTrayCoords({
-        bottom: window.innerHeight - rect.top + 8, // Hovers 8px above the bubble
+        bottom: safeBottom,
         left: safeLeft,
       });
     } else {
@@ -181,109 +189,158 @@ export default function ReactionBar({ targetType, targetId, userId, showTray, on
             zIndex: 99999,
             bottom: trayCoords.bottom,
             left: trayCoords.left,
-            transform: 'translateX(-50%)', // Centered relative to the clamped X coordinate
+            transform: 'translateX(-50%)',
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'center',
-            gap: 8,
-            transformOrigin: 'bottom center'
+            gap: 4,
+            transformOrigin: 'bottom center',
+            maxWidth: 'min(92vw, 200px)',
           }}
         >
-          <div
-            style={{
-              display: 'flex', alignItems: 'center', gap: 2, // Tighter gap
-              padding: '6px 10px', // Tighter padding
-              borderRadius: 32,
-              backgroundColor: 'var(--menu-bg)',
-              backdropFilter: 'blur(16px)',
-              WebkitBackdropFilter: 'blur(16px)',
-              border: '1px solid var(--glass-border)',
-              boxShadow: 'var(--shadow-card)',
-              width: 'max-content',
-              flexWrap: 'wrap',
-              justifyContent: 'center',
-            }}
-          >
-            {QUICK_EMOJI.map((emoji) => (
-              <button
-                key={emoji} type="button" onClick={() => handleQuickPick(emoji)}
-                style={{
-                  border: 'none', background: 'transparent', 
-                  fontSize: 18, // Smaller Emojis
-                  width: 32, height: 32, // Smaller Hitbox
-                  borderRadius: '50%', cursor: 'pointer',
-                  display: 'flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1,
-                  transition: 'transform 0.15s cubic-bezier(0.2, 0.8, 0.2, 1), background-color 0.15s'
-                }}
-                onMouseOver={(e) => {
-                  e.currentTarget.style.transform = 'scale(1.25)';
-                  e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.06)';
-                }}
-                onMouseOut={(e) => {
-                  e.currentTarget.style.transform = 'scale(1)';
-                  e.currentTarget.style.backgroundColor = 'transparent';
-                }}
-              >
-                {emoji}
-              </button>
-            ))}
-
-            <button
-              type="button" onClick={() => setFullPickerOpen(true)} aria-label="More emoji"
-              style={{
-                border: 'none', backgroundColor: 'rgba(63,120,255,0.06)', color: 'var(--dim)',
-                fontSize: 12, fontWeight: 700, 
-                width: 30, height: 30, marginLeft: 4, // Smaller plus button
-                borderRadius: '50%', cursor: 'pointer', display: 'flex',
-                alignItems: 'center', justifyContent: 'center', lineHeight: 1,
-                transition: 'background-color 0.15s'
-              }}
-              onMouseOver={(e) => e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.1)'}
-              onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'rgba(63,120,255,0.06)'}
-            >
-              …
-            </button>
-          </div>
-
-          {actions.length > 0 && (
+          {/* Full emoji grid replaces the selection tray (not stacked on top). */}
+          {fullPickerOpen ? (
             <div
               style={{
-                display: 'flex', flexDirection: 'column',
-                width: 190, borderRadius: 16, overflow: 'hidden',
+                width: 'min(92vw, 168px)',
+                borderRadius: 12,
+                overflow: 'hidden',
                 backgroundColor: 'var(--menu-bg)',
-                backdropFilter: 'blur(16px)',
-                WebkitBackdropFilter: 'blur(16px)',
                 border: '1px solid var(--glass-border)',
                 boxShadow: 'var(--shadow-card)',
+                backdropFilter: 'blur(16px)',
+                WebkitBackdropFilter: 'blur(16px)',
               }}
             >
-              {actions.map((action, idx) => (
+              <div style={{ display: 'flex', alignItems: 'center', gap: 4, padding: '5px 6px', borderBottom: '1px solid var(--separator)' }}>
                 <button
-                  key={action.key || action.label}
                   type="button"
-                  onClick={() => { action.onClick(); if (onCloseTray) onCloseTray(); }}
+                  onClick={() => setFullPickerOpen(false)}
                   style={{
-                    display: 'flex', alignItems: 'center', gap: 10,
-                    padding: '12px 16px', border: 'none', background: 'transparent',
-                    borderTop: idx > 0 ? '1px solid var(--separator)' : 'none',
-                    color: action.danger ? 'var(--danger)' : 'var(--paper)',
-                    fontSize: 14, fontWeight: 600, cursor: 'pointer', textAlign: 'left',
+                    border: 'none', background: 'var(--glass-white)', color: 'var(--paper)',
+                    borderRadius: 6, padding: '3px 7px', fontSize: 10, fontWeight: 700, cursor: 'pointer',
                   }}
-                  onMouseOver={(e) => e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.06)'}
-                  onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
                 >
-                  {action.icon}
-                  {action.label}
+                  ← Back
                 </button>
-              ))}
+                <span style={{ fontSize: 10, fontWeight: 600, color: 'var(--dim)' }}>More</span>
+              </div>
+              <div
+                style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(6, 1fr)',
+                  gap: 2,
+                  padding: 6,
+                  maxHeight: 140,
+                  overflowY: 'auto',
+                }}
+              >
+                {MORE_EMOJI.map((emoji) => (
+                  <button
+                    key={emoji}
+                    type="button"
+                    onClick={() => handleMorePick(emoji)}
+                    style={{
+                      border: 'none', background: 'transparent', fontSize: 14,
+                      width: 24, height: 24, borderRadius: 6, cursor: 'pointer',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1,
+                    }}
+                  >
+                    {emoji}
+                  </button>
+                ))}
+              </div>
             </div>
-          )}
+          ) : (
+            <>
+              <div
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 1,
+                  padding: '3px 5px',
+                  borderRadius: 16,
+                  backgroundColor: 'var(--menu-bg)',
+                  backdropFilter: 'blur(16px)',
+                  WebkitBackdropFilter: 'blur(16px)',
+                  border: '1px solid var(--glass-border)',
+                  boxShadow: 'var(--shadow-card)',
+                  width: 'max-content',
+                  maxWidth: 'min(92vw, 200px)',
+                  flexWrap: 'wrap',
+                  justifyContent: 'center',
+                }}
+              >
+                {QUICK_EMOJI.map((emoji) => (
+                  <button
+                    key={emoji} type="button" onClick={() => handleQuickPick(emoji)}
+                    style={{
+                      border: 'none', background: 'transparent',
+                      fontSize: 14,
+                      width: 22, height: 22,
+                      borderRadius: '50%', cursor: 'pointer',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center', lineHeight: 1,
+                      transition: 'transform 0.15s ease, background-color 0.15s',
+                    }}
+                    onMouseOver={(e) => {
+                      e.currentTarget.style.transform = 'scale(1.2)';
+                      e.currentTarget.style.backgroundColor = 'rgba(127,127,127,0.12)';
+                    }}
+                    onMouseOut={(e) => {
+                      e.currentTarget.style.transform = 'scale(1)';
+                      e.currentTarget.style.backgroundColor = 'transparent';
+                    }}
+                  >
+                    {emoji}
+                  </button>
+                ))}
 
-          {fullPickerOpen && (
-            <EmojiGifPicker
-              open={fullPickerOpen} mode="emoji-only"
-              onClose={() => setFullPickerOpen(false)} onEmoji={handleMorePick} onMedia={() => {}}
-            />
+                <button
+                  type="button" onClick={() => setFullPickerOpen(true)} aria-label="More emoji"
+                  style={{
+                    border: 'none', backgroundColor: 'var(--ember-soft)', color: 'var(--dim)',
+                    fontSize: 11, fontWeight: 700,
+                    width: 20, height: 20, marginLeft: 2,
+                    borderRadius: '50%', cursor: 'pointer', display: 'flex',
+                    alignItems: 'center', justifyContent: 'center', lineHeight: 1,
+                  }}
+                >
+                  …
+                </button>
+              </div>
+
+              {actions.length > 0 && (
+                <div
+                  style={{
+                    display: 'flex', flexDirection: 'column',
+                    width: 112, borderRadius: 10, overflow: 'hidden',
+                    backgroundColor: 'var(--menu-bg)',
+                    backdropFilter: 'blur(16px)',
+                    WebkitBackdropFilter: 'blur(16px)',
+                    border: '1px solid var(--glass-border)',
+                    boxShadow: 'var(--shadow-card)',
+                  }}
+                >
+                  {actions.map((action, idx) => (
+                    <button
+                      key={action.key || action.label}
+                      type="button"
+                      onClick={() => { action.onClick(); if (onCloseTray) onCloseTray(); }}
+                      style={{
+                        display: 'flex', alignItems: 'center', gap: 6,
+                        padding: '6px 10px', border: 'none', background: 'transparent',
+                        borderTop: idx > 0 ? '1px solid var(--separator)' : 'none',
+                        color: action.danger ? 'var(--danger)' : 'var(--paper)',
+                        fontSize: 11, fontWeight: 600, cursor: 'pointer', textAlign: 'left',
+                      }}
+                      onMouseOver={(e) => e.currentTarget.style.backgroundColor = 'rgba(127,127,127,0.1)'}
+                      onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                    >
+                      {action.icon}
+                      {action.label}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </>
           )}
         </div>,
         document.body
