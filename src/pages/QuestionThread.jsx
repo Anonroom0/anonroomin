@@ -38,7 +38,7 @@ import supabase from '../lib/supabaseClient';
 import { useAuth } from '../lib/authContext';
 import { useViewportHeight } from '../lib/useViewportHeight';
 import { getOrCreateVisitorId } from '../lib/visitorId';
-import { ROOT_PATH, isShortId } from '../lib/subdomain';
+import { ROOT_PATH, isShortId , navigateInApp } from '../lib/subdomain';
 import { showToast, friendlyDbError } from '../lib/toast';
 import { playSend } from '../lib/soundManager';
 import { hapticSend } from '../lib/haptics';
@@ -511,7 +511,7 @@ export default function QuestionThread({ questionId, onBack, onShareReply }) {
       onBack();
       return;
     }
-    window.location.href = ROOT_PATH;
+    navigateInApp(ROOT_PATH);
   }
 
   // --------------------------------------------------------------------------

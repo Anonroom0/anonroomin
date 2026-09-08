@@ -97,22 +97,45 @@ jobs:
           distribution: temurin
           java-version: '21'
 
-      - name: Build debug APK
+      - name: Decode release keystore
+        # The keystore itself is never committed to the repo — it only ever
+        # exists on disk here, inside the CI runner's workspace, and only
+        # for the duration of this job. android/ is already gitignored, so
+        # this file never gets picked up by the later "git add" commit step.
+        run: |
+          echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > android/app/upload-keystore.jks
+
+      - name: Build signed release APK
         working-directory: android
+        env:
+          ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
           chmod +x gradlew
-          ./gradlew assembleDebug
+          ./gradlew assembleRelease \
+            -Pandroid.injected.signing.store.file=upload-keystore.jks \
+            -Pandroid.injected.signing.store.password="$ANDROID_KEYSTORE_PASSWORD" \
+            -Pandroid.injected.signing.key.alias="$ANDROID_KEY_ALIAS" \
+            -Pandroid.injected.signing.key.password="$ANDROID_KEY_PASSWORD"
+
+      - name: Remove decoded keystore from the runner
+        # Belt-and-suspenders cleanup — android/ is gitignored so this was
+        # never going to be committed, but there's no reason to leave the
+        # decoded key file sitting on disk for the rest of the job either.
+        if: always()
+        run: rm -f android/app/upload-keystore.jks
 
       - name: Upload APK artifact
         uses: actions/upload-artifact@v4
         with:
-          name: anonroom-debug-apk
-          path: android/app/build/outputs/apk/debug/app-debug.apk
+          name: anonroom-release-apk
+          path: android/app/build/outputs/apk/release/app-release.apk
 
       - name: Copy APK into repo for the download page
         run: |
           mkdir -p downloads
-          cp android/app/build/outputs/apk/debug/app-debug.apk downloads/anonroom-latest.apk
+          cp android/app/build/outputs/apk/release/app-release.apk downloads/anonroom-latest.apk
 
       - name: Update /apk/download page and version.json
         # Canonical path is public/apk/download (legacy public/download removed).

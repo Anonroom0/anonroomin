@@ -400,6 +400,48 @@ export function buildGroupPath(slug) {
   return `/g/${encodeURIComponent(slug)}`;
 }
 
+/**
+ * Same-origin in-app navigation without opening a new tab or full reload.
+ * Uses pushState and fires popstate so Home/App route listeners update.
+ * External absolute URLs (different origin) fall back to location.assign.
+ */
+export function navigateInApp(pathOrUrl, { replace = false } = {}) {
+  if (typeof window === 'undefined') return;
+  let path = pathOrUrl;
+  try {
+    if (/^https?:\/\//i.test(pathOrUrl)) {
+      const u = new URL(pathOrUrl);
+      if (u.origin === window.location.origin) {
+        path = `${u.pathname}${u.search}${u.hash}`;
+      } else {
+        window.location.assign(pathOrUrl);
+        return;
+      }
+    }
+  } catch {
+    window.location.assign(pathOrUrl);
+    return;
+  }
+  if (!path.startsWith('/')) path = `/${path}`;
+  if (replace) window.history.replaceState({}, '', path);
+  else window.history.pushState({}, '', path);
+  window.dispatchEvent(new PopStateEvent('popstate'));
+}
+
+/** Open only external http(s) links in a new tab; same-origin stays in-app. */
+export function openExternalOrInApp(url) {
+  if (typeof window === 'undefined' || !url) return;
+  try {
+    const u = new URL(url, window.location.origin);
+    if (u.origin === window.location.origin) {
+      navigateInApp(`${u.pathname}${u.search}${u.hash}`);
+      return;
+    }
+  } catch { /* fall through */ }
+  window.open(url, '_blank', 'noopener,noreferrer');
+}
+
+
 // ----------------------------------------------------------------------------
 // QUESTION-THREAD ROUTING (root domain, /q/<id>)
 // ----------------------------------------------------------------------------

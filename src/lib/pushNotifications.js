@@ -76,6 +76,8 @@ export async function getPushStatus() {
  */
  export async function subscribeToPush(userId) {
   if (!('serviceWorker' in navigator) || !('PushManager' in window)) {
+    // Native Capacitor Android uses FCM via @capacitor/push-notifications —
+    // web PushManager is for browser / installed PWA (including Android Chrome).
     return false;
   }
 

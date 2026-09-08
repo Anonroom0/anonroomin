@@ -22,7 +22,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import { createPortal } from 'react-dom'; // <--- MAGIC FIX FOR RENDERING LOCATION
 import supabase from '../lib/supabaseClient';
 import { useAuth } from '../lib/authContext';
-import { getRootDomainUrl } from '../lib/subdomain';
+import { getRootDomainUrl, navigateInApp, buildDmPath } from '../lib/subdomain';
 import { playSend } from '../lib/soundManager';
 import { hapticSend } from '../lib/haptics';
 
@@ -351,7 +351,7 @@ export default function ProfileCard({ userId, open, onClose, onMessage }) {
                         setIsVisible(false);
                         setTimeout(() => { onMessage(userId); }, ANIMATION_DURATION - 50);
                       } else {
-                        window.location.href = `${getRootDomainUrl()}${encodeURIComponent(profile.username)}`;
+                        navigateInApp(buildDmPath(profile.username));
                       }
                     }}
                     style={{ width: '100%', padding: '17px 0', borderRadius: 999, border: 'none', background: 'linear-gradient(135deg, var(--ember), #FF8A5C)', color: '#fff', fontWeight: 800, fontSize: 16, letterSpacing: 0.2, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10, boxShadow: 'var(--shadow-float)' }}

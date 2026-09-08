@@ -6,7 +6,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import supabase from '../../lib/supabaseClient';
 import ConfessionBubble from '../shared/ConfessionBubble';
-import { buildQuestionPath, toShortId, getGroupUrl, getCanonicalOrigin } from '../../lib/subdomain';
+import { buildQuestionPath, buildGroupPath, toShortId, getGroupUrl, getCanonicalOrigin, navigateInApp } from '../../lib/subdomain';
 import ReactionBar from '../shared/ReactionBar';
 import MediaViewer from '../../pages/MediaViewer';
 import { hapticTap, hapticSelect } from '../../lib/haptics';
@@ -610,7 +610,7 @@ export default function StoryViewer({ channels, startIndex = 0, initialItemId, o
     if (!channel || !item) return;
     if (channel.type === 'group') {
       const sourceId = item.source_message_id || item.id;
-      window.location.href = `${getGroupUrl(channel.slug)}#reply-${toShortId(sourceId)}`;
+      navigateInApp(`${buildGroupPath(channel.slug)}#reply-${toShortId(sourceId)}`);
     } else if (channel.type === 'public-questions') {
       onViewReplies?.(item.id);
     }

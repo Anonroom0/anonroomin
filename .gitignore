@@ -1,2 +1,20 @@
 node_modules/
 .env.local
+
+# Signing keys — never commit these, they're pulled from CI secrets instead
+*.jks
+*.keystore
+*.p12
+upload-keystore.jks
+
+# Capacitor's generated native project (created fresh by `npx cap add android`
+# in CI). If you ever run that locally to test, don't let the output in —
+# it can contain a decoded keystore or other machine-specific build state.
+android/
+ios/
+
+# Capacitor asset-generation output (icon/splash) — CI regenerates this
+resources/
+
+# Vite build output
+dist/

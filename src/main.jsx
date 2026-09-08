@@ -110,9 +110,17 @@ if ('serviceWorker' in navigator) {
     // added to that branch in sw.js to actually use this.
     navigator.serviceWorker.addEventListener('message', (event) => {
       if (event.data?.type === 'notification-navigate' && event.data?.url) {
-        // Hook point for client-side routing (e.g. history.pushState +
-        // whatever re-resolves App.jsx's top-level route) once sw.js
-        // actually sends this message.
+        try {
+          const u = new URL(event.data.url, window.location.origin);
+          if (u.origin === window.location.origin) {
+            window.history.pushState({}, '', `${u.pathname}${u.search}${u.hash}`);
+            window.dispatchEvent(new PopStateEvent('popstate'));
+          } else {
+            window.location.assign(event.data.url);
+          }
+        } catch {
+          window.location.assign(event.data.url);
+        }
       }
     });
   });
@@ -123,6 +131,13 @@ if ('serviceWorker' in navigator) {
 // pinch-zoom is otherwise blocked elsewhere in the app.
 let lastTouchEnd = 0;
 document.addEventListener('touchend', (event) => {
+  // Never intercept taps on text fields — preventDefault here blocks the
+  // iOS Safari keyboard from opening on the composer.
+  const t = event.target;
+  if (t && (t.closest && t.closest('input, textarea, select, [contenteditable="true"]'))) {
+    lastTouchEnd = 0;
+    return;
+  }
   const now = Date.now();
   if (now - lastTouchEnd < 300) {
     event.preventDefault();

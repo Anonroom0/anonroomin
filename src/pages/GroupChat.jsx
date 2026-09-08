@@ -1828,6 +1828,8 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
                   const maxH = 3 * 20 + 16; // ~3 lines
                   el.style.height = `${Math.min(el.scrollHeight, maxH)}px`;
                 }}
+                onPointerDown={() => { if (composerLocked) setComposerLocked(false); }}
+                onTouchStart={() => { if (composerLocked) setComposerLocked(false); }}
                 onFocus={() => { setComposerLocked(false); setPickerOpen(false); }}
                 onBlur={() => setComposerLocked(true)}
                 onKeyDown={(e) => {
@@ -1844,9 +1846,10 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
                 style={{
                   flex: 1, minWidth: 0, border: '1px solid var(--glass-border)', outline: 'none',
                   background: 'var(--input-bg)', borderRadius: 20,
-                  padding: '8px 14px', fontSize: 14, color: 'var(--paper)',
+                  padding: '8px 14px', fontSize: 16, color: 'var(--paper)',
                   lineHeight: '20px', resize: 'none', overflowY: 'auto',
                   maxHeight: 76, minHeight: 36,
+                  WebkitUserSelect: 'text', userSelect: 'text',
                   backdropFilter: 'blur(8px)', WebkitBackdropFilter: 'blur(8px)',
                   transition: 'border-color 0.2s', boxSizing: 'border-box',
                   fontFamily: 'inherit',
