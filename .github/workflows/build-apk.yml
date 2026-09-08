@@ -111,13 +111,18 @@ jobs:
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
-        run: |
-          chmod +x gradlew
-          ./gradlew assembleRelease \
-            -Pandroid.injected.signing.store.file="$(pwd)/app/upload-keystore.jks"
-            -Pandroid.injected.signing.store.password="$ANDROID_KEYSTORE_PASSWORD" \
-            -Pandroid.injected.signing.key.alias="$ANDROID_KEY_ALIAS" \
-            -Pandroid.injected.signing.key.password="$ANDROID_KEY_PASSWORD"
+        # NOTE: uses `run: >` (folded scalar) instead of `run: |` with
+        # trailing `\` line-continuations. A single stray space after a `\`
+        # silently breaks the continuation and the shell tries to run the
+        # leftover flag as its own command ("command not found"). `>` joins
+        # everything into one line automatically, so there's nothing to break.
+        run: >
+          chmod +x gradlew &&
+          ./gradlew assembleRelease
+          -Pandroid.injected.signing.store.file="$(pwd)/app/upload-keystore.jks"
+          -Pandroid.injected.signing.store.password="$ANDROID_KEYSTORE_PASSWORD"
+          -Pandroid.injected.signing.key.alias="$ANDROID_KEY_ALIAS"
+          -Pandroid.injected.signing.key.password="$ANDROID_KEY_PASSWORD"
 
       - name: Remove decoded keystore from the runner
         # Belt-and-suspenders cleanup — android/ is gitignored so this was
