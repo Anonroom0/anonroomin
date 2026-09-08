@@ -5,7 +5,7 @@ node_modules/
 *.jks
 *.keystore
 *.p12
-upload-keystore.jks
+
 
 # Capacitor's generated native project (created fresh by `npx cap add android`
 # in CI). If you ever run that locally to test, don't let the output in —
