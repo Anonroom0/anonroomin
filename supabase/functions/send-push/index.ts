@@ -27,16 +27,31 @@
  *     cron-driven hourly digest checks for any new confession in the past
  *     hour and, only if one exists, sends a single "new confessions"
  *     notification instead.
+ *
+ * DELIVERY RAILS (this is what's new in this revision):
+ *   Every call to sendToRecipients() now fans a notification out over BOTH
+ *   Web Push (VAPID, browser subscribers — push_subscriptions table) AND
+ *   FCM (Android APK subscribers — fcm_tokens table) at once. A user with
+ *   both a browser subscription and the Android app gets both — that's
+ *   correct, not a bug, since they're genuinely two separate devices.
  * ========================================================================= */
 
 import { createClient } from 'npm:@supabase/supabase-js@2';
 import webpush from 'npm:web-push@3';
+import { GoogleAuth } from 'npm:google-auth-library@9';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 const VAPID_PUBLIC_KEY = Deno.env.get('VAPID_PUBLIC_KEY');
 const VAPID_PRIVATE_KEY = Deno.env.get('VAPID_PRIVATE_KEY');
 const VAPID_SUBJECT = Deno.env.get('VAPID_SUBJECT');
+// Full service account JSON (as a single-line string), same one downloaded
+// from Firebase Project Settings > Service Accounts. Set via
+// `supabase secrets set FCM_SERVICE_ACCOUNT='<contents of the json file>'`.
+// See Step 8. Deliberately optional — if unset, FCM sends are skipped
+// entirely rather than erroring, so this deploys safely before that secret
+// exists and web push keeps working either way.
+const FCM_SERVICE_ACCOUNT_RAW = Deno.env.get('FCM_SERVICE_ACCOUNT');
 
 // A group message notification only actually reaches non-mentioned members
 // once every this-many messages, as a single digest. Mentions are exempt —
@@ -64,6 +79,33 @@ function ensureVapidConfigured() {
     vapidConfigured = true;
   } catch (err) {
     vapidConfigError = err instanceof Error ? err.message : String(err);
+  }
+}
+
+// Same lazy-init reasoning as VAPID above, but FCM is allowed to be simply
+// absent (unset secret) rather than treated as a hard error — unlike VAPID,
+// which this function has always required, FCM support is being added
+// incrementally and shouldn't block deploys before Step 8 is done.
+let fcmProjectId = null;
+let fcmAuthClient = null;
+let fcmConfigAttempted = false;
+function ensureFcmConfigured() {
+  if (fcmConfigAttempted) return;
+  fcmConfigAttempted = true;
+  if (!FCM_SERVICE_ACCOUNT_RAW) return;
+
+  try {
+    const credentials = JSON.parse(FCM_SERVICE_ACCOUNT_RAW);
+    fcmProjectId = credentials.project_id;
+    const auth = new GoogleAuth({
+      credentials,
+      scopes: ['https://www.googleapis.com/auth/firebase.messaging'],
+    });
+    fcmAuthClient = auth; // GoogleAuth instance; getAccessToken() is called per-send below.
+  } catch (err) {
+    console.error('send-push: FCM_SERVICE_ACCOUNT is set but invalid:', err);
+    fcmProjectId = null;
+    fcmAuthClient = null;
   }
 }
 
@@ -112,12 +154,96 @@ function settingValue(settingsRow, column) {
 }
 
 /**
+ * Sends one FCM v1 message to a single device token. Returns 'sent',
+ * 'invalid' (token should be deleted — UNREGISTERED / NOT_FOUND / the
+ * sender-mismatch case), or 'skipped' (transient/other error, token kept
+ * for the next attempt).
+ */
+async function sendFcmToToken(token, title, body, url) {
+  const accessToken = await fcmAuthClient.getAccessToken();
+  const res = await fetch(
+    `https://fcm.googleapis.com/v1/projects/${fcmProjectId}/messages:send`,
+    {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        message: {
+          token,
+          notification: { title, body },
+          // Delivered alongside the system notification and read by the
+          // pushNotificationActionPerformed listener in nativePush.js on
+          // tap, so the app can deep-link straight to url.
+          data: { url: url ?? '/' },
+          android: { priority: 'high' },
+        },
+      }),
+    },
+  );
+
+  if (res.ok) return 'sent';
+
+  const errBody = await res.json().catch(() => null);
+  const status = errBody?.error?.status;
+  if (status === 'UNREGISTERED' || status === 'NOT_FOUND' || status === 'INVALID_ARGUMENT') {
+    return 'invalid';
+  }
+  console.error('send-push: FCM send failed:', res.status, errBody);
+  return 'skipped';
+}
+
+/**
+ * Sends to every fcm_tokens row for the given recipient user ids, deleting
+ * rows FCM reports as no-longer-valid. Mirrors sendToRecipients' Web Push
+ * pruning behavior for push_subscriptions.
+ */
+async function sendFcmToRecipients(recipientIds, title, body, url) {
+  ensureFcmConfigured();
+  if (!fcmAuthClient || recipientIds.length === 0) return { sent: 0, skipped: 0 };
+
+  const { data: tokenRows } = await supabase
+    .from('fcm_tokens')
+    .select('id, token')
+    .in('user_id', recipientIds);
+
+  let sent = 0;
+  let skipped = 0;
+
+  await Promise.all(
+    (tokenRows ?? []).map(async (row) => {
+      try {
+        const result = await sendFcmToToken(row.token, title, body, url);
+        if (result === 'sent') {
+          sent += 1;
+        } else {
+          skipped += 1;
+          if (result === 'invalid') {
+            await supabase.from('fcm_tokens').delete().eq('id', row.id);
+          }
+        }
+      } catch (err) {
+        console.error('send-push: FCM send threw:', err);
+        skipped += 1;
+      }
+    }),
+  );
+
+  return { sent, skipped };
+}
+
+/**
  * Actually sends a Web Push message to every push_subscriptions row for the
  * given recipient user ids, pruning dead subscriptions on 404/410. Pulled
  * out as its own helper because group_message notifications now need to
  * send two DIFFERENT payloads (an immediate one to mentioned users, a
  * digest one to everyone else) out of a single trigger invocation, instead
  * of always sending one payload to one recipient list.
+ *
+ * Now also fans out to FCM (Android APK) in parallel with the existing Web
+ * Push (browser) send — same recipient list, same title/body/url, two
+ * delivery rails. Counts are combined into one { sent, skipped } result.
  */
 async function sendToRecipients(recipientIds, title, body, url) {
   if (recipientIds.length === 0) return { sent: 0, skipped: 0 };
@@ -130,7 +256,7 @@ async function sendToRecipients(recipientIds, title, body, url) {
   let sent = 0;
   let skipped = 0;
 
-  await Promise.all(
+  const webPushWork = Promise.all(
     (subs ?? []).map(async (sub) => {
       const subscription = {
         endpoint: sub.endpoint,
@@ -153,6 +279,12 @@ async function sendToRecipients(recipientIds, title, body, url) {
       }
     }),
   );
+
+  const fcmWork = sendFcmToRecipients(recipientIds, title, body, url);
+
+  const [, fcmResult] = await Promise.all([webPushWork, fcmWork]);
+  sent += fcmResult.sent;
+  skipped += fcmResult.skipped;
 
   return { sent, skipped };
 }
@@ -458,7 +590,7 @@ Deno.serve(async (req) => {
         recipients,
         titleOverride ?? 'Anonroom',
         bodyOverride ?? '',
-        url,
+        urlOverride ?? '/',
       );
       return jsonResponse(result);
     }

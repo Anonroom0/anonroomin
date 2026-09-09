@@ -14,11 +14,18 @@
  * plus updateNotificationSettings() for optimistic upserts, and
  * refreshProfile() so components like EditProfile.jsx can re-sync profile
  * data after a save without forcing a full page reload.
+ *
+ * Also initializes native push (FCM, Android APK builds only — no-ops on
+ * web) once per signed-in user, reusing the same lastHandledUserId guard
+ * that already dedupes the profile fetch, so registration doesn't fire
+ * again on the follow-up TOKEN_REFRESHED event for the same session. Torn
+ * down on sign-out.
  * ============================================================================
  */
 
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import supabase from './supabaseClient';
+import { initNativePush, teardownNativePush } from './nativePush';
 
 const AuthContext = createContext();
 
@@ -48,7 +55,9 @@ export function AuthProvider({ children }) {
     // fetchProfile/fetchNotificationSettings a second or third time. Each of
     // those duplicate calls was its own pair of network round-trips plus a
     // state update, which is what made screens depending on `profile`
-    // visibly "reload" more than once.
+    // visibly "reload" more than once. Native push registration piggybacks
+    // on this same guard for the same reason — FCM re-registering on every
+    // token refresh event would be wasted work.
     let lastHandledUserId = null;
 
     // A single subscription covers both the initial session AND all
@@ -65,6 +74,7 @@ export function AuthProvider({ children }) {
         if (uid !== lastHandledUserId) {
           lastHandledUserId = uid;
           fetchProfile(uid);
+          initNativePush(uid);
         } else {
           // Same user we already fetched — just make sure we're not stuck
           // showing a loading state.
@@ -75,6 +85,7 @@ export function AuthProvider({ children }) {
         setProfile(null);
         setNotificationSettings(null);
         setLoading(false);
+        teardownNativePush();
       }
     });
 

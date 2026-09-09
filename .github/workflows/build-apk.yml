@@ -44,14 +44,28 @@ jobs:
           VITE_APP_VERSION: ${{ env.BUILD_VERSION }}
           VITE_VERSION_JSON_URL: https://anonroom.in/apk/version.json
 
-      - name: Install Capacitor CLI + Android platform
-        run: npm install @capacitor/cli@^6.2.0 @capacitor/android@^6.2.0
+      - name: Install Capacitor CLI + Android platform + push plugin
+        run: npm install @capacitor/cli@^6.2.0 @capacitor/android@^6.2.0 @capacitor/push-notifications@^6.0.2
 
       - name: Init Capacitor config
         run: npx cap init "Anonroom" "in.anonroom.app" --web-dir=dist
 
       - name: Add Android platform
         run: npx cap add android
+
+      - name: Decode google-services.json
+        # Same pattern as the release keystore below: never committed to the
+        # repo, only ever materialized on disk here for this job. Required
+        # by the Google Services Gradle plugin step + FCM at runtime.
+        run: |
+          echo "${{ secrets.GOOGLE_SERVICES_JSON_BASE64 }}" | base64 -d > android/app/google-services.json
+
+      - name: Add Google Services Gradle plugin
+        # google-services.json alone does nothing — the plugin is what reads
+        # it at build time and wires the Firebase config into the app.
+        run: |
+          sed -i "/dependencies {/a\\        classpath 'com.google.gms:google-services:4.4.2'" android/build.gradle
+          echo "apply plugin: 'com.google.gms.google-services'" >> android/app/build.gradle
 
       - name: Fix Kotlin stdlib version conflict
         run: |
@@ -85,11 +99,10 @@ jobs:
       - name: Sync web build + native plugins into Android project
         # `cap sync` (not just `cap copy`) is required here: @capacitor/share
         # and @capacitor/filesystem (added for the native Share-to-Instagram
-        # story flow — see src/lib/storyImageGenerator.js) are native
-        # plugins that need to be linked into the Android project's
-        # build.gradle/MainActivity, not just have their web JS copied in.
-        # `cap copy` alone would leave them unlinked and the native Share
-        # calls would fail at runtime even though the web bundle built fine.
+        # story flow — see src/lib/storyImageGenerator.js), plus the new
+        # @capacitor/push-notifications, are native plugins that need to be
+        # linked into the Android project's build.gradle/MainActivity, not
+        # just have their web JS copied in.
         run: npx cap sync android
 
       - uses: actions/setup-java@v5
@@ -111,11 +124,6 @@ jobs:
           ANDROID_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           ANDROID_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           ANDROID_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
-        # NOTE: uses `run: >` (folded scalar) instead of `run: |` with
-        # trailing `\` line-continuations. A single stray space after a `\`
-        # silently breaks the continuation and the shell tries to run the
-        # leftover flag as its own command ("command not found"). `>` joins
-        # everything into one line automatically, so there's nothing to break.
         run: >
           chmod +x gradlew &&
           ./gradlew assembleRelease
@@ -125,9 +133,6 @@ jobs:
           -Pandroid.injected.signing.key.password="$ANDROID_KEY_PASSWORD"
 
       - name: Remove decoded keystore from the runner
-        # Belt-and-suspenders cleanup — android/ is gitignored so this was
-        # never going to be committed, but there's no reason to leave the
-        # decoded key file sitting on disk for the rest of the job either.
         if: always()
         run: rm -f android/app/upload-keystore.jks
 
@@ -143,8 +148,6 @@ jobs:
           cp android/app/build/outputs/apk/release/app-release.apk downloads/anonroom-latest.apk
 
       - name: Update /apk/download page and version.json
-        # Canonical path is public/apk/download (legacy public/download removed).
-        # Expects public/apk/download/index.html committed with href="%%APK_URL%%".
         run: |
           APK_URL="https://raw.githubusercontent.com/${{ github.repository }}/${{ github.ref_name }}/downloads/anonroom-latest.apk"
           APP_VERSION="${BUILD_VERSION:-$(node -p "require('./package.json').version")}"
@@ -162,8 +165,6 @@ jobs:
           echo "Wrote version ${APP_VERSION} -> ${APK_URL}"
 
       - name: Publish version to Supabase app_releases
-        # Requires repo secrets SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY.
-        # Soft-skips if missing so local forks still build.
         env:
           SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
@@ -192,8 +193,6 @@ jobs:
             echo "APK unchanged since the last build — nothing to commit."
           else
             git commit -m "chore: update downloadable APK [skip ci]"
-            # Build steps leave unstaged/untracked noise (android/, dist/, etc.).
-            # --autostash lets pull --rebase proceed; drop the stash after push.
             git pull --rebase --autostash origin "${{ github.ref_name }}"
             git push origin "HEAD:${{ github.ref_name }}"
             git stash drop 2>/dev/null || true
