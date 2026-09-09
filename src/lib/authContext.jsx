@@ -26,7 +26,7 @@
 import React, { createContext, useContext, useEffect, useState } from 'react';
 import supabase from './supabaseClient';
 import { initNativePush, teardownNativePush } from './nativePush';
-
+import { Capacitor } from '@capacitor/core';
 const AuthContext = createContext();
 
 // Mirrors the column defaults on public.notification_settings — used
@@ -74,7 +74,45 @@ export function AuthProvider({ children }) {
         if (uid !== lastHandledUserId) {
           lastHandledUserId = uid;
           fetchProfile(uid);
-          initNativePush(uid);
+          initNativePush(uid, {
+  onNotificationTap: (data) => {
+    const raw = data?.url;
+    if (!raw || typeof raw !== 'string') return;
+
+    try {
+      // FCM may send a relative path ("/g/foo") or an absolute URL.
+      const u = new URL(raw, window.location.origin);
+      const path = `\( {u.pathname} \){u.search}${u.hash}` || '/';
+
+      // Same-origin only — never jump out of the WebView.
+      if (u.origin !== window.location.origin && !u.hostname.endsWith('anonroom.in')) {
+        return;
+      }
+
+      // App resolves routes from window.location on load / popstate
+      // (see main.jsx's notification-navigate handler and App.jsx).
+      if (path !== `\( {window.location.pathname} \){window.location.search}${window.location.hash}`) {
+        window.history.pushState({}, '', path);
+        window.dispatchEvent(new PopStateEvent('popstate'));
+        // Fallback for cold start / no popstate listeners yet:
+        // a full assign is safe inside the Capacitor WebView.
+        if (typeof Capacitor !== 'undefined' && Capacitor.isNativePlatform?.()) {
+          // Small delay so the SPA can paint if it's already mounted;
+          // if nothing handled popstate, force navigation.
+          setTimeout(() => {
+            if (
+              `\( {window.location.pathname} \){window.location.search}${window.location.hash}` !== path
+            ) {
+              window.location.assign(path);
+            }
+          }, 50);
+        }
+      }
+    } catch {
+      // Malformed url — ignore rather than crash the auth listener.
+    }
+  },
+});
         } else {
           // Same user we already fetched — just make sure we're not stuck
           // showing a loading state.
