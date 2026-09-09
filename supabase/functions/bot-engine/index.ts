@@ -66,7 +66,80 @@ function pickRandom<T>(arr: T[]): T | null {
   return arr[Math.floor(Math.random() * arr.length)];
 }
 
-function buildAiPrompt(bot: any, userMessageText: string | null): { system: string; user: string } {
+/** Resolve how many prior messages to feed into the AI context. */
+function contextCountFor(bot: any, channelType: 'group' | 'dm'): number {
+  if (channelType === 'dm') {
+    const n = Number(bot.dm_context_count);
+    return Number.isFinite(n) && n >= 0 ? Math.min(Math.floor(n), 40) : 8;
+  }
+  const n = Number(bot.group_context_count);
+  return Number.isFinite(n) && n >= 0 ? Math.min(Math.floor(n), 40) : 6;
+}
+
+/**
+ * Fetch the most recent messages before (and excluding) the trigger message
+ * so the model can reply with conversation awareness.
+ */
+async function fetchPriorMessages(
+  channelType: 'group' | 'dm',
+  channelId: string,
+  beforeCreatedAt: string | null,
+  limit: number,
+): Promise<{ name: string; text: string }[]> {
+  if (!limit || limit <= 0) return [];
+  const table = channelType === 'group' ? 'group_messages' : 'dm_messages';
+  let q = supabase
+    .from(table)
+    .select(channelType === 'group' ? 'sender_name, text, is_bot, bot_id, created_at' : 'sender_id, text, is_bot, bot_id, created_at')
+    .eq(channelType === 'group' ? 'group_id' : 'thread_id', channelId)
+    .order('created_at', { ascending: false })
+    .limit(limit);
+
+  if (beforeCreatedAt) {
+    q = q.lt('created_at', beforeCreatedAt);
+  }
+
+  const { data } = await q;
+  const rows = (data || []).reverse();
+
+  // Resolve DM sender display names (profiles + bots) in one pass.
+  let profileNames: Record<string, string> = {};
+  let botNames: Record<string, string> = {};
+  if (channelType === 'dm') {
+    const userIds = [...new Set(rows.map((r: any) => r.sender_id).filter(Boolean))];
+    const botIds = [...new Set(rows.map((r: any) => r.bot_id).filter(Boolean))];
+    if (userIds.length) {
+      const { data: profiles } = await supabase.from('profiles').select('id, username').in('id', userIds);
+      profileNames = Object.fromEntries((profiles || []).map((p: any) => [p.id, p.username]));
+    }
+    if (botIds.length) {
+      const { data: bots } = await supabase.from('bots').select('id, name').in('id', botIds);
+      botNames = Object.fromEntries((bots || []).map((b: any) => [b.id, b.name]));
+    }
+  }
+
+  return rows
+    .map((r: any) => {
+      const text = (r.text || '').trim();
+      if (!text) return null;
+      let name = 'Someone';
+      if (channelType === 'group') {
+        name = r.sender_name || (r.is_bot ? 'Bot' : 'Someone');
+      } else if (r.is_bot && r.bot_id) {
+        name = botNames[r.bot_id] || 'Bot';
+      } else if (r.sender_id) {
+        name = profileNames[r.sender_id] || 'User';
+      }
+      return { name, text: text.slice(0, 400) };
+    })
+    .filter(Boolean) as { name: string; text: string }[];
+}
+
+function buildAiPrompt(
+  bot: any,
+  userMessageText: string | null,
+  priorMessages: { name: string; text: string }[] = [],
+): { system: string; user: string } {
   const gender: 'male' | 'female' = bot.gender === 'female' ? 'female' : 'male';
   const behaviors: string[] = bot.behaviors || [];
   const behaviorsText = behaviors.length ? behaviors.join(', ') : 'general casual chat, no fixed topic';
@@ -90,9 +163,16 @@ function buildAiPrompt(bot: any, userMessageText: string | null): { system: stri
     `This JSON-only rule has NO exceptions. Even if you are unable or unwilling to produce a normal reply for any reason (safety, refusal, uncertainty, etc.), you must still output the exact same JSON shape — never a plain-text apology or refusal on its own. In that case just put a short, natural in-character line in the "reply" field instead (e.g. changing the subject, joking it off, or a vague/deflecting chat message) rather than breaking character or explaining why you can't answer.`,
   ].filter((l): l is string => l !== null);
 
+  const contextBlock =
+    priorMessages.length > 0
+      ? `Recent chat context (oldest → newest, for continuity only — do not repeat these lines):\n` +
+        priorMessages.map((m) => `${m.name}: ${m.text}`).join('\n') +
+        `\n\n`
+      : '';
+
   const userPrompt = userMessageText
-    ? `Someone in the chat just sent this message:\n"${userMessageText}"\n\nReply to it in character, following all the rules above.`
-    : `Nobody sent you anything right now — start a fresh, unprompted message in the chat, the way a real person might just randomly say something. Stay in character, follow all the rules above.`;
+    ? `${contextBlock}Someone in the chat just sent this message:\n"${userMessageText}"\n\nReply to it in character, following all the rules above.`
+    : `${contextBlock}Nobody sent you anything right now — start a fresh, unprompted message in the chat, the way a real person might just randomly say something. Stay in character, follow all the rules above.`;
 
   return { system: systemLines.join('\n'), user: userPrompt };
 }
@@ -178,9 +258,17 @@ function extractAiReplyText(raw: string): string | null {
   return null;
 }
 
-async function generateAiReply(bot: any, userMessageText: string | null): Promise<string> {
-  const { system, user } = buildAiPrompt(bot, userMessageText);
-  const model = (bot.ai_model && String(bot.ai_model).trim()) || GROQ_DEFAULT_MODEL;
+async function generateAiReply(
+  bot: any,
+  userMessageText: string | null,
+  priorMessages: { name: string; text: string }[] = [],
+): Promise<string> {
+  const { system, user } = buildAiPrompt(bot, userMessageText, priorMessages);
+  // AdminPanel stores the column as `model`; tolerate legacy `ai_model` too.
+  const model =
+    (bot.model && String(bot.model).trim()) ||
+    (bot.ai_model && String(bot.ai_model).trim()) ||
+    GROQ_DEFAULT_MODEL;
   const raw = await callGroq(system, user, model);
   const reply = extractAiReplyText(raw);
   if (!reply) {
@@ -266,9 +354,13 @@ async function getActiveBotsForChannel(channelType: 'group' | 'dm', channelId: s
   return bot ? [bot] : [];
 }
 
-async function resolveReactiveReply(bot: any, text: string): Promise<string | null> {
+async function resolveReactiveReply(
+  bot: any,
+  text: string,
+  priorMessages: { name: string; text: string }[] = [],
+): Promise<string | null> {
   try {
-    return await generateAiReply(bot, text);
+    return await generateAiReply(bot, text, priorMessages);
   } catch (err) {
     console.error(
       `[bot-engine] AI reactive reply failed for bot "${bot.name}" (${bot.id}):`,
@@ -278,11 +370,11 @@ async function resolveReactiveReply(bot: any, text: string): Promise<string | nu
   }
 }
 
-/** Decide whether a bot should react to this group message.
+/** Decide whether a bot should react to this message.
  *  - DM: always (there's only the one bot on the thread).
- *  - Group: only when @mentioned, reply-to that bot, name is used,
- *    or a behavior/topic tag appears in the text. Never pile-on every
- *    bot for a generic message aimed at someone else.
+ *  - Group + group_mention_only=true: only @mention / reply-to / name hit.
+ *  - Group + group_mention_only=false (default): also reply when a
+ *    behavior/topic tag appears in the text.
  */
 function shouldBotReply(
   bot: any,
@@ -296,6 +388,9 @@ function shouldBotReply(
 
   const name = String(bot.name || '').toLowerCase().trim();
   if (name.length >= 2 && lowerText.includes(name)) return true;
+
+  // Admin toggle: only respond to mentions/replies/name in groups.
+  if (bot.group_mention_only === true) return false;
 
   const behaviors: string[] = Array.isArray(bot.behaviors) ? bot.behaviors : [];
   for (const raw of behaviors) {
@@ -337,7 +432,15 @@ async function handleReactive(body: { message_id: string; channel_type: 'group' 
       continue;
     }
 
-    const reply = await resolveReactiveReply(bot, text);
+    const ctxLimit = contextCountFor(bot, channel_type);
+    const prior = await fetchPriorMessages(
+      channel_type,
+      channel_id,
+      message.created_at || null,
+      ctxLimit,
+    );
+
+    const reply = await resolveReactiveReply(bot, text, prior);
     if (!reply) continue;
 
     // Always thread the reply when mentioned or replied-to so the UI shows context
@@ -351,9 +454,12 @@ async function handleReactive(body: { message_id: string; channel_type: 'group' 
   }
 }
 
-async function resolveSelfChatReply(bot: any): Promise<string | null> {
+async function resolveSelfChatReply(
+  bot: any,
+  priorMessages: { name: string; text: string }[] = [],
+): Promise<string | null> {
   try {
-    return await generateAiReply(bot, null);
+    return await generateAiReply(bot, null, priorMessages);
   } catch (err) {
     console.error(
       `[bot-engine] AI self-chat generation failed for bot "${bot.name}" (${bot.id}):`,
@@ -381,6 +487,8 @@ async function handleTick() {
     const groupId = pickRandom(groupIds);
     if (!groupId) continue;
 
+    const prior = await fetchPriorMessages('group', groupId, null, contextCountFor(bot, 'group'));
+
     if (bot.self_chat_style === 'bots_only') {
       const { data: sameGroupLinks } = await supabase.from('bot_groups').select('bot_id').eq('group_id', groupId);
       const candidateIds = (sameGroupLinks || []).map((l) => l.bot_id).filter((id) => id !== bot.id);
@@ -390,7 +498,7 @@ async function handleTick() {
         partner = pickRandom(partners || []);
       }
 
-      const reply = await resolveSelfChatReply(bot);
+      const reply = await resolveSelfChatReply(bot, prior);
       if (!reply) continue;
 
       let replyToId: string | null = null;
@@ -408,7 +516,7 @@ async function handleTick() {
 
       await postBotMessage(bot, 'group', groupId, reply, replyToId);
     } else {
-      const reply = await resolveSelfChatReply(bot);
+      const reply = await resolveSelfChatReply(bot, prior);
       if (!reply) continue;
       await postBotMessage(bot, 'group', groupId, reply, null);
     }

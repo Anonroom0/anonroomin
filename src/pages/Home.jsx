@@ -29,7 +29,8 @@ import {
   buildStoryPath,
   getStoryTargetFromPath,
   ROOT_PATH,
-  isShortId
+  isShortId,
+  navigateInApp,
 } from '../lib/subdomain';
 import { subscribeToPush } from '../lib/pushNotifications';
 import { playTabSwitch, playRefreshComplete } from '../lib/soundManager';
@@ -357,8 +358,13 @@ const [sharingReply, setSharingReply] = useState(null); // NEW — { question, r
 
         finalGroups = await Promise.all(finalGroups.map(async (g) => {
           const lastRead = groupReceiptsMap[g.id] || '1970-01-01T00:00:00.000Z';
-          const { count } = await supabase.from('group_messages').select('*', { count: 'exact', head: true }).eq('group_id', g.id).contains('mentioned_user_ids', [userId]).gt('created_at', lastRead);
-          return { ...g, unread_mention: count > 0 };
+          const [{ count: mentionCount }, { count: unreadCount }] = await Promise.all([
+            supabase.from('group_messages').select('*', { count: 'exact', head: true }).eq('group_id', g.id).contains('mentioned_user_ids', [userId]).gt('created_at', lastRead),
+            // All messages after last_read, excluding the user's own (user_id match).
+            // Bot rows have user_id null so they still count as unread for the viewer.
+            supabase.from('group_messages').select('*', { count: 'exact', head: true }).eq('group_id', g.id).gt('created_at', lastRead).or(`user_id.is.null,user_id.neq.${userId}`),
+          ]);
+          return { ...g, unread_mention: (mentionCount || 0) > 0, unread_count: unreadCount || 0 };
         }));
 
         // Include bot DMs (user_b null, bot_id set) as well as normal user threads.
@@ -393,11 +399,16 @@ const [sharingReply, setSharingReply] = useState(null); // NEW — { question, r
           const isBotThread = !!t.bot_id;
           const otherId = isBotThread ? t.bot_id : (t.user_a === userId ? t.user_b : t.user_a);
           const lastRead = dmReceiptsMap[t.id] || '1970-01-01T00:00:00.000Z';
-          const { count } = await supabase.from('dm_messages').select('*', { count: 'exact', head: true }).eq('thread_id', t.id).contains('mentioned_user_ids', [userId]).gt('created_at', lastRead);
+          const [{ count: mentionCount }, { count: unreadCount }] = await Promise.all([
+            supabase.from('dm_messages').select('*', { count: 'exact', head: true }).eq('thread_id', t.id).contains('mentioned_user_ids', [userId]).gt('created_at', lastRead),
+            // Unread = messages after last_read that the current user did not send.
+            // Bot messages have sender_id null and still count.
+            supabase.from('dm_messages').select('*', { count: 'exact', head: true }).eq('thread_id', t.id).gt('created_at', lastRead).or(`sender_id.is.null,sender_id.neq.${userId}`),
+          ]);
           const otherUser = isBotThread
             ? (botsById[t.bot_id] || { id: t.bot_id, username: 'Bot', is_bot: true })
             : (profilesById[otherId] || { id: otherId, username: 'Unknown User' });
-          return { ...t, otherUser, unread_mention: count > 0 };
+          return { ...t, otherUser, unread_mention: (mentionCount || 0) > 0, unread_count: unreadCount || 0 };
         }));
 
         const { data: questionsData, error: questionsError } = await supabase.from('questions').select('*').eq('author_id', userId).order('created_at', { ascending: false });
@@ -577,7 +588,7 @@ const [sharingReply, setSharingReply] = useState(null); // NEW — { question, r
   }, []);
 
   const closeActiveChat = useCallback(() => {
-    if (activeChatType === 'group' && activeChatSource === 'subdomain') { window.location.href = getRootDomainUrl(); return; }
+    if (activeChatType === 'group' && activeChatSource === 'subdomain') { navigateInApp(ROOT_PATH || '/'); return; }
     setActiveChatId(null); setActiveChatType(null); setActiveChatSource(null); window.history.pushState({}, '', ROOT_PATH);
   }, [activeChatType, activeChatSource]);
 
@@ -714,7 +725,7 @@ const [sharingReply, setSharingReply] = useState(null); // NEW — { question, r
                       className="touch-bounce"
                       title="Download app"
                       aria-label="Download app"
-                      onClick={() => { window.location.href = '/apk/download/'; }}
+                      onClick={() => { navigateInApp('/apk/download/'); }}
                       style={{
                         width: 36, height: 36, borderRadius: '50%', border: '1px solid var(--glass-border)',
                         padding: 0, flexShrink: 0, background: 'var(--surface-2)', color: 'var(--paper)',
@@ -806,7 +817,14 @@ const [sharingReply, setSharingReply] = useState(null); // NEW — { question, r
                                       <span style={{ fontWeight: 600, fontSize: 16, display: 'block', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{group.name}</span>
                                       <span style={{ fontSize: 14, color: 'var(--dim)', display: 'block', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>{group.description || 'Public Channel'}</span>
                                     </div>
-                                    {group.unread_mention && <div style={{ width: 22, height: 22, borderRadius: '50%', background: 'var(--ember)', color: '#fff', fontSize: 12, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, marginLeft: 8 }}>@</div>}
+                                    <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0, marginLeft: 8 }}>
+                                      {group.unread_mention && <div style={{ width: 22, height: 22, borderRadius: '50%', background: 'var(--ember)', color: '#fff', fontSize: 12, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>@</div>}
+                                      {(group.unread_count || 0) > 0 && (
+                                        <div style={{ minWidth: 22, height: 22, padding: '0 6px', borderRadius: 11, background: 'var(--signal)', color: '#fff', fontSize: 12, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                          {group.unread_count > 99 ? '99+' : group.unread_count}
+                                        </div>
+                                      )}
+                                    </div>
                                   </button>
                                 );
                               })}
@@ -825,8 +843,13 @@ const [sharingReply, setSharingReply] = useState(null); // NEW — { question, r
                                     <div className="chat-row-content">
                                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 2 }}>
                                         <span style={{ fontWeight: 600, fontSize: 16, display: 'flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{identity.name}{identity.is_admin && <span style={{ color: 'var(--admin-1)' }}>{Icons.AdminShield}</span>}</span>
-                                        <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0, paddingLeft: 8 }}>
+                                        <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0, paddingLeft: 8 }}>
                                           {thread.unread_mention && <div style={{ width: 18, height: 18, borderRadius: '50%', background: 'var(--ember)', color: '#fff', fontSize: 11, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>@</div>}
+                                          {(thread.unread_count || 0) > 0 && (
+                                            <div style={{ minWidth: 18, height: 18, padding: '0 5px', borderRadius: 9, background: 'var(--signal)', color: '#fff', fontSize: 11, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                                              {thread.unread_count > 99 ? '99+' : thread.unread_count}
+                                            </div>
+                                          )}
                                           <span style={{ fontSize: 12, color: 'var(--dim)' }}>{formatTelegramTime(thread.created_at)}</span>
                                         </div>
                                       </div>

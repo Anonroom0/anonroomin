@@ -112,8 +112,11 @@ if ('serviceWorker' in navigator) {
       if (event.data?.type === 'notification-navigate' && event.data?.url) {
         try {
           const u = new URL(event.data.url, window.location.origin);
-          if (u.origin === window.location.origin) {
-            window.history.pushState({}, '', `${u.pathname}${u.search}${u.hash}`);
+          // Same-origin: stay inside the SPA / WebView — never bounce to an
+          // external browser tab which would "close" the app experience.
+          if (u.origin === window.location.origin || u.hostname.endsWith('anonroom.in')) {
+            const path = `${u.pathname}${u.search}${u.hash}`;
+            window.history.pushState({}, '', path);
             window.dispatchEvent(new PopStateEvent('popstate'));
           } else {
             window.location.assign(event.data.url);
@@ -124,6 +127,36 @@ if ('serviceWorker' in navigator) {
       }
     });
   });
+}
+
+// Capacitor / Android App Links: when the OS opens https://anonroom.in/...
+// into the already-running WebView, route in-app instead of a full reload
+// that can feel like leaving the app.
+if (Capacitor.isNativePlatform()) {
+  document.addEventListener('deviceready', () => {}, { once: true });
+  // Fallback for Capacitor without @capacitor/app: intercept same-origin
+  // anchors that would otherwise force a full document navigation.
+  document.addEventListener(
+    'click',
+    (e) => {
+      const a = e.target && e.target.closest && e.target.closest('a[href]');
+      if (!a) return;
+      const href = a.getAttribute('href');
+      if (!href || href.startsWith('#') || href.startsWith('mailto:') || href.startsWith('tel:')) return;
+      if (a.target === '_blank' || a.hasAttribute('download')) return;
+      try {
+        const u = new URL(href, window.location.origin);
+        if (u.origin === window.location.origin || u.hostname.endsWith('anonroom.in')) {
+          e.preventDefault();
+          window.history.pushState({}, '', `${u.pathname}${u.search}${u.hash}`);
+          window.dispatchEvent(new PopStateEvent('popstate'));
+        }
+      } catch {
+        /* ignore */
+      }
+    },
+    true,
+  );
 }
 
 // Global double-tap-to-zoom prevention safeguard.

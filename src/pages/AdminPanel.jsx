@@ -1421,6 +1421,7 @@ function emptyBotForm() {
     mode: 'reactive', self_chat_style: 'bots_only', min_interval_seconds: 60, max_interval_seconds: 240,
     active: true, dm_enabled: false,
     ai_model: '', ai_prefix_prompt: '', groq_api_key: '',
+    group_mention_only: false, group_context_count: 6, dm_context_count: 8,
   };
 }
 
@@ -1489,6 +1490,9 @@ function BotsTab({ actor }) {
       min_interval_seconds: bot.min_interval_seconds, max_interval_seconds: bot.max_interval_seconds,
       active: bot.active, dm_enabled: !!bot.dm_enabled,
       ai_model: bot.model || '', ai_prefix_prompt: bot.ai_prefix_prompt || '', groq_api_key: bot.groq_api_key || '',
+      group_mention_only: !!bot.group_mention_only,
+      group_context_count: bot.group_context_count ?? 6,
+      dm_context_count: bot.dm_context_count ?? 8,
     });
     setCustomBehaviorInput('');
     setEditing(bot);
@@ -1556,6 +1560,9 @@ function BotsTab({ actor }) {
       model: form.ai_model.trim() || null,
       ai_prefix_prompt: form.ai_prefix_prompt.trim() || null,
       groq_api_key: form.groq_api_key.trim() || null,
+      group_mention_only: !!form.group_mention_only,
+      group_context_count: Math.max(0, Math.min(40, Number(form.group_context_count) || 0)),
+      dm_context_count: Math.max(0, Math.min(40, Number(form.dm_context_count) || 0)),
     };
 
     let botId = editing?.id;
@@ -1784,6 +1791,40 @@ function BotsTab({ actor }) {
                 <div style={{ fontSize: 12, color: 'var(--dim)' }}>Users can open a 1:1 DM with this bot.</div>
               </div>
               <LiquidSwitch checked={form.dm_enabled} onChange={() => setForm((f) => ({ ...f, dm_enabled: !f.dm_enabled }))} />
+            </div>
+
+            <div style={{ borderTop: '1px solid var(--glass-border)', margin: '8px 0 14px', paddingTop: 12 }}>
+              <div style={{ fontSize: 13, fontWeight: 700, color: 'var(--paper)', marginBottom: 10 }}>AI context &amp; reply rules</div>
+
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
+                <div style={{ paddingRight: 12 }}>
+                  <div style={{ fontSize: 13.5, color: 'var(--paper)', fontWeight: 600 }}>Group: only @mentions / replies</div>
+                  <div style={{ fontSize: 12, color: 'var(--dim)' }}>When on, the bot ignores general chat and only replies when mentioned, replied to, or named. DM always replies to every message.</div>
+                </div>
+                <LiquidSwitch checked={form.group_mention_only} onChange={() => setForm((f) => ({ ...f, group_mention_only: !f.group_mention_only }))} />
+              </div>
+
+              <label style={{ fontSize: 12.5, color: 'var(--dim)', display: 'block', marginBottom: 4 }}>Previous messages in group context (0–40)</label>
+              <input
+                type="number"
+                min={0}
+                max={40}
+                style={{ ...inputStyle, marginBottom: 4 }}
+                value={form.group_context_count}
+                onChange={(e) => setForm((f) => ({ ...f, group_context_count: e.target.value }))}
+              />
+              <p style={{ fontSize: 12, color: 'var(--dim)', margin: '0 0 12px' }}>How many earlier group messages are included in the AI prompt for continuity.</p>
+
+              <label style={{ fontSize: 12.5, color: 'var(--dim)', display: 'block', marginBottom: 4 }}>Previous messages in DM context (0–40)</label>
+              <input
+                type="number"
+                min={0}
+                max={40}
+                style={{ ...inputStyle, marginBottom: 4 }}
+                value={form.dm_context_count}
+                onChange={(e) => setForm((f) => ({ ...f, dm_context_count: e.target.value }))}
+              />
+              <p style={{ fontSize: 12, color: 'var(--dim)', margin: '0 0 4px' }}>How many earlier DM messages are included. DM always replies to every user message.</p>
             </div>
 
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 16 }}>

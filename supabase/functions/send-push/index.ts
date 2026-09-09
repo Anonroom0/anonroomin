@@ -220,10 +220,23 @@ async function resolveGroupMessageRecipients(row, actorId) {
 async function resolveDmRecipient(row, actorId) {
   const { data: thread } = await supabase
     .from('dm_threads')
-    .select('user_a, user_b')
+    .select('user_a, user_b, bot_id')
     .eq('id', row.thread_id)
     .maybeSingle();
   if (!thread) return { recipients: [] };
+
+  // Bot DM thread: only the human user receives pushes when the bot posts.
+  if (thread.bot_id) {
+    const humanId = thread.user_a || thread.user_b;
+    if (!humanId) return { recipients: [] };
+    if (actorId && actorId === humanId) return { recipients: [] };
+    const { data: settings } = await supabase
+      .from('notification_settings')
+      .select('dm_enabled')
+      .eq('user_id', humanId)
+      .maybeSingle();
+    return { recipients: settingValue(settings, 'dm_enabled') ? [humanId] : [] };
+  }
 
   const otherId = thread.user_a === actorId ? thread.user_b : thread.user_a;
   if (!otherId || otherId === actorId) return { recipients: [] };
@@ -323,8 +336,6 @@ Deno.serve(async (req) => {
     return jsonResponse({ error: 'target_type is required' }, 400);
   }
 
-  const url = urlOverride ?? '/';
-
   try {
     if (targetType === 'group_message') {
       const { data: row } = await supabase
@@ -337,6 +348,13 @@ Deno.serve(async (req) => {
       const { mentionRecipients, milestoneRecipients, groupName, messageCount } =
         await resolveGroupMessageRecipients(row, actorId);
 
+      // Deep-link into the group chat path so notification taps stay in-app.
+      let groupUrl = urlOverride ?? '/';
+      if (!urlOverride && row.group_id) {
+        const { data: g } = await supabase.from('groups').select('slug').eq('id', row.group_id).maybeSingle();
+        if (g?.slug) groupUrl = `/g/${encodeURIComponent(g.slug)}`;
+      }
+
       let sent = 0;
       let skipped = 0;
 
@@ -346,7 +364,7 @@ Deno.serve(async (req) => {
           mentionRecipients,
           titleOverride ?? 'You were mentioned',
           bodyOverride ?? truncate(row.text, 120),
-          url,
+          groupUrl,
         );
         sent += r.sent;
         skipped += r.skipped;
@@ -359,7 +377,7 @@ Deno.serve(async (req) => {
           milestoneRecipients,
           titleOverride ?? `${messageCount} new messages in ${groupName ?? 'a group'}`,
           bodyOverride ?? 'Catch up on the conversation',
-          url,
+          groupUrl,
         );
         sent += r.sent;
         skipped += r.skipped;
@@ -377,11 +395,35 @@ Deno.serve(async (req) => {
       if (!row) return jsonResponse({ sent: 0, skipped: 0 });
 
       const { recipients } = await resolveDmRecipient(row, actorId);
+
+      // Resolve a username path for in-app DM open when possible.
+      let dmUrl = urlOverride ?? '/';
+      if (!urlOverride && row.thread_id) {
+        const { data: thread } = await supabase
+          .from('dm_threads')
+          .select('user_a, user_b, bot_id')
+          .eq('id', row.thread_id)
+          .maybeSingle();
+        if (thread?.bot_id) {
+          const { data: bot } = await supabase.from('bots').select('name').eq('id', thread.bot_id).maybeSingle();
+          if (bot?.name) dmUrl = `/${encodeURIComponent(bot.name)}`;
+        } else if (thread) {
+          // Prefer the non-actor user as the path username when actor is known.
+          const otherId = actorId
+            ? (thread.user_a === actorId ? thread.user_b : thread.user_a)
+            : (thread.user_a || thread.user_b);
+          if (otherId) {
+            const { data: prof } = await supabase.from('profiles').select('username').eq('id', otherId).maybeSingle();
+            if (prof?.username) dmUrl = `/${encodeURIComponent(prof.username)}`;
+          }
+        }
+      }
+
       const result = await sendToRecipients(
         recipients,
         titleOverride ?? 'New message',
         bodyOverride ?? truncate(row.text, 120),
-        url,
+        dmUrl,
       );
       return jsonResponse(result);
     }
