@@ -1484,12 +1484,24 @@ function BotsTab({ actor }) {
   }
 
   function openEdit(bot) {
+    // Column is `model` only — Groq model id. Reject persona prose stored there.
+    const rawModel = (bot.model || '').toString().trim();
+    const looksLikeModelId = rawModel && rawModel.length <= 80 && !/\s/.test(rawModel) && /^[a-zA-Z0-9_./:-]+$/.test(rawModel);
+    let persona = (bot.ai_prefix_prompt || '').toString();
+    // One-time rescue: if model held free-text instructions, show them under persona.
+    if (!looksLikeModelId && rawModel && !persona) {
+      persona = rawModel;
+    } else if (!looksLikeModelId && rawModel && persona && !persona.includes(rawModel)) {
+      persona = `${persona}\n${rawModel}`.trim();
+    }
     setForm({
       group_ids: botGroupMap[bot.id] || [], name: bot.name, gender: bot.gender, avatar_url: bot.avatar_url || '',
       behaviors: bot.behaviors || [], mode: bot.mode, self_chat_style: bot.self_chat_style,
       min_interval_seconds: bot.min_interval_seconds, max_interval_seconds: bot.max_interval_seconds,
       active: bot.active, dm_enabled: !!bot.dm_enabled,
-      ai_model: bot.model || '', ai_prefix_prompt: bot.ai_prefix_prompt || '', groq_api_key: bot.groq_api_key || '',
+      ai_model: looksLikeModelId ? rawModel : '',
+      ai_prefix_prompt: persona,
+      groq_api_key: bot.groq_api_key || '',
       group_mention_only: !!bot.group_mention_only,
       group_context_count: bot.group_context_count ?? 6,
       dm_context_count: bot.dm_context_count ?? 8,
@@ -1552,12 +1564,19 @@ function BotsTab({ actor }) {
     if (!form.group_ids.length) { showToast('Select at least one group for this bot.', 'error'); return; }
 
     setSaving(true);
+    // Column is `model` only — must be a Groq model id, never persona text.
+    const modelId = form.ai_model.trim() || null;
+    if (modelId && (/\s/.test(modelId) || modelId.length > 80 || !/^[a-zA-Z0-9_./:-]+$/.test(modelId))) {
+      showToast('Groq model must be a model id (e.g. openai/gpt-oss-120b), not persona text.', 'error');
+      setSaving(false);
+      return;
+    }
     const payload = {
       name, gender: form.gender, avatar_url: form.avatar_url || null,
       behaviors: form.behaviors, mode: form.mode, self_chat_style: form.self_chat_style,
       min_interval_seconds: Number(form.min_interval_seconds) || 60, max_interval_seconds: Number(form.max_interval_seconds) || 240,
       active: form.active, dm_enabled: form.dm_enabled,
-      model: form.ai_model.trim() || null,
+      model: modelId,
       ai_prefix_prompt: form.ai_prefix_prompt.trim() || null,
       groq_api_key: form.groq_api_key.trim() || null,
       group_mention_only: !!form.group_mention_only,
