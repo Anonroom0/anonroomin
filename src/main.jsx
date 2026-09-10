@@ -19,6 +19,7 @@ import './styles/animations.css';
 
 import { Capacitor } from '@capacitor/core';
 import { StatusBar } from '@capacitor/status-bar';
+import { App as CapacitorApp } from '@capacitor/app';
 
 // When running as the wrapped native Android app (Capacitor), the WebView
 // draws edge-to-edge under the status bar by default, which is what was
@@ -134,30 +135,66 @@ if ('serviceWorker' in navigator) {
 // that can feel like leaving the app.
 if (Capacitor.isNativePlatform()) {
   document.addEventListener('deviceready', () => {}, { once: true });
-  // Fallback for Capacitor without @capacitor/app: intercept same-origin
-  // anchors that would otherwise force a full document navigation.
-  document.addEventListener(
-    'click',
-    (e) => {
-      const a = e.target && e.target.closest && e.target.closest('a[href]');
-      if (!a) return;
-      const href = a.getAttribute('href');
-      if (!href || href.startsWith('#') || href.startsWith('mailto:') || href.startsWith('tel:')) return;
-      if (a.target === '_blank' || a.hasAttribute('download')) return;
-      try {
-        const u = new URL(href, window.location.origin);
-        if (u.origin === window.location.origin || u.hostname.endsWith('anonroom.in')) {
-          e.preventDefault();
-          window.history.pushState({}, '', `${u.pathname}${u.search}${u.hash}`);
-          window.dispatchEvent(new PopStateEvent('popstate'));
-        }
-      } catch {
-        /* ignore */
-      }
-    },
-    true,
-  );
 }
+
+// Hardware/gesture back button (Android). Without this listener, Capacitor's
+// default behavior is to exit the app on every back press — even with a
+// DM/group/question/story open — which is the "back button just closes the
+// whole app" bug. `canGoBack` reflects the WebView's own session history,
+// which grows by one on every pushState this SPA does (opening a
+// DM/group/question/story, navigateInApp calls, the anchor intercept
+// below, ResetPassword's redirect, etc. — all pushState, never replaceState,
+// except where a screen deliberately wants back to skip over it). So here,
+// "go back" always means "close whatever's open via the same popstate
+// listeners Home.jsx/App.jsx already have" (see resolveActiveChatFromLocation
+// in Home.jsx and the top-level listener in App.jsx), and it's only once
+// there's truly nothing left in that history that the app should exit.
+if (Capacitor.isNativePlatform()) {
+  CapacitorApp.addListener('backButton', ({ canGoBack }) => {
+    if (canGoBack) {
+      window.history.back();
+    } else {
+      CapacitorApp.exitApp();
+    }
+  });
+}
+
+// Global same-origin anchor intercept — runs on web AND native (previously
+// native-only). Any <a href="/..."> or <a href="https://anonroom.in/...">
+// anywhere in the app — including ones that aren't already wrapped in a
+// navigateInApp()/onClick handler — gets routed through pushState + a
+// synthetic popstate instead of a full document navigation. On native this
+// also keeps the WebView from ever loading the real internet host (which
+// would drop it out of the bundled app entirely, not just "leave the
+// screen"); on web it's what makes an ordinary same-origin <a> behave like
+// the rest of the SPA instead of a full-page reload/flash. External links
+// (different host, target="_blank", download, mailto:/tel:/#) are left
+// alone either way.
+document.addEventListener(
+  'click',
+  (e) => {
+    const a = e.target && e.target.closest && e.target.closest('a[href]');
+    if (!a) return;
+    const href = a.getAttribute('href');
+    if (!href || href.startsWith('#') || href.startsWith('mailto:') || href.startsWith('tel:')) return;
+    if (a.target === '_blank' || a.hasAttribute('download')) return;
+    // Explicit opt-out for the rare internal link that genuinely needs a
+    // full reload — e.g. anything pointing at admin.html, a separate Vite
+    // entry point/bundle that isn't part of this SPA's router at all.
+    if (a.hasAttribute('data-hard-nav')) return;
+    try {
+      const u = new URL(href, window.location.origin);
+      if (u.origin === window.location.origin || u.hostname.endsWith('anonroom.in')) {
+        e.preventDefault();
+        window.history.pushState({}, '', `${u.pathname}${u.search}${u.hash}`);
+        window.dispatchEvent(new PopStateEvent('popstate'));
+      }
+    } catch {
+      /* ignore */
+    }
+  },
+  true,
+);
 
 // Global double-tap-to-zoom prevention safeguard.
 // Some mobile browsers still allow zooming via a rapid double-tap even when

@@ -126,16 +126,15 @@ function truncate(text, max) {
 }
 
 /**
- * There's no group_members table in this schema — group access is
- * subdomain-based, not a separate membership list. group_read_receipts is
- * the closest proxy for "who has this group open" (a row is written there
- * per user per group), so it's used here as the membership set for
- * notification fan-out. Swap this for a real membership table if one gets
- * added later.
+ * group_threads is the real membership table now (migration 0009) — a row
+ * there means the user has actually joined the channel, not just "has ever
+ * had it open" (which is all group_read_receipts, its now-unused
+ * predecessor, ever meant). That makes this an even better fan-out set than
+ * before: joining/leaving a channel now directly controls who gets paged.
  */
 async function getGroupMemberIds(groupId, excludeUserId) {
   const { data } = await supabase
-    .from('group_read_receipts')
+    .from('group_threads')
     .select('user_id')
     .eq('group_id', groupId);
   return [...new Set((data ?? []).map((r) => r.user_id))].filter(

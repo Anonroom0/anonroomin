@@ -34,12 +34,13 @@
 
 import React, { useEffect, useState } from 'react';
 import supabase from '../lib/supabaseClient';
-import { getGroupUrl } from '../lib/subdomain';
+import { buildGroupPath, navigateInApp } from '../lib/subdomain';
 import { getOrCreateVisitorId } from '../lib/visitorId';
 import { useViewportHeight } from '../lib/useViewportHeight';
 import { showToast } from '../lib/toast';
 import { hapticSuccess, hapticError } from '../lib/haptics';
 import { playRefreshComplete, playError } from '../lib/soundManager';
+import BbssmBanner from '../components/shared/BbssmBanner';
 
 const MAX_LENGTH = 500;
 
@@ -215,6 +216,8 @@ export default function ConfessToGroup({ groupSlug }) {
           'radial-gradient(circle at 20% 10%, rgba(47,111,255,0.18), transparent 55%), radial-gradient(circle at 85% 90%, rgba(47,111,255,0.10), transparent 50%), var(--ink)',
       }}
     >
+      <div style={{ width: '100%', maxWidth: 440, display: 'flex', flexDirection: 'column', gap: 12 }}>
+      <BbssmBanner style={{ margin: 0 }} />
       <div
         className="pop-in"
         style={{
@@ -269,12 +272,13 @@ export default function ConfessToGroup({ groupSlug }) {
               >
                 Send another
               </button>
-              <a
-                href={getGroupUrl(groupSlug)}
-                style={{ flex: 1, padding: '13px 0', borderRadius: 16, border: 'none', background: 'var(--ember)', color: '#fff', fontWeight: 700, fontSize: 14.5, textAlign: 'center', textDecoration: 'none' }}
+              <button
+                type="button"
+                onClick={() => navigateInApp(buildGroupPath(groupSlug))}
+                style={{ flex: 1, padding: '13px 0', borderRadius: 16, border: 'none', background: 'var(--ember)', color: '#fff', fontWeight: 700, fontSize: 14.5, textAlign: 'center', cursor: 'pointer' }}
               >
                 View group
-              </a>
+              </button>
             </div>
           </div>
         )}
@@ -349,6 +353,7 @@ export default function ConfessToGroup({ groupSlug }) {
             </p>
           </form>
         )}
+      </div>
       </div>
     </div>
   );

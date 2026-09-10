@@ -54,6 +54,7 @@ import CreateConfessionModal from '../components/questions/CreateConfessionModal
 import QuestionCard from '../components/questions/QuestionCard';
 import QuestionThread from './QuestionThread';
 import ShareStorySheet from '../components/questions/ShareStorySheet';
+import ExploreChannelsSheet from '../components/groups/ExploreChannelsSheet';
 import '../styles/tokens.css';
 import '../styles/animations.css';
 
@@ -106,6 +107,12 @@ const Icons = {
     <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
       <polyline points="23 4 23 10 17 10" />
       <path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
+    </svg>
+  ),
+  Compass: (
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+      <circle cx="12" cy="12" r="10" />
+      <polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76" />
     </svg>
   )
 };
@@ -334,6 +341,11 @@ const [sharingReply, setSharingReply] = useState(null); // NEW — { question, r
 
   const [threads, setThreads] = useState([]);
   const [groups, setGroups] = useState([]);
+  // Channels the user hasn't joined yet — only ever shown behind "Explore
+  // more" (see the CHATS TAB render below), never mixed into `groups`.
+  const [exploreGroups, setExploreGroups] = useState([]);
+  const [exploreOpen, setExploreOpen] = useState(false);
+  const [joiningGroupId, setJoiningGroupId] = useState(null);
   const [myQuestions, setMyQuestions] = useState([]);
   const [loadingList, setLoadingList] = useState(true);
   const [isInitialLoad, setIsInitialLoad] = useState(true);
@@ -345,38 +357,49 @@ const [sharingReply, setSharingReply] = useState(null); // NEW — { question, r
     if (isInitialLoad) setLoadingList(true);
 
     try {
-      const { data: groupsData, error: groupsError } = await supabase
+      const { data: allGroupsData, error: groupsError } = await supabase
         .from('groups').select('id, slug, name, description, cover_url, created_at').order('created_at', { ascending: false });
       if (groupsError) throw groupsError;
-      let finalGroups = groupsData || [];
+      const allGroups = allGroupsData || [];
+      let finalGroups = [];
+      let finalExploreGroups = allGroups;
       let finalThreads = [];
       let finalQuestions = [];
-      
+
       if (userId) {
-        const { data: groupReceipts } = await supabase.from('group_read_receipts').select('group_id, last_read_at').eq('user_id', userId);
-        const groupReceiptsMap = Object.fromEntries((groupReceipts || []).map(r => [r.group_id, r.last_read_at]));
+        // A group_threads row = "joined this channel" — it's also where its
+        // unread_count/mention live now, denormalized and kept current by
+        // DB triggers, so this replaces the old per-group COUNT queries
+        // entirely (see 0009_group_threads_and_dm_counters.sql).
+        const { data: joinedRows, error: joinedError } = await supabase
+          .from('group_threads')
+          .select('group_id, unread_count, mention, joined_at')
+          .eq('user_id', userId)
+          .order('joined_at', { ascending: false });
+        if (joinedError) throw joinedError;
 
-        finalGroups = await Promise.all(finalGroups.map(async (g) => {
-          const lastRead = groupReceiptsMap[g.id] || '1970-01-01T00:00:00.000Z';
-          const [{ count: mentionCount }, { count: unreadCount }] = await Promise.all([
-            supabase.from('group_messages').select('*', { count: 'exact', head: true }).eq('group_id', g.id).contains('mentioned_user_ids', [userId]).gt('created_at', lastRead),
-            // All messages after last_read, excluding the user's own (user_id match).
-            // Bot rows have user_id null so they still count as unread for the viewer.
-            supabase.from('group_messages').select('*', { count: 'exact', head: true }).eq('group_id', g.id).gt('created_at', lastRead).or(`user_id.is.null,user_id.neq.${userId}`),
-          ]);
-          return { ...g, unread_mention: (mentionCount || 0) > 0, unread_count: unreadCount || 0 };
-        }));
+        const groupsById = Object.fromEntries(allGroups.map((g) => [g.id, g]));
+        finalGroups = (joinedRows || [])
+          .map((r) => {
+            const g = groupsById[r.group_id];
+            if (!g) return null; // group was deleted since joining
+            return { ...g, unread_mention: !!r.mention, unread_count: r.unread_count || 0 };
+          })
+          .filter(Boolean);
 
-        // Include bot DMs (user_b null, bot_id set) as well as normal user threads.
+        const joinedIds = new Set(finalGroups.map((g) => g.id));
+        finalExploreGroups = allGroups.filter((g) => !joinedIds.has(g.id));
+
+        // Include bot DMs (user_b null, bot_id set) as well as normal user
+        // threads. Unread counts + last-message preview are columns on
+        // dm_threads itself now (kept current by DB triggers), so no more
+        // separate read-receipts fetch or per-thread COUNT queries either.
         const { data: threadRows, error: threadsError } = await supabase
           .from('dm_threads')
-          .select('id, user_a, user_b, bot_id, created_at')
+          .select('id, user_a, user_b, bot_id, created_at, last_message_at, last_message_preview, unread_count_a, unread_count_b, mention_a, mention_b')
           .or(`user_a.eq.${userId},user_b.eq.${userId}`)
-          .order('created_at', { ascending: false });
+          .order('last_message_at', { ascending: false, nullsFirst: false });
         if (threadsError) throw threadsError;
-
-        const { data: dmReceipts } = await supabase.from('dm_read_receipts').select('thread_id, last_read_at').eq('user_id', userId);
-        const dmReceiptsMap = Object.fromEntries((dmReceipts || []).map(r => [r.thread_id, r.last_read_at]));
 
         const otherIds = (threadRows || [])
           .map((t) => (t.bot_id ? null : (t.user_a === userId ? t.user_b : t.user_a)))
@@ -395,21 +418,20 @@ const [sharingReply, setSharingReply] = useState(null); // NEW — { question, r
           botsById = Object.fromEntries((botRows || []).map((b) => [b.id, { id: b.id, username: b.name, avatar_url: b.avatar_url, is_admin: false, is_bot: true }]));
         }
 
-        finalThreads = await Promise.all((threadRows || []).map(async (t) => {
+        finalThreads = (threadRows || []).map((t) => {
           const isBotThread = !!t.bot_id;
           const otherId = isBotThread ? t.bot_id : (t.user_a === userId ? t.user_b : t.user_a);
-          const lastRead = dmReceiptsMap[t.id] || '1970-01-01T00:00:00.000Z';
-          const [{ count: mentionCount }, { count: unreadCount }] = await Promise.all([
-            supabase.from('dm_messages').select('*', { count: 'exact', head: true }).eq('thread_id', t.id).contains('mentioned_user_ids', [userId]).gt('created_at', lastRead),
-            // Unread = messages after last_read that the current user did not send.
-            // Bot messages have sender_id null and still count.
-            supabase.from('dm_messages').select('*', { count: 'exact', head: true }).eq('thread_id', t.id).gt('created_at', lastRead).or(`sender_id.is.null,sender_id.neq.${userId}`),
-          ]);
+          const isUserA = t.user_a === userId;
           const otherUser = isBotThread
             ? (botsById[t.bot_id] || { id: t.bot_id, username: 'Bot', is_bot: true })
             : (profilesById[otherId] || { id: otherId, username: 'Unknown User' });
-          return { ...t, otherUser, unread_mention: (mentionCount || 0) > 0, unread_count: unreadCount || 0 };
-        }));
+          return {
+            ...t,
+            otherUser,
+            unread_mention: isUserA ? !!t.mention_a : !!t.mention_b,
+            unread_count: (isUserA ? t.unread_count_a : t.unread_count_b) || 0,
+          };
+        });
 
         const { data: questionsData, error: questionsError } = await supabase.from('questions').select('*').eq('author_id', userId).order('created_at', { ascending: false });
         if (!questionsError && questionsData) finalQuestions = questionsData;
@@ -417,6 +439,7 @@ const [sharingReply, setSharingReply] = useState(null); // NEW — { question, r
 
       if (isMounted) {
         setGroups(finalGroups);
+        setExploreGroups(finalExploreGroups);
         setThreads(finalThreads);
         setMyQuestions(finalQuestions);
       }
@@ -426,6 +449,44 @@ const [sharingReply, setSharingReply] = useState(null); // NEW — { question, r
 
   useEffect(() => { fetchData(); }, [fetchData]);
   const { pullDistance, isRefreshing, handleTouchStart, handleTouchMove, handleTouchEnd } = usePullToRefresh(fetchData, scrollRef);
+
+  // Badge counts live on group_threads/dm_threads rows now (see
+  // 0009_group_threads_and_dm_counters.sql), so a plain postgres_changes
+  // UPDATE subscription is enough to keep them current in real time —
+  // no more waiting on the next pull-to-refresh to see a new unread count.
+  useEffect(() => {
+    if (!userId) return undefined;
+
+    const channel = supabase
+      .channel(`home_badges:${userId}`)
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'group_threads', filter: `user_id=eq.${userId}` },
+        (payload) => {
+          const row = payload.new;
+          setGroups((prev) => prev.map((g) => (g.id === row.group_id ? { ...g, unread_count: row.unread_count || 0, unread_mention: !!row.mention } : g)));
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'dm_threads', filter: `user_a=eq.${userId}` },
+        (payload) => {
+          const row = payload.new;
+          setThreads((prev) => prev.map((t) => (t.id === row.id ? { ...t, unread_count: row.unread_count_a || 0, unread_mention: !!row.mention_a, last_message_preview: row.last_message_preview, last_message_at: row.last_message_at } : t)));
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'dm_threads', filter: `user_b=eq.${userId}` },
+        (payload) => {
+          const row = payload.new;
+          setThreads((prev) => prev.map((t) => (t.id === row.id ? { ...t, unread_count: row.unread_count_b || 0, unread_mention: !!row.mention_b, last_message_preview: row.last_message_preview, last_message_at: row.last_message_at } : t)));
+        }
+      )
+      .subscribe();
+
+    return () => { supabase.removeChannel(channel); };
+  }, [userId]);
 
   useEffect(() => {
     if (userId && 'Notification' in window) {
@@ -440,65 +501,83 @@ const [sharingReply, setSharingReply] = useState(null); // NEW — { question, r
   const handleEnablePush = async () => { localStorage.setItem('anonroom_push_prompted', 'true'); setShowPushPrompt(false); try { await subscribeToPush(userId); } catch (err) {} };
   const handleDismissPush = () => { localStorage.setItem('anonroom_push_prompted', 'true'); setShowPushPrompt(false); };
 
-  useEffect(() => {
-    let cancelled = false;
-    async function resolveInitialRoute() {
-      // Groups now route through the path-based anonroom.in/g/<slug> URL —
-      // a real subdomain visit never reaches this point at all anymore (see
-      // App.jsx's redirect effect), so this only needs to check the path.
-      const pathGroupSlug = getGroupSlugFromPath();
-      if (pathGroupSlug) { if (!cancelled) { setActiveChatId(pathGroupSlug); setActiveChatType('group'); setActiveChatSource('path'); } return; }
+  // Single source of truth for "what should activeChatId/Type/Source be,
+  // given the CURRENT URL" — used both at mount (cold start / deep link)
+  // and on every popstate (browser back/forward, our own synthetic
+  // popstate from navigateInApp/pushState elsewhere in the app, and the
+  // native back-button handler in main.jsx). Previously this logic only
+  // ever ran once at mount, so pressing back out of a DM/group/question
+  // changed the URL but left the old panel on screen until a manual
+  // refresh re-read the path — this is what makes that URL the actual
+  // source of truth continuously, not just on first load. Deliberately
+  // does NOT handle story paths (see the popstate listener below for why).
+  const resolveActiveChatFromLocation = useCallback(async ({ isCancelled = () => false } = {}) => {
+    // Groups now route through the path-based anonroom.in/g/<slug> URL —
+    // a real subdomain visit never reaches this point at all anymore (see
+    // App.jsx's redirect effect), so this only needs to check the path.
+    const pathGroupSlug = getGroupSlugFromPath();
+    if (pathGroupSlug) { if (!isCancelled()) { setActiveChatId(pathGroupSlug); setActiveChatType('group'); setActiveChatSource('path'); } return; }
 
-      // Local/dev-only fallback: wildcard subdomains don't resolve on
-      // localhost or a bare IP, so a group can still be opened there via
-      // ?group=slug (see getGroupSlugFromHost's local-host branch).
-      const hostSlug = getGroupSlugFromHost();
-      if (hostSlug) { if (!cancelled) { setActiveChatId(hostSlug); setActiveChatType('group'); setActiveChatSource('subdomain'); } return; }
+    // Local/dev-only fallback: wildcard subdomains don't resolve on
+    // localhost or a bare IP, so a group can still be opened there via
+    // ?group=slug (see getGroupSlugFromHost's local-host branch).
+    const hostSlug = getGroupSlugFromHost();
+    if (hostSlug) { if (!isCancelled()) { setActiveChatId(hostSlug); setActiveChatType('group'); setActiveChatSource('subdomain'); } return; }
 
-      const currentPath = window.location.pathname;
-      if (currentPath.startsWith('/q/')) {
-        const qId = currentPath.split('/')[2];
-        if (qId && !cancelled) { setActiveChatId(qId); setActiveChatType('question'); setActiveChatSource('path'); }
-        return;
-      }
+    const currentPath = window.location.pathname;
+    if (currentPath.startsWith('/q/')) {
+      const qId = currentPath.split('/')[2];
+      if (qId) { if (!isCancelled()) { setActiveChatId(qId); setActiveChatType('question'); setActiveChatSource('path'); } return; }
+    }
 
-      const storyTarget = getStoryTargetFromPath();
-      if (storyTarget) {
-        if (!cancelled) setInitialStoryTarget(storyTarget);
-        return;
-      }
-
-      const dmUsername = getDmUsernameFromPath();
-      if (dmUsername) {
-        const uname = dmUsername.toLowerCase();
-        // Real profiles first, then bots treated as real usernames so
-        // /botname opens a DM the same way /username does.
-        const { data, error } = await supabase.from('profiles').select('id, username').eq('username', uname).maybeSingle();
-        if (cancelled) return;
-        if (!error && data) {
-          // Own profile path should not open a self-DM
-          const myId = (await supabase.auth.getSession()).data?.session?.user?.id;
-          if (myId && data.id === myId) {
-            showToast("Messaging yourself isn't available.", 'info');
-            window.history.replaceState({}, '', ROOT_PATH);
-            setActiveChatId(null); setActiveChatType(null); setActiveChatSource(null);
-          } else {
-            setActiveChatId(data.id); setActiveChatType('dm'); setActiveChatSource('path');
-          }
+    const dmUsername = getDmUsernameFromPath();
+    if (dmUsername) {
+      const uname = dmUsername.toLowerCase();
+      // Real profiles first, then bots treated as real usernames so
+      // /botname opens a DM the same way /username does.
+      const { data, error } = await supabase.from('profiles').select('id, username').eq('username', uname).maybeSingle();
+      if (isCancelled()) return;
+      if (!error && data) {
+        // Own profile path should not open a self-DM
+        const myId = (await supabase.auth.getSession()).data?.session?.user?.id;
+        if (isCancelled()) return;
+        if (myId && data.id === myId) {
+          showToast("Messaging yourself isn't available.", 'info');
+          window.history.replaceState({}, '', ROOT_PATH);
+          setActiveChatId(null); setActiveChatType(null); setActiveChatSource(null);
         } else {
-          const { data: botRow } = await supabase.from('bots').select('id, name, active, dm_enabled').ilike('name', uname).eq('active', true).maybeSingle();
-          if (cancelled) return;
-          if (botRow && botRow.dm_enabled !== false) {
-            setActiveChatId(botRow.id); setActiveChatType('dm'); setActiveChatSource('path');
-          } else {
-            window.history.replaceState({}, '', ROOT_PATH); setActiveChatId(null); setActiveChatType(null); setActiveChatSource(null);
-          }
+          setActiveChatId(data.id); setActiveChatType('dm'); setActiveChatSource('path');
+        }
+      } else {
+        const { data: botRow } = await supabase.from('bots').select('id, name, active, dm_enabled').ilike('name', uname).eq('active', true).maybeSingle();
+        if (isCancelled()) return;
+        if (botRow && botRow.dm_enabled !== false) {
+          setActiveChatId(botRow.id); setActiveChatType('dm'); setActiveChatSource('path');
+        } else {
+          window.history.replaceState({}, '', ROOT_PATH); setActiveChatId(null); setActiveChatType(null); setActiveChatSource(null);
         }
       }
+      return;
     }
-    resolveInitialRoute();
-    return () => { cancelled = true; };
+
+    // Nothing above matched — we're at the root (or a story/top-level path
+    // this function doesn't own). Clear any stale panel so a back-navigation
+    // out of a DM/group/question actually lands on Home.
+    if (!isCancelled()) { setActiveChatId(null); setActiveChatType(null); setActiveChatSource(null); }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    // Story deep links are a cold-start-only concern (handed to StoriesBar
+    // via initialTarget, consumed once) — resolveActiveChatFromLocation
+    // deliberately doesn't touch them; see the popstate listener below for
+    // why re-opening a story from a back-navigation isn't done the same way.
+    const storyTarget = getStoryTargetFromPath();
+    if (storyTarget) setInitialStoryTarget(storyTarget);
+    resolveActiveChatFromLocation({ isCancelled: () => cancelled });
+    return () => { cancelled = true; };
+  }, [resolveActiveChatFromLocation]);
 
   // Deep Link Resolver for #story-<id>
   useEffect(() => {
@@ -564,6 +643,31 @@ const [sharingReply, setSharingReply] = useState(null); // NEW — { question, r
     window.history.pushState({}, '', buildGroupPath(slug));
   }
 
+  // Explore → Join: inserts the group_threads membership row, then opens
+  // the channel. Optimistic (moves the card into the main list immediately)
+  // with a rollback on failure. GroupChat.jsx would actually create this
+  // same row itself the moment it marks the channel read, so this is really
+  // just "join right now, from the list" instead of "join by opening it".
+  async function handleJoinGroup(group) {
+    if (!userId) { setAuthOpen(true); return; }
+    hapticTap();
+    setJoiningGroupId(group.id);
+    setExploreGroups((prev) => prev.filter((g) => g.id !== group.id));
+    setGroups((prev) => (prev.some((g) => g.id === group.id) ? prev : [{ ...group, unread_count: 0, unread_mention: false }, ...prev]));
+
+    const { error } = await supabase.from('group_threads').insert({ group_id: group.id, user_id: userId });
+    setJoiningGroupId(null);
+    if (error) {
+      console.error(error);
+      showToast(friendlyDbError(), 'error');
+      setGroups((prev) => prev.filter((g) => g.id !== group.id));
+      setExploreGroups((prev) => (prev.some((g) => g.id === group.id) ? prev : [group, ...prev]));
+      return;
+    }
+    setExploreOpen(false);
+    handleOpenGroup(group.slug);
+  }
+
   // Now accepts an initialItemId so the viewer can jump directly to that story
   function handleOpenStory(channels, startIndex, initialItemId = null) {
     setViewingStory({ channels, startIndex, initialItemId });
@@ -578,14 +682,22 @@ const [sharingReply, setSharingReply] = useState(null); // NEW — { question, r
 
   useEffect(() => {
     function handlePopState() {
+      // Story open/close only ever CLOSES here (never re-opens) — see
+      // resolveActiveChatFromLocation's comment for why: handleOpenStory
+      // pushes a new history entry, so re-opening from a popstate handler
+      // would push on top of a back-navigation and leave an extra, wrong
+      // entry in the stack. Landing back on a story URL via forward/back
+      // is rare enough (StoryViewer's own channel-switching uses
+      // replaceState, not pushState) that this asymmetry is fine.
       if (!getStoryTargetFromPath()) {
         setViewingStory(null);
         setInitialStoryTarget(null);
       }
+      resolveActiveChatFromLocation();
     }
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
-  }, []);
+  }, [resolveActiveChatFromLocation]);
 
   const closeActiveChat = useCallback(() => {
     if (activeChatType === 'group' && activeChatSource === 'subdomain') { navigateInApp(ROOT_PATH || '/'); return; }
@@ -804,9 +916,22 @@ const [sharingReply, setSharingReply] = useState(null); // NEW — { question, r
                     <div className="tab-animated">
                       {loadingList ? ( <div style={{ padding: '0 12px' }}><MessageSkeleton variant="list-row" count={6} /></div> ) : (
                         <>
-                          {groups.length > 0 && (
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '18px 24px 6px' }}>
+                            <span style={{ fontSize: 13, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5, color: 'var(--dim)' }}>Groups</span>
+                            <button
+                              className="touch-bounce"
+                              onClick={() => { hapticTap(); setExploreOpen(true); }}
+                              style={{ display: 'inline-flex', alignItems: 'center', gap: 5, border: 'none', background: 'var(--tab-track)', color: 'var(--paper)', padding: '5px 12px', borderRadius: 999, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}
+                            >
+                              {Icons.Compass} Explore more
+                            </button>
+                          </div>
+                          {groups.length === 0 ? (
+                            <div style={{ padding: '4px 24px 8px' }}>
+                              <p style={{ fontSize: 13.5, color: 'var(--dim)', lineHeight: 1.4 }}>You haven't joined any channels yet — tap Explore more to find one.</p>
+                            </div>
+                          ) : (
                             <>
-                              <div style={{ fontSize: 13, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5, color: 'var(--dim)', padding: '18px 24px 6px' }}>Groups</div>
                               {groups.map((group, index) => {
                                 const isActive = activeChatId === group.slug && activeChatType === 'group';
                                 const identity = { name: group.name, avatar_url: group.cover_url, is_admin: false };
@@ -850,10 +975,10 @@ const [sharingReply, setSharingReply] = useState(null); // NEW — { question, r
                                               {thread.unread_count > 99 ? '99+' : thread.unread_count}
                                             </div>
                                           )}
-                                          <span style={{ fontSize: 12, color: 'var(--dim)' }}>{formatTelegramTime(thread.created_at)}</span>
+                                          <span style={{ fontSize: 12, color: 'var(--dim)' }}>{formatTelegramTime(thread.last_message_at || thread.created_at)}</span>
                                         </div>
                                       </div>
-                                      <span style={{ fontSize: 14, color: 'var(--dim)', display: 'block', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>Tap to view messages</span>
+                                      <span style={{ fontSize: 14, color: 'var(--dim)', display: 'block', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>{thread.last_message_preview || 'Tap to view messages'}</span>
                                     </div>
                                   </button>
                                 );
@@ -1011,6 +1136,7 @@ const [sharingReply, setSharingReply] = useState(null); // NEW — { question, r
 <ProfileCard userId={profileCardUserId} open={profileCardUserId !== null} onClose={() => setProfileCardUserId(null)} onMessage={(id) => { setProfileCardUserId(null); handleOpenChat(id, 'dm'); }} />
 <CreateQuestionModal open={createQuestionOpen} onClose={() => setCreateQuestionOpen(false)} initialType={createQuestionType} onCreated={(question) => { setMyQuestions(prev => [question, ...prev]); }} />
 <CreateConfessionModal open={createConfessionOpen} onClose={() => setCreateConfessionOpen(false)} onCreated={() => {}} />
+<ExploreChannelsSheet open={exploreOpen} onClose={() => setExploreOpen(false)} groups={exploreGroups} onJoin={handleJoinGroup} joiningId={joiningGroupId} />
 {sharingQuestion && (
   <ShareStorySheet mode="question" open={!!sharingQuestion} onClose={() => setSharingQuestion(null)} question={sharingQuestion} />
 )}

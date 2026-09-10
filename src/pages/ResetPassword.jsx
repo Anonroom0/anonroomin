@@ -53,7 +53,7 @@
 
 import React, { useEffect, useRef, useState } from 'react';
 import supabase from '../lib/supabaseClient';
-import { ROOT_PATH, getResetPasswordTokenHash } from '../lib/subdomain';
+import { ROOT_PATH, getResetPasswordTokenHash, navigateInApp } from '../lib/subdomain';
 import { showToast } from '../lib/toast';
 import { hapticSuccess, hapticError } from '../lib/haptics';
 import { playRefreshComplete, playError } from '../lib/soundManager';
@@ -201,7 +201,10 @@ export default function ResetPassword() {
     setStage('success');
     showToast('Password updated', 'success');
     setTimeout(() => {
-      window.location.href = ROOT_PATH;
+      // In-app redirect (pushState + popstate), not a full reload — App.jsx
+      // now picks this up via its own popstate listener and swaps straight
+      // to Home instead of a reset-password screen flash on the way there.
+      navigateInApp(ROOT_PATH, { replace: true });
     }, REDIRECT_DELAY_MS);
   }
 
@@ -259,7 +262,7 @@ export default function ResetPassword() {
               This password reset link is invalid or has already been used. Request a new one from the sign-in screen and try again.
             </p>
             <button
-              onClick={() => { window.location.href = ROOT_PATH; }}
+              onClick={() => navigateInApp(ROOT_PATH, { replace: true })}
               style={{
                 marginTop: 8, width: '100%', padding: '14px 0', borderRadius: 16, border: 'none',
                 background: 'var(--ember)', color: '#fff', fontWeight: 700, fontSize: 15, cursor: 'pointer',

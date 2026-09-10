@@ -82,7 +82,7 @@ export function AuthProvider({ children }) {
     try {
       // FCM may send a relative path ("/g/foo") or an absolute URL.
       const u = new URL(raw, window.location.origin);
-      const path = `\( {u.pathname} \){u.search}${u.hash}` || '/';
+      const path = `${u.pathname}${u.search}${u.hash}` || '/';
 
       // Same-origin only — never jump out of the WebView.
       if (u.origin !== window.location.origin && !u.hostname.endsWith('anonroom.in')) {
@@ -91,7 +91,7 @@ export function AuthProvider({ children }) {
 
       // App resolves routes from window.location on load / popstate
       // (see main.jsx's notification-navigate handler and App.jsx).
-      if (path !== `\( {window.location.pathname} \){window.location.search}${window.location.hash}`) {
+      if (path !== `${window.location.pathname}${window.location.search}${window.location.hash}`) {
         window.history.pushState({}, '', path);
         window.dispatchEvent(new PopStateEvent('popstate'));
         // Fallback for cold start / no popstate listeners yet:
@@ -101,7 +101,7 @@ export function AuthProvider({ children }) {
           // if nothing handled popstate, force navigation.
           setTimeout(() => {
             if (
-              `\( {window.location.pathname} \){window.location.search}${window.location.hash}` !== path
+              `${window.location.pathname}${window.location.search}${window.location.hash}` !== path
             ) {
               window.location.assign(path);
             }

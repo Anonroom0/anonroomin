@@ -618,7 +618,12 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
     // "undefined" to uuid).
     let lastReadAt = '1970-01-01T00:00:00.000Z';
     if (ownUserId) {
-      const { data: receiptData } = await supabase.from('group_read_receipts').select('last_read_at').eq('group_id', group.id).eq('user_id', ownUserId).maybeSingle();
+      // group_threads is both membership ("joined this channel") and read
+      // state now — this select doubles as "am I already joined?" but we
+      // don't need that here, just last_read_at for the unread-mention math
+      // below. The upsert a few lines down creates the row (= joins the
+      // channel) the first time this runs for a given user+group.
+      const { data: receiptData } = await supabase.from('group_threads').select('last_read_at').eq('group_id', group.id).eq('user_id', ownUserId).maybeSingle();
       lastReadAt = receiptData?.last_read_at || lastReadAt;
     }
 
@@ -637,7 +642,16 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
       if (ownUserId) {
         const unreadMention = fetchedMessages.find((m) => m.mentioned_user_ids?.includes(ownUserId) && new Date(m.created_at) > new Date(lastReadAt));
         if (unreadMention) { setHasUnreadMention(true); setLatestMentionId(unreadMention.id); } 
-        else { supabase.from('group_read_receipts').upsert({ group_id: group.id, user_id: ownUserId, last_read_at: new Date().toISOString() }).then(); }
+        else {
+          // Upsert-only-passing-last_read_at is deliberate: on first run
+          // (no row yet) this INSERTs and joined_at/unread_count/mention
+          // take their column defaults (now(), 0, false) — i.e. opening a
+          // group you haven't joined joins it. On every later run it's a
+          // plain UPDATE of last_read_at, which a DB trigger uses to zero
+          // unread_count/mention (see 0009_group_threads_and_dm_counters.sql)
+          // without ever touching joined_at.
+          supabase.from('group_threads').upsert({ group_id: group.id, user_id: ownUserId, last_read_at: new Date().toISOString() }, { onConflict: 'group_id,user_id' }).then();
+        }
       }
     }
   }, [group?.id, ownUserId, attachConfessionIds]);
@@ -1146,7 +1160,7 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
     const element = document.getElementById(`msg-${latestMentionId}`);
     if (element) { element.scrollIntoView({ behavior: 'smooth', block: 'center' }); setHighlightedMsgId(latestMentionId); setTimeout(() => setHighlightedMsgId(null), 2000); }
     setHasUnreadMention(false);
-    if (ownUserId && group?.id) supabase.from('group_read_receipts').upsert({ group_id: group.id, user_id: ownUserId, last_read_at: new Date().toISOString() }).then();
+    if (ownUserId && group?.id) supabase.from('group_threads').upsert({ group_id: group.id, user_id: ownUserId, last_read_at: new Date().toISOString() }, { onConflict: 'group_id,user_id' }).then();
   }
 
   // `isAnonMsg` used to be read here as a closure variable, but this

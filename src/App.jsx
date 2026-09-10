@@ -330,6 +330,22 @@ function SubdomainRedirectScreen() {
 export default function App() {
   const subdomainGroupSlug = useGroupSubdomainRedirect();
 
+  // resolveTopLevelView() reads window.location fresh on every call, but
+  // nothing was ever telling React TO call it again after the URL changes
+  // without a full page load — so browser back/forward (and our own
+  // synthetic popstate from navigateInApp) silently left the wrong
+  // top-level view mounted (e.g. back out of /confessions or /confess/<slug>
+  // did nothing) until a manual refresh re-ran this component from scratch.
+  // This just forces a re-render on every popstate so the dispatch below
+  // re-reads the URL; Home.jsx has its own, more granular popstate handler
+  // for routing *within* itself (DM/group/question/story).
+  const [, forceRerenderOnNavigate] = useState(0);
+  useEffect(() => {
+    function handlePopState() { forceRerenderOnNavigate((n) => n + 1); }
+    window.addEventListener('popstate', handlePopState);
+    return () => window.removeEventListener('popstate', handlePopState);
+  }, []);
+
   // ----------------------------------------------------------------------
   // JS-level pinch-zoom prevention.
   // ----------------------------------------------------------------------

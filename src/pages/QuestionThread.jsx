@@ -46,6 +46,7 @@ import MessageSkeleton from '../components/shared/MessageSkeleton';
 import SendButton from '../components/shared/SendButton';
 import AuthModal from './AuthModal';
 import ShareStorySheet from '../components/questions/ShareStorySheet';
+import BbssmBanner from '../components/shared/BbssmBanner';
 
 // ============================================================================
 // 1. CONSTANTS
@@ -663,44 +664,9 @@ export default function QuestionThread({ questionId, onBack, onShareReply }) {
 
       <QuestionHeaderCard question={question} isPrivate={isPrivate} isAuthor={isAuthor} />
 
-      {/* --- START BANNER ALONG WITH LINK --- */}
-<div
-  role="link"
-  tabIndex={0}
-  onClick={() => navigateInApp('/g/bbssm')}
-  onKeyDown={(e) => {
-    if (e.key === 'Enter' || e.key === ' ') navigateInApp('/g/bbssm');
-  }}
-  style={{
-    display: 'flex',
-    alignItems: 'center',
-    margin: '0 16px 8px',
-    padding: '12px 14px',
-    borderRadius: 18,
-    background: 'var(--glass-white)',
-    border: '1px solid var(--glass-border)',
-    backdropFilter: 'blur(20px) saturate(115%)',
-    WebkitBackdropFilter: 'blur(20px) saturate(115%)',
-    cursor: 'pointer',
-    gap: 12,
-    boxShadow: '0 6px 16px rgba(0,0,0,0.25)',
-    flexShrink: 0,
-  }}
->
-  <img
-    src="https://akvvctjxodexaiwciwsd.supabase.co/storage/v1/object/public/media/2d745df8-d287-448d-aab3-74672e404238/dm-1787867170783-20919.jpg"
-    alt="BBSSM DP"
-    style={{ width: 46, height: 46, borderRadius: '50%', objectFit: 'cover', border: '2px solid var(--glass-border)' }}
-  />
-  <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 4 }}>
-    <span style={{ color: 'var(--paper)', fontSize: 15, fontWeight: 800, lineHeight: 1.1 }}>BBSSM</span>
-    <span style={{ color: 'var(--dim)', fontSize: 13, fontWeight: 500, lineHeight: 1.1 }}>Join the official group chat ✨</span>
-  </div>
-  <div style={{ background: 'var(--ember)', color: '#fff', padding: '6px 14px', borderRadius: 999, fontSize: 12, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5, boxShadow: '0 2px 8px rgba(47,111,255,0.4)' }}>
-    Join
-  </div>
-</div>
-{/* --- END BANNER --- */}
+      {/* --- START BANNER --- */}
+      <BbssmBanner />
+      {/* --- END BANNER --- */}
 
       <div
         ref={scrollRef}
