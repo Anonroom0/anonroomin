@@ -3,6 +3,8 @@ name: Build Android APK
 on:
   workflow_dispatch: {}
 
+# The commit-the-APK-back-into-the-repo step below needs push access —
+# the default GITHUB_TOKEN is read-only unless this is declared.
 permissions:
   contents: write
 
@@ -12,6 +14,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
+          # Full history (not the default shallow clone) so the later
+          # `git pull --rebase` before pushing the APK commit doesn't choke
+          # on a shallow repo if main has moved since this run started.
           fetch-depth: 0
 
       - uses: actions/setup-node@v5
@@ -22,9 +27,12 @@ jobs:
         run: npm install
 
       - name: Resolve app version for this build
+        # package.json base + GitHub run number so every CI APK is a new
+        # version (e.g. 0.1.0.58). Without this, Check for update always
+        # reports up-to-date because APK and version.json stay at 0.1.0.
         run: |
           BASE=$(node -p "require('./package.json').version")
-          BUILD_VERSION="\( {BASE}. \){{ github.run_number }}"
+          BUILD_VERSION="${BASE}.${{ github.run_number }}"
           echo "BUILD_VERSION=${BUILD_VERSION}" >> "$GITHUB_ENV"
           echo "Using BUILD_VERSION=${BUILD_VERSION}"
 
@@ -37,6 +45,10 @@ jobs:
           VITE_VERSION_JSON_URL: https://anonroom.in/apk/version.json
 
       - name: Install Capacitor CLI + Android platform + push plugin
+        # @capacitor/app is what powers the hardware/gesture back-button
+        # handling in src/main.jsx (backButton listener) — without it,
+        # Capacitor's default behavior is to exit the app on every back
+        # press instead of closing whatever's open first.
         run: npm install @capacitor/cli@^6.2.0 @capacitor/android@^6.2.0 @capacitor/push-notifications@^6.0.2 @capacitor/app@^6.0.0
 
       - name: Init Capacitor config
@@ -46,6 +58,12 @@ jobs:
         run: npx cap add android
 
       - name: Decode google-services.json
+        # Same pattern as the release keystore below: never committed to the
+        # repo, only ever materialized on disk here for this job. Required
+        # by the Google Services Gradle plugin step + FCM at runtime.
+        # Stripped of stray whitespace/newlines in case the secret picked
+        # any up on copy-paste, then validated so a bad secret fails fast
+        # here instead of surfacing as a confusing Gradle error later.
         run: |
           if [ -z "${{ secrets.GOOGLE_SERVICES_JSON_BASE64 }}" ]; then
             echo "ERROR: GOOGLE_SERVICES_JSON_BASE64 secret is empty"
@@ -58,6 +76,8 @@ jobs:
           }
 
       - name: Add Google Services Gradle plugin
+        # google-services.json alone does nothing — the plugin is what reads
+        # it at build time and wires the Firebase config into the app.
         run: |
           sed -i "/dependencies {/a\\        classpath 'com.google.gms:google-services:4.4.2'" android/build.gradle
           echo "apply plugin: 'com.google.gms.google-services'" >> android/app/build.gradle
@@ -82,6 +102,12 @@ jobs:
           sed -i '/<uses-permission android:name="android.permission.INTERNET" \/>/a\    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />\n    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />' android/app/src/main/AndroidManifest.xml
 
       - name: Add App Links intent filters
+        # Lets https://anonroom.in/... links opened elsewhere on the device
+        # (browser, notifications, other apps) open directly in this app
+        # instead of Chrome, once the assetlinks.json/autoVerify handshake
+        # passes (see public/.well-known/assetlinks.json and the App Links
+        # verification plan). Idempotent: skips if already present so
+        # re-runs against a cached/edited manifest don't double-insert it.
         run: |
           python3 << 'PY'
           from pathlib import Path
@@ -117,6 +143,12 @@ jobs:
           npx @capacitor/assets generate --android
 
       - name: Sync web build + native plugins into Android project
+        # `cap sync` (not just `cap copy`) is required here: @capacitor/share
+        # and @capacitor/filesystem (added for the native Share-to-Instagram
+        # story flow — see src/lib/storyImageGenerator.js), plus
+        # @capacitor/push-notifications and @capacitor/app, are native
+        # plugins that need to be linked into the Android project's
+        # build.gradle/MainActivity, not just have their web JS copied in.
         run: npx cap sync android
 
       # MUST run AFTER cap sync so build.gradle is not overwritten
@@ -132,10 +164,10 @@ jobs:
             sed -i -E "s/versionCode[[:space:]]+[0-9]+/versionCode ${VERSION_CODE}/" android/app/build.gradle
             sed -i -E "s/versionName[[:space:]]+\"[^\"]*\"/versionName \"${VERSION_NAME}\"/" android/app/build.gradle
           else
-            sed -i "/defaultConfig {/a\        versionCode \( {VERSION_CODE}\n        versionName \" \){VERSION_NAME}\"" android/app/build.gradle
+            sed -i "/defaultConfig {/a\        versionCode ${VERSION_CODE}\n        versionName \"${VERSION_NAME}\"" android/app/build.gradle
           fi
 
-          echo "Android versionCode=\( {VERSION_CODE} versionName= \){VERSION_NAME}"
+          echo "Android versionCode=${VERSION_CODE} versionName=${VERSION_NAME}"
           grep -E "applicationId|versionCode|versionName" android/app/build.gradle
 
       - uses: actions/setup-java@v5
@@ -144,6 +176,10 @@ jobs:
           java-version: '21'
 
       - name: Decode release keystore
+        # The keystore itself is never committed to the repo — it only ever
+        # exists on disk here, inside the CI runner's workspace, and only
+        # for the duration of this job. android/ is already gitignored, so
+        # this file never gets picked up by the later "git add" commit step.
         run: |
           echo "${{ secrets.ANDROID_KEYSTORE_BASE64 }}" | base64 -d > android/app/upload-keystore.jks
 
@@ -178,18 +214,19 @@ jobs:
 
       - name: Update /apk/download page and version.json
         run: |
-          APK_URL="https://raw.githubusercontent.com/\( {{ github.repository }}/ \){{ github.ref_name }}/downloads/anonroom-latest.apk"
-          APP_VERSION="\( {BUILD_VERSION:- \)(node -p "require('./package.json').version")}"
+          APK_URL="https://raw.githubusercontent.com/${{ github.repository }}/${{ github.ref_name }}/downloads/anonroom-latest.apk"
+          APP_VERSION="${BUILD_VERSION:-$(node -p "require('./package.json').version")}"
 
           if [ ! -f public/apk/download/index.html ]; then
             echo "ERROR: public/apk/download/index.html is missing from the repo."
+            echo "Commit that file with href=\"%%APK_URL%%\" and re-run."
             exit 1
           fi
 
           sed -i "s#%%APK_URL%%#${APK_URL}#g" public/apk/download/index.html
           sed -i -E 's#(class="download-btn" href=")[^"]*(")#\1'"${APK_URL}"'\2#g' public/apk/download/index.html
 
-          printf '%s\n' "{\"version\": \"\( {APP_VERSION}\", \"apkUrl\": \" \){APK_URL}\"}" > public/apk/version.json
+          printf '%s\n' "{\"version\": \"${APP_VERSION}\", \"apkUrl\": \"${APK_URL}\"}" > public/apk/version.json
           echo "Wrote version ${APP_VERSION} -> ${APK_URL}"
 
       - name: Publish version to Supabase app_releases
@@ -201,9 +238,9 @@ jobs:
             echo "Skipping DB publish (SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY not set)"
             exit 0
           fi
-          APK_URL="https://raw.githubusercontent.com/\( {{ github.repository }}/ \){{ github.ref_name }}/downloads/anonroom-latest.apk"
+          APK_URL="https://raw.githubusercontent.com/${{ github.repository }}/${{ github.ref_name }}/downloads/anonroom-latest.apk"
           VER="${BUILD_VERSION}"
-          BODY=$(printf '{"id":"android","version":"%s","apk_url":"%s","updated_at":"%s"}' "$VER" "\( APK_URL" " \)(date -u +%Y-%m-%dT%H:%M:%SZ)")
+          BODY=$(printf '{"id":"android","version":"%s","apk_url":"%s","updated_at":"%s"}' "$VER" "$APK_URL" "$(date -u +%Y-%m-%dT%H:%M:%SZ)")
           curl -sS -f -X POST "${SUPABASE_URL}/rest/v1/app_releases?on_conflict=id" \
             -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" \
             -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
