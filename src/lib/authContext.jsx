@@ -27,6 +27,7 @@ import React, { createContext, useContext, useEffect, useState } from 'react';
 import supabase from './supabaseClient';
 import { initNativePush, teardownNativePush } from './nativePush';
 import { Capacitor } from '@capacitor/core';
+import SplashLoader from '../components/shared/SplashLoader';
 const AuthContext = createContext();
 
 // Mirrors the column defaults on public.notification_settings — used
@@ -241,7 +242,10 @@ export function AuthProvider({ children }) {
         refreshProfile,
       }}
     >
-      {!loading && children}
+      {/* While session/profile are still being resolved, show the animated
+          ANONROOM splash instead of rendering nothing (which just exposed
+          the bare HTML/body background with no loading indication). */}
+      {loading ? <SplashLoader /> : children}
     </AuthContext.Provider>
   );
 }

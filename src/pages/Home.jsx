@@ -184,6 +184,63 @@ function usePullToRefresh(onRefresh, scrollRef) {
   return { pullDistance, isRefreshing, handleTouchStart, handleTouchMove, handleTouchEnd };
 }
 
+// Swipe left/right on the Chats/Ask Me list area to switch tabs — the
+// modularity convenience feature: swipe left on Chats to land on Ask Me,
+// swipe right on Ask Me to land back on Chats (and vice-versa symmetrically
+// once on Ask Me), same as the segmented control buttons above the list.
+// Runs alongside usePullToRefresh's own touch handlers on the same
+// element (see the ref usage below) — it only ever acts once a gesture is
+// clearly more horizontal than vertical, so it never fights the vertical
+// scroll/pull-to-refresh gesture.
+const SWIPE_TAB_ORDER = ['chats', 'ask_me'];
+const SWIPE_DISTANCE_THRESHOLD_PX = 50;
+const SWIPE_DIRECTION_LOCK_PX = 12;
+
+function useTabSwipe(activeTab, setActiveTab, disabled, onSwitch) {
+  const startX = useRef(null);
+  const startY = useRef(null);
+  const isHorizontal = useRef(false);
+
+  const onTouchStart = (e) => {
+    if (disabled || !e.touches || e.touches.length !== 1) return;
+    startX.current = e.touches[0].clientX;
+    startY.current = e.touches[0].clientY;
+    isHorizontal.current = false;
+  };
+
+  const onTouchMove = (e) => {
+    if (disabled || startX.current === null || !e.touches || e.touches.length !== 1) return;
+    const dx = e.touches[0].clientX - startX.current;
+    const dy = e.touches[0].clientY - startY.current;
+    if (!isHorizontal.current && Math.abs(dx) > SWIPE_DIRECTION_LOCK_PX && Math.abs(dx) > Math.abs(dy) * 1.5) {
+      isHorizontal.current = true;
+    }
+  };
+
+  const onTouchEnd = (e) => {
+    if (disabled || startX.current === null) { startX.current = null; return; }
+    if (isHorizontal.current && e.changedTouches && e.changedTouches.length) {
+      const dx = e.changedTouches[0].clientX - startX.current;
+      if (Math.abs(dx) >= SWIPE_DISTANCE_THRESHOLD_PX) {
+        const currentIndex = SWIPE_TAB_ORDER.indexOf(activeTab);
+        // Swipe left (dx < 0, finger moves right-to-left) -> next tab.
+        // Swipe right (dx > 0, finger moves left-to-right) -> previous tab.
+        const nextIndex = currentIndex + (dx < 0 ? 1 : -1);
+        const nextTab = SWIPE_TAB_ORDER[nextIndex];
+        if (nextTab && nextTab !== activeTab) {
+          setActiveTab(nextTab);
+          onSwitch?.();
+        }
+      }
+    }
+    startX.current = null;
+    startY.current = null;
+    isHorizontal.current = false;
+  };
+
+  return { onTouchStart, onTouchMove, onTouchEnd };
+}
+
 // ============================================================================
 // 4. UI SUB-COMPONENTS
 // ============================================================================
@@ -221,7 +278,12 @@ function DarkGlassBackground() {
         
         .chat-row:active { 
           transform: scale(0.96) translateY(2px);
-          background: #252630;
+          /* Was a hardcoded dark hex (#252630) that ignored the light
+             theme entirely, so tapping/selecting a row still flashed a
+             near-black background even with data-theme="light" — a
+             semi-transparent tint reads as a subtle highlight over
+             whichever theme's --ink-2 is underneath instead. */
+          background: rgba(120, 170, 255, 0.16);
           box-shadow: 0 2px 8px rgba(0,0,0,0.1);
         }
 
@@ -449,6 +511,9 @@ const [sharingReply, setSharingReply] = useState(null); // NEW — { question, r
 
   useEffect(() => { fetchData(); }, [fetchData]);
   const { pullDistance, isRefreshing, handleTouchStart, handleTouchMove, handleTouchEnd } = usePullToRefresh(fetchData, scrollRef);
+  // Disabled while the search results view is showing — that's a single
+  // view, not a tab to swipe out of.
+  const tabSwipe = useTabSwipe(activeTab, setActiveTab, showSearch, () => { playTabSwitch(); hapticTap(); });
 
   // Badge counts live on group_threads/dm_threads rows now (see
   // 0009_group_threads_and_dm_counters.sql), so a plain postgres_changes
@@ -837,7 +902,17 @@ const [sharingReply, setSharingReply] = useState(null); // NEW — { question, r
                       className="touch-bounce"
                       title="Download app"
                       aria-label="Download app"
-                      onClick={() => { navigateInApp('/apk/download/'); }}
+                      // NOT navigateInApp(): /apk/download/ is a real static
+                      // page (public/apk/download/index.html), not a route
+                      // this SPA's router knows about. navigateInApp() only
+                      // does pushState + a synthetic popstate, which updates
+                      // the address bar but never actually fetches that
+                      // page — nothing here is listening for that path, so
+                      // the SPA just kept rendering Home underneath the new
+                      // URL until a manual refresh forced a real page load
+                      // (which is why it "worked after refreshing"). This
+                      // needs an actual navigation instead.
+                      onClick={() => { window.location.assign('/apk/download/'); }}
                       style={{
                         width: 36, height: 36, borderRadius: '50%', border: '1px solid var(--glass-border)',
                         padding: 0, flexShrink: 0, background: 'var(--surface-2)', color: 'var(--paper)',
@@ -903,7 +978,12 @@ const [sharingReply, setSharingReply] = useState(null); // NEW — { question, r
               </div>
 
               {/* Scrolling List */}
-              <div ref={scrollRef} onTouchStart={handleTouchStart} onTouchMove={handleTouchMove} onTouchEnd={handleTouchEnd} className="custom-scrollbar" style={{ flex: 1, overflowY: 'auto', paddingBottom: 24, zIndex: 10, transform: `translateY(${pullDistance}px)`, transition: isRefreshing || pullDistance === 0 ? 'transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1)' : 'none' }}>
+              <div
+                ref={scrollRef}
+                onTouchStart={(e) => { handleTouchStart(e); tabSwipe.onTouchStart(e); }}
+                onTouchMove={(e) => { handleTouchMove(e); tabSwipe.onTouchMove(e); }}
+                onTouchEnd={(e) => { handleTouchEnd(e); tabSwipe.onTouchEnd(e); }}
+                className="custom-scrollbar" style={{ flex: 1, overflowY: 'auto', paddingBottom: 24, zIndex: 10, transform: `translateY(${pullDistance}px)`, transition: isRefreshing || pullDistance === 0 ? 'transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1)' : 'none' }}>
               {showSearch ? (
                 <div className="pop-in" style={{ padding: '0 12px' }}>
                   <SearchUsers externalTerm={searchQuery} onSelectUser={(id) => { setProfileCardUserId(id); setSearchQuery(''); }} />

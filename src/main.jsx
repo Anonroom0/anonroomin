@@ -131,10 +131,38 @@ if ('serviceWorker' in navigator) {
 }
 
 // Capacitor / Android App Links: when the OS opens https://anonroom.in/...
-// into the already-running WebView, route in-app instead of a full reload
-// that can feel like leaving the app.
+// (a shared group link, a story deep link, a #msg-<id> reply link, etc.)
+// the intent-filter added in the CI build (see APP_LINKS_SETUP.md /
+// .github/workflows/build-apk.yml) hands the URL to the native Activity —
+// but the WebView itself never re-navigates on its own; it just keeps
+// showing whatever it already had loaded (index.html at "/"), which is
+// exactly why a specific link used to land on the home screen instead of
+// its target. @capacitor/app's 'appUrlOpen' event is what actually
+// delivers that URL to JS — fired both on cold start (app wasn't running
+// yet) and when the app is resumed/already running — so this is the one
+// place that needs to turn it into real in-app navigation.
 if (Capacitor.isNativePlatform()) {
-  document.addEventListener('deviceready', () => {}, { once: true });
+  CapacitorApp.addListener('appUrlOpen', ({ url }) => {
+    if (!url) return;
+    try {
+      const u = new URL(url);
+      // Only ever same-origin app links reach here in practice (the
+      // intent-filter is scoped to anonroom.in/www.anonroom.in), but stay
+      // defensive: anything else just falls through rather than being
+      // force-loaded into the WebView.
+      if (u.hostname !== 'anonroom.in' && !u.hostname.endsWith('.anonroom.in')) return;
+      const path = `${u.pathname}${u.search}${u.hash}`;
+      // pushState (not replace) + a synthetic popstate — same mechanism
+      // navigateInApp() uses elsewhere — so App.jsx's top-level dispatch
+      // and Home.jsx's resolveActiveChatFromLocation()/popstate listener
+      // both re-read the URL and open the right group/DM/question/message
+      // instead of silently sitting on whatever was already rendered.
+      window.history.pushState({}, '', path);
+      window.dispatchEvent(new PopStateEvent('popstate'));
+    } catch {
+      /* malformed URL — ignore rather than navigate somewhere wrong */
+    }
+  });
 }
 
 // Hardware/gesture back button (Android). Without this listener, Capacitor's
