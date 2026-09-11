@@ -1219,8 +1219,30 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
           <button onClick={handleDeleteSelected} style={{ border: 'none', background: 'transparent', color: '#fff', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontWeight: 600 }}>{Vectors.Trash} Delete</button>
         </header>
       ) : (
-        <header style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', background: 'var(--header-bg)', borderBottom: '1px solid var(--separator)', backdropFilter: 'blur(24px) saturate(160%)', WebkitBackdropFilter: 'blur(24px) saturate(160%)', zIndex: 20 }}>
-          <button onClick={onBack} style={{ border: 'none', background: 'transparent', color: 'var(--paper)', cursor: 'pointer', padding: '4px', marginLeft: '-4px', flexShrink: 0 }}>{Vectors.Back}</button>
+        <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: 8, margin: '8px 10px 0', zIndex: 20 }}>
+          <button
+            onClick={onBack}
+            aria-label="Back"
+            style={{
+              border: '1px solid var(--glass-border)',
+              background: 'rgba(255,255,255,0.08)',
+              color: 'var(--paper)',
+              cursor: 'pointer',
+              width: 42,
+              height: 42,
+              borderRadius: '50%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              flexShrink: 0,
+              backdropFilter: 'blur(20px) saturate(160%)',
+              WebkitBackdropFilter: 'blur(20px) saturate(160%)',
+              boxShadow: '0 4px 14px rgba(0,0,0,0.12)',
+            }}
+          >
+            {Vectors.Back}
+          </button>
+          <header style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', borderRadius: 22, background: 'var(--header-bg)', border: '1px solid var(--glass-border)', backdropFilter: 'blur(24px) saturate(160%)', WebkitBackdropFilter: 'blur(24px) saturate(160%)', boxShadow: '0 4px 18px rgba(0,0,0,0.18)' }}>
           <button onClick={() => setProfileCardUserId(activeThread.otherUser.id)} style={{ border: 'none', background: 'transparent', padding: 0, cursor: 'pointer', flexShrink: 0 }}>
             <DMLiquidAvatar identity={otherIdentity} size={36} />
           </button>
@@ -1242,6 +1264,7 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
             </div>
           </div>
         </header>
+        </div>
       )}
 
       {isSearching && (
@@ -1425,8 +1448,8 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
               </div>
 
               {showDayDivider && !isSearching && (
-                <div style={{ textAlign: 'center', margin: '24px 0 16px', position: 'sticky', top: 16, zIndex: 15 }}>
-                  <span style={{ fontSize: 12, fontWeight: 600, color: 'var(--dim)', background: 'var(--ink-2)', padding: '6px 14px', borderRadius: 14, border: '1px solid var(--separator)', boxShadow: '0 4px 12px rgba(0,0,0,0.2)' }}>
+                <div style={{ textAlign: 'center', margin: '14px 0 10px', position: 'relative', zIndex: 1 }}>
+                  <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--dim)', background: 'var(--glass-white)', padding: '4px 12px', borderRadius: 14, border: '1px solid var(--glass-border)' }}>
                     {formatDayLabel(message.created_at)}
                   </span>
                 </div>
@@ -1457,7 +1480,7 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
           var(--ink-2) — see the matching comment in GroupChat.jsx for why this
           wrapper being transparent produced a mismatched-color strip at
           the bottom edge. */}
-      <div className="safe-bottom" style={{ flexShrink: 0, zIndex: 20, position: 'sticky', bottom: 0, background: 'var(--composer-bg)' }}>
+      <div className="safe-bottom" style={{ flexShrink: 0, zIndex: 20, position: 'sticky', bottom: 0, background: 'var(--composer-bg)', overflow: 'visible' }}>
         {!session ? (
           <div style={{ padding: '16px', background: 'var(--ink-2)', borderTop: '1px solid var(--separator)' }}>
             <button onClick={() => setAuthOpen(true)} style={{ width: '100%', padding: '14px 0', borderRadius: 20, border: 'none', background: 'var(--ember)', color: '#fff', fontWeight: 700, fontSize: 15, cursor: 'pointer', boxShadow: 'var(--shadow-float)' }}>Sign in to send message</button>
@@ -1512,14 +1535,27 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
             bottom by the keyboard height double-compensated and made the
             composer balloon to fill most of the screen on keyboard open. */}
         <form onSubmit={handleSend} autoComplete="off-nope" data-form-type="other" style={{ display: 'flex', alignItems: 'flex-end', gap: 8, padding: '8px 10px', background: 'var(--composer-bg)', borderTop: replyingTo ? 'none' : '1px solid var(--separator)', position: 'relative', zIndex: 20, backdropFilter: 'blur(20px) saturate(150%)', WebkitBackdropFilter: 'blur(20px) saturate(150%)', boxSizing: 'border-box', width: '100%', maxWidth: '100%' }}>
-          <EmojiGifPicker open={pickerOpen} onClose={() => setPickerOpen(false)} onEmoji={handleEmojiPicked} onMedia={handleMediaPicked} />
           <button type="button" onClick={() => setAttachSheetOpen(true)} disabled={uploading || cooldownPercent > 0 || selectedMessages.length > 0} style={{ width: 34, height: 34, borderRadius: '50%', border: 'none', background: 'transparent', color: 'var(--dim)', cursor: 'pointer', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 2 }}>{uploading ? Vectors.Spinner : Vectors.Attach}</button>
           
           <input ref={fileInputRef} type="file" accept="*/*" onChange={handleAttachmentSelected} style={{ position: 'absolute', width: 1, height: 1, padding: 0, margin: -1, overflow: 'hidden', clip: 'rect(0,0,0,0)', whiteSpace: 'nowrap', border: 0, opacity: 0, pointerEvents: 'none' }} />
           <input ref={photoInputRef} type="file" accept="image/*" onChange={handleAttachmentSelected} style={{ position: 'absolute', width: 1, height: 1, padding: 0, margin: -1, overflow: 'hidden', clip: 'rect(0,0,0,0)', whiteSpace: 'nowrap', border: 0, opacity: 0, pointerEvents: 'none' }} />
           <input ref={cameraInputRef} type="file" accept="image/*,video/*" onChange={handleAttachmentSelected} style={{ position: 'absolute', width: 1, height: 1, padding: 0, margin: -1, overflow: 'hidden', clip: 'rect(0,0,0,0)', whiteSpace: 'nowrap', border: 0, opacity: 0, pointerEvents: 'none' }} />
           
-          <button type="button" onClick={() => setPickerOpen((v) => !v)} disabled={uploading || selectedMessages.length > 0} style={{ width: 34, height: 34, borderRadius: '50%', border: 'none', background: pickerOpen ? 'rgba(255,255,255,0.06)' : 'transparent', color: pickerOpen ? 'var(--paper)' : 'var(--dim)', cursor: 'pointer', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 2 }}>{Vectors.Smiley}</button>
+          <button type="button" onClick={() => {
+            setPickerOpen((v) => {
+              if (v) return false; // closing — instant
+              // Opening: dismiss keyboard FIRST, then mount the dock after
+              // the viewport has settled so the composer doesn't jump up
+              // with the keyboard still open and then drop when it closes.
+              messageInputRef.current?.blur();
+              if (typeof document !== 'undefined') {
+                const active = document.activeElement;
+                if (active && typeof active.blur === 'function') active.blur();
+              }
+              window.setTimeout(() => setPickerOpen(true), 180);
+              return false;
+            });
+          }} disabled={uploading || selectedMessages.length > 0} style={{ width: 34, height: 34, borderRadius: '50%', border: 'none', background: pickerOpen ? 'rgba(255,255,255,0.06)' : 'transparent', color: pickerOpen ? 'var(--paper)' : 'var(--dim)', cursor: 'pointer', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 2 }}>{Vectors.Smiley}</button>
           <textarea
             ref={messageInputRef}
             name="dm-message-f"
@@ -1568,10 +1604,50 @@ export default function DirectMessages({ openThreadWithUserId, onBack, onThreadR
               fontFamily: 'inherit',
             }}
           />
-          <div style={{ flexShrink: 0, marginBottom: 2 }}>
+          <div
+            style={{
+              flexShrink: 0,
+              marginBottom: 2,
+              width: 42,
+              height: 42,
+              borderRadius: '50%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              background: text.trim() && !sending && !uploading && cooldownPercent === 0
+                ? 'var(--ember)'
+                : 'rgba(255,255,255,0.08)',
+              border: '1px solid var(--glass-border)',
+              backdropFilter: 'blur(20px) saturate(160%)',
+              WebkitBackdropFilter: 'blur(20px) saturate(160%)',
+              boxShadow: text.trim() && !sending && !uploading && cooldownPercent === 0
+                ? '0 4px 14px rgba(0,0,0,0.2)'
+                : '0 2px 8px rgba(0,0,0,0.1)',
+              transition: 'background 0.2s, box-shadow 0.2s',
+            }}
+          >
             <SendButton canSend={!!text.trim()} sending={sending || uploading} cooldownPercent={cooldownPercent} />
           </div>
         </form>
+        {pickerOpen && (
+          <div
+            style={{
+              height: 'min(320px, 40dvh)',
+              flexShrink: 0,
+              overflow: 'hidden',
+              borderTop: '1px solid var(--glass-border)',
+              background: 'var(--glass-white)',
+            }}
+          >
+            <EmojiGifPicker
+              open={pickerOpen}
+              placement="dock"
+              onClose={() => setPickerOpen(false)}
+              onEmoji={handleEmojiPicked}
+              onMedia={handleMediaPicked}
+            />
+          </div>
+        )}
         </>
         )}
       </div>

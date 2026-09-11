@@ -8,6 +8,11 @@
  * confession ('mode="message"' — see GroupChat.jsx's "Share as Story"
  * action) into a shareable 1080x1920 story image.
  *
+ * v8 changes, on top of v7:
+ *   - STANDARD_FORMS expanded (polaroid, neon, minimal, magazine,
+ *     sticky, glass) — at least 5 new Standard layouts beyond Normal/Tweet.
+ *   - Style picker is a horizontal card strip instead of a 2-option select.
+ *
  * v7 changes, on top of v6:
  *   - The "Standard" tab (template === 'tweet') now has a "Style" dropdown
  *     with two options:
@@ -94,6 +99,52 @@ function getTagInfo(mode, isConfession) {
   }
   return { label: 'Message', from: '#3D8BFF', to: '#5B8FFF' };
 }
+
+
+// Standard-tab layouts. 'normal' + 'tweet' kept; five+ new forms for variety.
+// storyImageGenerator.js must branch on standardStyle for each id.
+export const STANDARD_FORMS = [
+  {
+    id: 'normal',
+    name: 'Normal',
+    blurb: 'Tag header, grey body, outlined text, logo at the bottom',
+  },
+  {
+    id: 'tweet',
+    name: 'Tweet',
+    blurb: 'Realistic social post card on a light backdrop',
+  },
+  {
+    id: 'polaroid',
+    name: 'Polaroid',
+    blurb: 'White frame, soft shadow, caption under the photo area',
+  },
+  {
+    id: 'neon',
+    name: 'Neon',
+    blurb: 'Dark stage with glowing accent outline and bold type',
+  },
+  {
+    id: 'minimal',
+    name: 'Minimal',
+    blurb: 'Centered type on a clean solid field, lots of air',
+  },
+  {
+    id: 'magazine',
+    name: 'Magazine',
+    blurb: 'Editorial serif headline with a thin rule and byline',
+  },
+  {
+    id: 'sticky',
+    name: 'Sticky note',
+    blurb: 'Tilted paper note with handwritten feel',
+  },
+  {
+    id: 'glass',
+    name: 'Glass',
+    blurb: 'Frosted card over a soft gradient wash',
+  },
+];
 
 const PREVIEW_ASPECT_RATIO = 1080 / 1920;
 // Derived straight from storyImageGenerator.js's own LINK_ZONE (not
@@ -724,32 +775,27 @@ function SizeField({ scaleId, onChange }) {
 }
 
 // ---------------------------------------------------------------------------
-// StandardStyleField — NEW in v7. Only shown inside the "Standard" tab
-// (template === 'tweet'). Lets the user pick between the new "Normal"
-// confession-card look (default) and the old fixed "Tweet" look.
+// StandardStyleField — same app dropdown pattern as SizeField / original v7,
+// but lists every STANDARD_FORMS entry (Normal default + Tweet + new forms).
 // ---------------------------------------------------------------------------
 function StandardStyleField({ value, onChange, tagInfo }) {
   return (
-    <div style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '10px 12px', borderRadius: 16, border: '1px solid var(--glass-border)', background: 'var(--glass-white)' }}>
+    <div style={{ display: 'flex', alignItems: 'center', gap: 12, width: '100%', padding: '10px 12px', borderRadius: 16, border: '1px solid var(--glass-border)', background: 'var(--glass-white)', boxSizing: 'border-box' }}>
       <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-start', flex: 1, minWidth: 0, gap: 4 }}>
         <span style={{ fontSize: 12.5, fontWeight: 800, color: 'var(--dim)' }}>Style</span>
-        {value === 'normal' && (
-          <span
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              padding: '2px 9px',
-              borderRadius: 999,
-              fontSize: 10.5,
-              fontWeight: 900,
-              color: '#fff',
-              background: `linear-gradient(135deg, ${tagInfo.from} 0%, ${tagInfo.to} 100%)`,
-              letterSpacing: 0.2,
-            }}
-          >
-            {tagInfo.label} tag
-          </span>
-        )}
+        <span
+          style={{
+            fontSize: 11,
+            fontWeight: 800,
+            color: '#fff',
+            padding: '3px 8px',
+            borderRadius: 999,
+            background: `linear-gradient(135deg, ${tagInfo.from}, ${tagInfo.to})`,
+            letterSpacing: 0.3,
+          }}
+        >
+          {tagInfo.label}
+        </span>
       </div>
       <select
         value={value}
@@ -764,13 +810,17 @@ function StandardStyleField({ value, onChange, tagInfo }) {
           padding: '10px 30px 10px 14px',
           fontSize: 14,
           fontWeight: 700,
+          minWidth: 140,
           backgroundImage: 'url("data:image/svg+xml;utf8,<svg xmlns=%27http://www.w3.org/2000/svg%27 width=%2718%27 height=%2718%27 viewBox=%270 0 24 24%27 fill=%27none%27 stroke=%27%238B8B96%27 stroke-width=%272.5%27 stroke-linecap=%27round%27 stroke-linejoin=%27round%27><polyline points=%276 9 12 15 18 9%27/></svg>")',
           backgroundRepeat: 'no-repeat',
           backgroundPosition: 'right 8px center',
         }}
       >
-        <option value="normal" style={{ background: 'var(--ink-2)', color: 'var(--paper)' }}>Normal</option>
-        <option value="tweet" style={{ background: 'var(--ink-2)', color: 'var(--paper)' }}>Tweet</option>
+        {STANDARD_FORMS.map((form) => (
+          <option key={form.id} value={form.id} style={{ background: 'var(--ink-2)', color: 'var(--paper)' }}>
+            {form.name}
+          </option>
+        ))}
       </select>
     </div>
   );
@@ -804,7 +854,7 @@ function ShareStorySheetContent({ mode, question, reply, message, customizable, 
   // above; 'tweet' = "Standard" — a fixed, single-card layout with its own
   // Style dropdown (see standardStyle below). Works for all three modes
   // (question/reply/message).
-  const [template, setTemplate] = useState(() => (!customizable ? (lockedStyle ? 'basic' : 'tweet') : 'basic'));
+  const [template, setTemplate] = useState(() => (!customizable ? (lockedStyle ? 'basic' : 'tweet') : 'tweet'));
 
   // NEW in v7 — only meaningful while template === 'tweet' ("Standard").
   // 'normal' (default): confession-bubble-style card with a coloured tag
@@ -1148,9 +1198,8 @@ function ShareStorySheetContent({ mode, question, reply, message, customizable, 
           </div>
         ) : (
           <p style={{ margin: 0, fontSize: 12.5, color: 'var(--dim)', textAlign: 'center', lineHeight: 1.4, flexShrink: 0 }}>
-            {standardStyle === 'normal'
-              ? `A ${tagInfo.label.toLowerCase()} card with a coloured tag header and the Anonroom logo — nothing else to customize here.`
-              : 'A fixed, professional realistic-post style — nothing to customize here.'}
+            {(STANDARD_FORMS.find((f) => f.id === standardStyle)?.blurb)
+              || 'A fixed Standard layout — pick another Style above to change the look.'}
           </p>
         )
       )}

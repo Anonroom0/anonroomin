@@ -126,15 +126,16 @@ function truncate(text, max) {
 }
 
 /**
- * group_threads is the real membership table now (migration 0009) — a row
- * there means the user has actually joined the channel, not just "has ever
- * had it open" (which is all group_read_receipts, its now-unused
- * predecessor, ever meant). That makes this an even better fan-out set than
- * before: joining/leaving a channel now directly controls who gets paged.
+ * There's no group_members table in this schema — group access is
+ * subdomain-based, not a separate membership list. group_read_receipts is
+ * the closest proxy for "who has this group open" (a row is written there
+ * per user per group), so it's used here as the membership set for
+ * notification fan-out. Swap this for a real membership table if one gets
+ * added later.
  */
 async function getGroupMemberIds(groupId, excludeUserId) {
   const { data } = await supabase
-    .from('group_threads')
+    .from('group_read_receipts')
     .select('user_id')
     .eq('group_id', groupId);
   return [...new Set((data ?? []).map((r) => r.user_id))].filter(
@@ -471,7 +472,7 @@ Deno.serve(async (req) => {
     if (targetType === 'group_message') {
       const { data: row } = await supabase
         .from('group_messages')
-        .select('id, group_id, text')
+        .select('id, group_id, text, sender_name, user_id, is_confession')
         .eq('id', targetId)
         .maybeSingle();
       if (!row) return jsonResponse({ sent: 0, skipped: 0 });
@@ -491,9 +492,14 @@ Deno.serve(async (req) => {
 
       // Mentions: immediate, one-to-one, with the actual message text.
       if (mentionRecipients.length > 0) {
+        // Prefer "Alice mentioned you" over a generic header.
+        let mentionTitle = titleOverride ?? 'You were mentioned';
+        if (!titleOverride && row.sender_name) {
+          mentionTitle = `${row.sender_name} mentioned you`;
+        }
         const r = await sendToRecipients(
           mentionRecipients,
-          titleOverride ?? 'You were mentioned',
+          mentionTitle,
           bodyOverride ?? truncate(row.text, 120),
           groupUrl,
         );
@@ -520,7 +526,7 @@ Deno.serve(async (req) => {
     if (targetType === 'dm_message') {
       const { data: row } = await supabase
         .from('dm_messages')
-        .select('id, thread_id, text')
+        .select('id, thread_id, text, sender_id, is_bot, bot_id')
         .eq('id', targetId)
         .maybeSingle();
       if (!row) return jsonResponse({ sent: 0, skipped: 0 });
@@ -550,9 +556,20 @@ Deno.serve(async (req) => {
         }
       }
 
+      // Resolve a human title: sender username when possible.
+      let dmTitle = titleOverride ?? 'New message';
+      if (!titleOverride) {
+        if (row.is_bot && row.bot_id) {
+          const { data: bot } = await supabase.from('bots').select('name').eq('id', row.bot_id).maybeSingle();
+          if (bot?.name) dmTitle = bot.name;
+        } else if (row.sender_id) {
+          const { data: prof } = await supabase.from('profiles').select('username').eq('id', row.sender_id).maybeSingle();
+          if (prof?.username) dmTitle = prof.username;
+        }
+      }
       const result = await sendToRecipients(
         recipients,
-        titleOverride ?? 'New message',
+        dmTitle,
         bodyOverride ?? truncate(row.text, 120),
         dmUrl,
       );
@@ -577,8 +594,8 @@ Deno.serve(async (req) => {
       const result = await sendToRecipients(
         recipients,
         titleOverride ?? 'New confessions',
-        bodyOverride ?? 'New confessions have been shared — check them out.',
-        urlOverride ?? '/confessions',
+        bodyOverride ?? 'Someone shared a new confession — open Stories to read it.',
+        urlOverride ?? '/',  // never deep-link to discarded /confessions page
       );
       return jsonResponse(result);
     }

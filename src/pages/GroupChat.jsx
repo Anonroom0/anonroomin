@@ -33,7 +33,6 @@ import SendButton from '../components/shared/SendButton';
 import { AudioBubble, VideoBubble } from '../components/shared/MediaBubble';
 import InstagramCard from '../components/shared/InstagramCard';
 import ShareStorySheet from '../components/questions/ShareStorySheet';
-import { generateConfessionCardImage } from '../lib/storyImageGenerator';
 import { BACKGROUND_STRUCTURES, ACCENT_COLORS, BODY_SHAPES, BODY_SCALES } from '../lib/storyStylePresets';
 
 const MESSAGE_LIMIT = 20;
@@ -41,6 +40,38 @@ const REPLY_SNIPPET_LENGTH = 80;
 const MAX_TEXT_LENGTH = 500;
 const ADMIN_DISPLAY_NAME = 'ADMIN';
 const UPLOAD_TIMEOUT_MS = 60000;
+
+// Telegram-style per-sender name colors. Deterministic hash of the
+// user's id (falls back to sender_name) picks a color from this palette,
+// so a given person's name/reply-bar color stays stable across renders.
+const SENDER_PALETTE = ['#E17076', '#F0A75B', '#7BC862', '#6EC9CB', '#65AADD', '#A695E7', '#EE7AAE'];
+function getSenderColor(key) {
+  if (!key) return SENDER_PALETTE[0];
+  let hash = 0;
+  for (let i = 0; i < key.length; i++) hash = (hash * 31 + key.charCodeAt(i)) >>> 0;
+  return SENDER_PALETTE[hash % SENDER_PALETTE.length];
+}
+
+// Doodle wallpaper (Telegram-style) — kept as a helper for potential future
+// use, but the chat surface itself renders a flat, borderless background
+// now (see the removed wallpaper layer in the component below).
+const WALLPAPER_SVG = encodeURIComponent(
+  '<svg xmlns="http://www.w3.org/2000/svg" width="220" height="220">' +
+  '<g fill="none" stroke="currentColor" stroke-width="1.4">' +
+  '<circle cx="20" cy="30" r="6"/>' +
+  '<path d="M50 20 L60 10 L70 20 L60 30 Z"/>' +
+  '<path d="M120 40 q10 -15 20 0 q10 15 -10 15 q-20 0 -10 -15"/>' +
+  '<rect x="150" y="60" width="14" height="10" rx="2"/>' +
+  '<path d="M30 100 l8 8 l-8 8 l-8 -8 Z"/>' +
+  '<path d="M90 120 c0 -10 10 -10 10 0 c0 10 -10 20 -10 20 c0 0 -10 -10 -10 -20 c0 -10 10 -10 10 0"/>' +
+  '<path d="M170 130 l6 -10 l6 10 l-6 6 Z"/>' +
+  '<circle cx="190" cy="180" r="5"/>' +
+  '<path d="M40 180 h16 v10 h-16 Z"/>' +
+  '<path d="M110 190 l5 8 l-10 0 Z"/>' +
+  '<path d="M0 60 l6 6 l-6 6 l-6 -6 Z"/>' +
+  '<circle cx="200" cy="30" r="4"/>' +
+  '</g></svg>'
+);
 
 const Vectors = {
   ChevronDown: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9" /></svg>,
@@ -65,7 +96,8 @@ const Vectors = {
   Palette: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2a10 10 0 1 0 0 20c1.1 0 2-.9 2-2 0-.5-.2-1-.5-1.4-.3-.4-.5-.9-.5-1.4 0-1.1.9-2 2-2h2.3c1.9 0 3.4-1.6 3.2-3.5C20 6.6 16.4 2 12 2z" /><circle cx="7.5" cy="11.5" r="1" fill="currentColor" stroke="none" /><circle cx="10" cy="7" r="1" fill="currentColor" stroke="none" /><circle cx="15" cy="7.5" r="1" fill="currentColor" stroke="none" /></svg>,
   Plus: <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></svg>,
   GhostSm: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M9 10h.01" /><path d="M15 10h.01" /><path d="M12 2a8 8 0 0 0-8 8v12l3-3 2.5 2.5L12 19l2.5 2.5L17 19l3 3V10a8 8 0 0 0-8-8z" /></svg>,
-  PinSm: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 17v5" /><path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V17a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 1 1 0 0 0 0-2H8a1 1 0 0 0 0 2 1 1 0 0 1 1 1z" /></svg>
+  PinSm: <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M12 17v5" /><path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V17a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-1.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 1 1 0 0 0 0-2H8a1 1 0 0 0 0 2 1 1 0 0 1 1 1z" /></svg>,
+  ListIcon: <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><line x1="8" y1="6" x2="21" y2="6" /><line x1="8" y1="12" x2="21" y2="12" /><line x1="8" y1="18" x2="21" y2="18" /><line x1="3" y1="6" x2="3.01" y2="6" /><line x1="3" y1="12" x2="3.01" y2="12" /><line x1="3" y1="18" x2="3.01" y2="18" /></svg>
 };
 
 function isSenderAdmin(message) { return message.sender_name === ADMIN_DISPLAY_NAME || message.is_admin === true; }
@@ -135,210 +167,165 @@ function randomStoryStyle() {
 }
 
 function ConfessionModal({ open, onClose, onSubmit }) {
-  const [text, setText] = useState(''); 
-  const [anon, setAnon] = useState(true); 
-  const [media, setMedia] = useState(null); 
+  const [text, setText] = useState('');
+  const [anon, setAnon] = useState(true);
+  const [media, setMedia] = useState(null);
   const mediaInputRef = useRef(null);
 
-  // Customize — pick a Background/Colour/Shape/Size combo (same preset
-  // lists ShareStorySheet/CreateConfessionModal use) to store as small JSON
-  // on the message row rather than rendering + uploading a PNG up front —
-  // see storyStylePresets.js and the 0003 migration. `storyStyle` null
-  // means "not customized"; the confession renders as a plain bubble.
-  const [customizeOpen, setCustomizeOpen] = useState(false);
+  // Optional bubble style JSON for ConfessionBubble. Full visual preview /
+  // Standard forms live only in ShareStorySheet (opened via Preview).
   const [storyStyle, setStoryStyle] = useState(null);
-  const [previewUrl, setPreviewUrl] = useState(null);
-  const [previewLoading, setPreviewLoading] = useState(false);
-  const previewUrlRef = useRef(null);
-  const previewTokenRef = useRef(0);
+  const [styleSheetOpen, setStyleSheetOpen] = useState(false);
 
   useEffect(() => {
     return () => { if (media) URL.revokeObjectURL(media.previewUrl); };
   }, [media]);
-
-  // Live preview of the customized card — renders through the exact same
-  // generateConfessionCardImage() pipeline the chat bubble itself will use
-  // (see ConfessionBubble.jsx), so what's shown here is what the group will
-  // actually see.
-  useEffect(() => {
-    if (!customizeOpen || !storyStyle) {
-      if (previewUrlRef.current) { URL.revokeObjectURL(previewUrlRef.current); previewUrlRef.current = null; }
-      setPreviewUrl(null);
-      return undefined;
-    }
-    const token = ++previewTokenRef.current;
-    setPreviewLoading(true);
-    generateConfessionCardImage({
-      text: text.trim() || 'Your confession will appear here…',
-      backgroundId: storyStyle.backgroundId,
-      colorId: storyStyle.colorId,
-      shapeId: storyStyle.shapeId,
-      scaleId: storyStyle.scaleId,
-    })
-      .then((blob) => {
-        if (previewTokenRef.current !== token) return;
-        const url = URL.createObjectURL(blob);
-        if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
-        previewUrlRef.current = url;
-        setPreviewUrl(url);
-        setPreviewLoading(false);
-      })
-      .catch(() => { if (previewTokenRef.current === token) setPreviewLoading(false); });
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [customizeOpen, storyStyle, text]);
-
-  useEffect(() => {
-    return () => { if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current); };
-  }, []);
 
   if (!open) return null;
 
   function handleFileChange(e) {
     const file = e.target.files?.[0];
     e.target.value = '';
-    if (file) {
-      setMedia({ file, isVideo: file.type.startsWith('video/'), previewUrl: URL.createObjectURL(file) });
-    }
+    if (!file) return;
+    if (media) URL.revokeObjectURL(media.previewUrl);
+    setMedia({ file, isVideo: file.type.startsWith('video/'), previewUrl: URL.createObjectURL(file) });
   }
 
-  function handleToggleCustomize() {
-    if (customizeOpen) { setCustomizeOpen(false); return; }
-    setCustomizeOpen(true);
+  function handleOpenStyleSheet() {
+    hapticTap();
     if (!storyStyle) setStoryStyle(randomStoryStyle());
+    setStyleSheetOpen(true);
   }
 
-  function handleShuffleStyle() { setStoryStyle(randomStoryStyle()); }
-  function handleRemoveCustomization() { setStoryStyle(null); setCustomizeOpen(false); }
+  function handleShuffleStyle() {
+    hapticTap();
+    setStoryStyle(randomStoryStyle());
+  }
+
+  function handleRemoveCustomization() {
+    setStoryStyle(null);
+  }
 
   function handleSubmit() {
-    if (text.trim() || media) {
-      onSubmit(text.trim(), anon, media?.file, storyStyle);
-      setText(''); setMedia(null); setStoryStyle(null); setCustomizeOpen(false);
-    }
+    if (!text.trim() && !media) return;
+    onSubmit(text.trim(), anon, media?.file, storyStyle);
+    setText('');
+    setMedia(null);
+    setStoryStyle(null);
+    setStyleSheetOpen(false);
   }
 
-  // Mirrors CreateConfessionModal.jsx's (Ask Me tab) layout: rendered through
-  // GlassPanel's portal-based sheet (so it repositions correctly above the
-  // on-screen keyboard instead of a hand-rolled fixed overlay), with the
-  // "Add Media" button living inline right under the textarea rather than
-  // in a separate row that can end up hidden behind the keyboard.
+  const draftMessage = {
+    id: 'draft',
+    text: text.trim() || 'Your confession will appear here…',
+    sender_name: anon ? 'Anonymous' : 'You',
+    avatar_url: null,
+    is_anon: anon,
+    is_confession: true,
+    media_url: media && !media.isVideo ? media.previewUrl : null,
+    media_type: media ? (media.isVideo ? 'video' : 'image') : null,
+    story_style: storyStyle,
+  };
+
   return (
-    <GlassPanel variant="sheet" onClose={onClose}>
-      <div style={{ display: 'flex', flexDirection: 'column', gap: 20, padding: '4px 20px 28px' }}>
-        <div style={{ fontSize: 20, fontWeight: 700, color: 'var(--paper)' }}>New Confession</div>
+    <>
+      <GlassPanel variant="sheet" onClose={onClose}>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 20, padding: '4px 20px 28px' }}>
+          <div style={{ fontSize: 20, fontWeight: 700, color: 'var(--paper)' }}>New Confession</div>
 
-        <div style={{ borderRadius: 20, border: '1px solid var(--separator)', background: 'var(--ink-2)', padding: '4px 4px 0' }}>
-          <textarea
-            name="group-confession-composer"
-            autoComplete="off"
-            data-lpignore="true"
-            data-1p-ignore
-            data-form-type="other"
-            value={text}
-            onChange={(e) => setText(e.target.value.slice(0, MAX_TEXT_LENGTH))}
-            maxLength={MAX_TEXT_LENGTH}
-            placeholder="Type your confession…"
-            rows={media ? 3 : 5}
-            style={{ width: '100%', resize: 'none', border: 'none', outline: 'none', background: 'transparent', color: 'var(--paper)', fontSize: 16, fontFamily: 'inherit', padding: '14px 16px 4px', boxSizing: 'border-box' }}
-          />
+          <div style={{ borderRadius: 24, border: '1px solid var(--separator)', background: 'var(--ink-2)', padding: '4px 4px 0' }}>
+            <textarea
+              name="group-confession-composer"
+              autoComplete="off"
+              data-lpignore="true"
+              data-1p-ignore
+              data-form-type="other"
+              value={text}
+              onChange={(e) => setText(e.target.value.slice(0, MAX_TEXT_LENGTH))}
+              maxLength={MAX_TEXT_LENGTH}
+              placeholder="Type your confession…"
+              rows={media ? 3 : 5}
+              style={{ width: '100%', resize: 'none', border: 'none', outline: 'none', background: 'transparent', color: 'var(--paper)', fontSize: 16, fontFamily: 'inherit', padding: '14px 16px 4px', boxSizing: 'border-box' }}
+            />
 
-          {media && (
-            <div style={{ position: 'relative', width: 80, height: 80, margin: '0 16px 12px' }}>
-              {media.isVideo ? (
-                <video src={media.previewUrl} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 12 }} />
-              ) : (
-                <img src={media.previewUrl} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 12 }} alt="preview" />
-              )}
-              <button onClick={() => setMedia(null)} style={{ position: 'absolute', top: -6, right: -6, background: 'var(--ink-2)', color: 'var(--paper)', border: 'none', borderRadius: '50%', width: 22, height: 22, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 8px rgba(0,0,0,0.3)' }}>{Vectors.Close}</button>
+            {media && (
+              <div style={{ position: 'relative', width: 80, height: 80, margin: '0 16px 12px' }}>
+                {media.isVideo ? (
+                  <video src={media.previewUrl} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 16 }} />
+                ) : (
+                  <img src={media.previewUrl} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 16 }} alt="preview" />
+                )}
+                <button onClick={() => setMedia(null)} style={{ position: 'absolute', top: -6, right: -6, background: 'var(--ink-2)', color: 'var(--paper)', border: 'none', borderRadius: '50%', width: 22, height: 22, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 8px rgba(0,0,0,0.3)' }}>{Vectors.Close}</button>
+              </div>
+            )}
+
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 16px 10px' }}>
+              <button
+                type="button"
+                onClick={() => mediaInputRef.current?.click()}
+                style={{ border: 'none', background: 'transparent', color: 'var(--dim)', fontWeight: 700, fontSize: 13, display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}
+              >
+                {Vectors.Photo} Add media
+              </button>
+              <input ref={mediaInputRef} type="file" accept="image/*,video/*" onChange={handleFileChange} style={{ display: 'none' }} />
+              <span style={{ fontSize: 12, color: 'var(--dim)' }}>{text.length}/{MAX_TEXT_LENGTH}</span>
             </div>
-          )}
+          </div>
 
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 16px 10px' }}>
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
             <button
               type="button"
-              onClick={() => mediaInputRef.current?.click()}
-              disabled={!!media}
-              style={{ background: 'transparent', border: 'none', color: media ? 'rgba(255,255,255,0.1)' : 'var(--dim)', cursor: media ? 'default' : 'pointer', display: 'flex', alignItems: 'center', gap: 6, padding: 0, fontSize: 13, fontWeight: 600 }}
-            >
-              {Vectors.Photo} {media ? 'Media Added' : 'Add Media'}
-            </button>
-            <input type="file" accept="image/*,video/*" ref={mediaInputRef} style={{ display: 'none' }} onChange={handleFileChange} />
-
-            {/* Customize — pick a story style for this confession's bubble
-                without rendering/uploading an image; see the panel below. */}
-            <button
-              type="button"
-              onClick={handleToggleCustomize}
-              disabled={text.trim().length === 0}
+              onClick={handleOpenStyleSheet}
+              disabled={text.trim().length === 0 && !media}
               style={{
-                background: storyStyle ? 'rgba(47,111,255,0.14)' : 'transparent',
-                border: 'none', borderRadius: 999, padding: '5px 10px',
-                color: text.trim().length === 0 ? 'rgba(255,255,255,0.15)' : storyStyle ? 'var(--ember)' : 'var(--dim)',
-                cursor: text.trim().length === 0 ? 'default' : 'pointer',
-                display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 700,
+                flex: 1,
+                minWidth: 140,
+                padding: '12px 14px',
+                borderRadius: 16,
+                border: '1px solid var(--glass-border)',
+                background: storyStyle ? 'rgba(47,111,255,0.14)' : 'var(--ink-2)',
+                color: text.trim().length === 0 && !media ? 'rgba(255,255,255,0.15)' : storyStyle ? 'var(--ember)' : 'var(--paper)',
+                fontWeight: 800,
+                fontSize: 13.5,
+                cursor: text.trim().length === 0 && !media ? 'default' : 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: 8,
               }}
             >
-              {Vectors.Palette} {storyStyle ? 'Customized' : 'Customize'}
+              {Vectors.Palette} {storyStyle ? 'Preview & style' : 'Preview story'}
             </button>
-
-            <div style={{ fontSize: 12, color: 'var(--dim)' }}>{text.length}/{MAX_TEXT_LENGTH}</div>
+            {storyStyle && (
+              <>
+                <button type="button" onClick={handleShuffleStyle} style={{ border: 'none', background: 'transparent', color: 'var(--ember)', fontSize: 13, fontWeight: 800, padding: '0 8px' }}>Shuffle</button>
+                <button type="button" onClick={handleRemoveCustomization} style={{ border: 'none', background: 'transparent', color: 'var(--dim)', fontSize: 13, fontWeight: 700, padding: '0 8px' }}>Remove</button>
+              </>
+            )}
           </div>
+
+          <label style={{ display: 'flex', alignItems: 'center', gap: 10, color: 'var(--paper)', fontWeight: 600, fontSize: 14 }}>
+            <input type="checkbox" checked={anon} onChange={(e) => setAnon(e.target.checked)} />
+            Post anonymously
+          </label>
+
+          <button onClick={handleSubmit} style={{ width: '100%', padding: 16, borderRadius: 24, border: 'none', background: 'var(--ember)', color: '#fff', fontWeight: 700, cursor: 'pointer', fontSize: 16 }}>Post Confession</button>
         </div>
+      </GlassPanel>
 
-        {customizeOpen && storyStyle && (
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 14, padding: 16, borderRadius: 20, border: '1px solid var(--separator)', background: 'var(--ink-2)' }}>
-            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-              <span style={{ fontSize: 14, fontWeight: 800, color: 'var(--paper)' }}>Bubble style</span>
-              <div style={{ display: 'flex', gap: 14 }}>
-                <button type="button" onClick={handleShuffleStyle} style={{ border: 'none', background: 'transparent', color: 'var(--ember)', fontSize: 13, fontWeight: 800, padding: 0 }}>Shuffle</button>
-                <button type="button" onClick={handleRemoveCustomization} style={{ border: 'none', background: 'transparent', color: 'var(--dim)', fontSize: 13, fontWeight: 700, padding: 0 }}>Remove</button>
-              </div>
-            </div>
-
-            <div style={{ display: 'flex', gap: 14, alignItems: 'flex-start' }}>
-              <div style={{ width: 96, aspectRatio: '3 / 4', borderRadius: 14, overflow: 'hidden', background: 'var(--ink-2)', border: '1px solid var(--separator)', flexShrink: 0, position: 'relative' }}>
-                {previewUrl && (
-                  <img src={previewUrl} alt="Bubble preview" style={{ width: '100%', height: '100%', objectFit: 'cover', opacity: previewLoading ? 0.5 : 1, transition: 'opacity 150ms ease' }} />
-                )}
-              </div>
-
-              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 10, minWidth: 0 }}>
-                {[
-                  { label: 'Background', list: BACKGROUND_STRUCTURES, key: 'backgroundId' },
-                  { label: 'Colour', list: ACCENT_COLORS, key: 'colorId' },
-                  { label: 'Shape', list: BODY_SHAPES, key: 'shapeId' },
-                  { label: 'Size', list: BODY_SCALES, key: 'scaleId' },
-                ].map(({ label, list, key }) => (
-                  <label key={key} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
-                    <span style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--dim)' }}>{label}</span>
-                    <select
-                      value={storyStyle[key]}
-                      onChange={(e) => setStoryStyle((prev) => ({ ...prev, [key]: e.target.value }))}
-                      style={{ flex: 1, maxWidth: 150, background: 'var(--ink-2)', color: 'var(--paper)', border: '1px solid var(--separator)', borderRadius: 10, padding: '6px 10px', fontSize: 13, fontWeight: 700 }}
-                    >
-                      {list.map((p) => (
-                        <option key={p.id} value={p.id} style={{ background: 'var(--ink-2)', color: 'var(--paper)' }}>{p.name}</option>
-                      ))}
-                    </select>
-                  </label>
-                ))}
-              </div>
-            </div>
-
-            <p style={{ margin: 0, fontSize: 12, color: 'var(--dim)', lineHeight: 1.4 }}>
-              Only this style choice is saved — the group sees this rendered right inside the chat bubble, no label, just the shape and background.
-            </p>
-          </div>
-        )}
-
-        <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '12px 16px', borderRadius: 20, border: '1px solid var(--separator)', background: 'var(--ink-2)', cursor: 'pointer' }}>
-          <span style={{ fontSize: 15, fontWeight: 700, color: 'var(--paper)' }}>Post anonymously</span>
-          <input type="checkbox" checked={anon} onChange={(e) => setAnon(e.target.checked)} />
-        </label>
-
-        <button onClick={handleSubmit} style={{ width: '100%', padding: 16, borderRadius: 20, border: 'none', background: 'var(--ember)', color: '#fff', fontWeight: 700, cursor: 'pointer', fontSize: 16 }}>Post Confession</button>
-      </div>
-    </GlassPanel>
+      {/* Preview / Standard forms / full Customization — ShareStorySheet only */}
+      {styleSheetOpen && (
+        <ShareStorySheet
+          mode="message"
+          open={styleSheetOpen}
+          onClose={() => setStyleSheetOpen(false)}
+          message={draftMessage}
+          customizable
+          initialStyle={storyStyle}
+          lockedStyle={null}
+        />
+      )}
+    </>
   );
 }
 
@@ -364,9 +351,89 @@ function InstagramModal({ open, onClose, onSubmit, loading }) {
         <p style={{ margin: '0 0 16px', fontSize: 14, color: 'var(--dim)' }}>Just the username — we'll pull the profile card automatically.</p>
         <div style={{ position: 'relative' }}>
           <span style={{ position: 'absolute', left: 14, top: '50%', transform: 'translateY(-50%)', color: 'var(--dim)', fontWeight: 700 }}>@</span>
-          <input autoFocus type="search" name="group-ig-username-f" autoComplete="off-nope" autoCorrect="off" autoCapitalize="off" spellCheck="false" data-lpignore="true" data-1p-ignore data-form-type="other" value={username} disabled={loading} onChange={(e) => setUsername(e.target.value.replace(/^@/, '').trim())} onKeyDown={(e) => { if (e.key === 'Enter' && username.trim()) onSubmit(username.trim()); }} placeholder="username" style={{ width: '100%', border: '1px solid var(--separator)', borderRadius: 16, padding: '14px 14px 14px 32px', fontSize: 15, boxSizing: 'border-box', color: 'var(--paper)', background: 'var(--ink-2)', outline: 'none' }} />
+          <input autoFocus type="search" name="group-ig-username-f" autoComplete="off-nope" autoCorrect="off" autoCapitalize="off" spellCheck="false" data-lpignore="true" data-1p-ignore data-form-type="other" value={username} disabled={loading} onChange={(e) => setUsername(e.target.value.replace(/^@/, '').trim())} onKeyDown={(e) => { if (e.key === 'Enter' && username.trim()) onSubmit(username.trim()); }} placeholder="username" style={{ width: '100%', border: '1px solid var(--separator)', borderRadius: 18, padding: '14px 14px 14px 32px', fontSize: 15, boxSizing: 'border-box', color: 'var(--paper)', background: 'var(--ink-2)', outline: 'none' }} />
         </div>
-        <button onClick={() => username.trim() && onSubmit(username.trim())} disabled={loading || !username.trim()} style={{ width: '100%', marginTop: 16, padding: 16, borderRadius: 20, border: 'none', background: loading ? 'var(--ink-2)' : 'var(--ember)', color: '#fff', fontWeight: 700, cursor: loading ? 'default' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, fontSize: 16 }}>{loading ? (<>{Vectors.Spinner} Fetching profile…</>) : 'Share Profile'}</button>
+        <button onClick={() => username.trim() && onSubmit(username.trim())} disabled={loading || !username.trim()} style={{ width: '100%', marginTop: 16, padding: 16, borderRadius: 22, border: 'none', background: loading ? 'var(--ink-2)' : 'var(--ember)', color: '#fff', fontWeight: 700, cursor: loading ? 'default' : 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, fontSize: 16 }}>{loading ? (<>{Vectors.Spinner} Fetching profile…</>) : 'Share Profile'}</button>
+      </div>
+    </div>
+  );
+}
+
+// Telegram-style top banner: a colored accent bar, a bold colored label
+// ("Pinned Message" / "Confession"), a dimmed one-line preview, an optional
+// extra action slot (used for the "+" add-confession button), and a
+// list button that opens the full MessageListOverlay of every pinned
+// message / confession in the group — not just the current one.
+function TelegramBanner({ label, accentColor, previewText, onTap, onOpenList, rightExtra }) {
+  return (
+    <div
+      onClick={onTap}
+      style={{
+        display: 'flex', alignItems: 'center', gap: 10,
+        padding: '7px 10px', margin: '6px 10px 0', borderRadius: 18,
+        background: 'var(--banner-bg, var(--glass-white))',
+        border: '1px solid var(--glass-border)',
+        backdropFilter: 'blur(16px) saturate(150%)',
+        WebkitBackdropFilter: 'blur(16px) saturate(150%)',
+        cursor: 'pointer', flexShrink: 0,
+      }}
+    >
+      <div style={{ width: 3, height: 32, borderRadius: 2, background: accentColor, flexShrink: 0 }} />
+      <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
+        <span style={{ fontSize: 13, fontWeight: 700, color: accentColor }}>{label}</span>
+        <span className="no-copy-text" style={{ fontSize: 13, color: 'var(--dim)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{previewText}</span>
+      </div>
+      {rightExtra}
+      <button
+        onClick={(e) => { e.stopPropagation(); onOpenList(); }}
+        title="View all"
+        style={{ border: 'none', background: 'transparent', color: accentColor, cursor: 'pointer', display: 'flex', padding: 4, flexShrink: 0 }}
+      >
+        {Vectors.ListIcon}
+      </button>
+    </div>
+  );
+}
+
+// Bottom-sheet listing every pinned message / confession in the group so
+// the person can jump straight to any of them, not just cycle one at a
+// time via the banner tap.
+function MessageListOverlay({ open, title, accentColor, messages, onClose, onSelect }) {
+  if (!open) return null;
+  return (
+    <div
+      onClick={onClose}
+      style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.6)', zIndex: 55, display: 'flex', alignItems: 'flex-end', justifyContent: 'center' }}
+    >
+      <div
+        onClick={(e) => e.stopPropagation()}
+        style={{ width: '100%', maxWidth: 500, maxHeight: '70vh', margin: '0 auto', background: 'var(--ink-2)', borderRadius: '28px 28px 0 0', border: '1px solid var(--separator)', borderBottom: 'none', display: 'flex', flexDirection: 'column' }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 18px 10px' }}>
+          <span style={{ fontSize: 16, fontWeight: 800, color: accentColor }}>{title}</span>
+          <button onClick={onClose} style={{ border: 'none', background: 'rgba(255,255,255,0.06)', width: 28, height: 28, borderRadius: '50%', color: 'var(--paper)', cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center' }}>{Vectors.Close}</button>
+        </div>
+        <div style={{ overflowY: 'auto', padding: '0 8px 12px' }}>
+          {messages.length === 0 && (
+            <div style={{ padding: '24px 16px', textAlign: 'center', color: 'var(--dim)', fontSize: 14 }}>Nothing here yet.</div>
+          )}
+          {messages.map((m) => (
+            <button
+              key={m.id}
+              onClick={() => onSelect(m.id)}
+              style={{ width: '100%', display: 'flex', alignItems: 'center', gap: 10, padding: '10px 10px', border: 'none', background: 'transparent', borderRadius: 18, cursor: 'pointer', textAlign: 'left' }}
+            >
+              <div style={{ width: 3, height: 30, borderRadius: 2, background: accentColor, flexShrink: 0 }} />
+              <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column' }}>
+                <span style={{ fontSize: 13, fontWeight: 700, color: m.is_anon ? 'var(--dim)' : getSenderColor(m.user_id || m.sender_name) }}>
+                  {m.is_anon ? 'Anonymous' : m.sender_name}
+                </span>
+                <span className="no-copy-text" style={{ fontSize: 13, color: 'var(--dim)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{generateReplySnippet(m)}</span>
+              </div>
+              <span style={{ fontSize: 11, color: 'var(--dim)', flexShrink: 0 }}>{formatTime(m.created_at)}</span>
+            </button>
+          ))}
+        </div>
       </div>
     </div>
   );
@@ -420,7 +487,7 @@ function usePullToRefresh(onRefresh, scrollRef) {
   return { pullDistance, isRefreshing, handleTouchStart, handleTouchMove, handleTouchEnd };
 }
 
-export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
+export default function GroupChat({ groupSlug, onBack, onGroupResolved, onDeleteGroup, onLeaveGroup }) {
   const { session, profile } = useAuth();
   const ownUserId = session?.user?.id;
   const isAdmin = profile?.is_admin === true;
@@ -494,6 +561,10 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
   const [pendingAction, setPendingAction] = useState(null);
   const [isAnonMode, setIsAnonMode] = useState(false);
   const [selectedMessages, setSelectedMessages] = useState([]);
+  // Lightweight cache of reply targets that aren't in the currently-loaded
+  // MESSAGE_LIMIT window — so reply previews show the real snippet instead
+  // of "Original message" until the user scrolls far enough to paginate them in.
+  const [replyCache, setReplyCache] = useState({});
   
   const [activeReactionMsgId, setActiveReactionMsgId] = useState(null);
   // Holds the flat { id, text, sender_name, avatar_url, is_anon, media_url,
@@ -513,6 +584,11 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
   const [pinning, setPinning] = useState(false);
   const [instagramModalOpen, setInstagramModalOpen] = useState(false);
   const [instagramLoading, setInstagramLoading] = useState(false);
+  // Full "view all" bottom sheets for the pinned-message and confession
+  // banners (see TelegramBanner's list button below).
+  const [pinnedListOpen, setPinnedListOpen] = useState(false);
+  const [confessionListOpen, setConfessionListOpen] = useState(false);
+
 
   const scrollRef = useRef(null);
   const fileInputRef = useRef(null);
@@ -565,6 +641,7 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
     setHasMoreMessages(true);
     setReplyingTo(null);
     setSelectedMessages([]);
+    setReplyCache({});
     setHighlightedMsgId(null);
     setHasUnreadMention(false);
     setLatestMentionId(null);
@@ -867,6 +944,41 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
     }
   }, [messages]);
 
+  // Pull any reply_to targets that aren't in the current messages window
+  // into replyCache so the inline quote can show a real snippet.
+  useEffect(() => {
+    if (!group?.id || messages.length === 0) return;
+    const loadedIds = new Set(messages.map((m) => m.id));
+    const uuidRe = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    const missing = [];
+    for (const m of messages) {
+      // Optimistic temp-* ids are not real UUIDs — never send them to Postgres.
+      if (m.reply_to_id && uuidRe.test(m.reply_to_id) && !loadedIds.has(m.reply_to_id) && !replyCache[m.reply_to_id]) {
+        missing.push(m.reply_to_id);
+      }
+    }
+    const unique = [...new Set(missing)];
+    if (unique.length === 0) return;
+    let cancelled = false;
+    (async () => {
+      const { data, error } = await supabase
+        .from('group_messages')
+        .select('id, text, sender_name, is_anon, media_url, media_type, instagram_username, user_id')
+        .eq('group_id', group.id)
+        .in('id', unique);
+      if (cancelled || error || !data) return;
+      setReplyCache((prev) => {
+        const next = { ...prev };
+        for (const row of data) next[row.id] = row;
+        return next;
+      });
+    })();
+    return () => { cancelled = true; };
+    // replyCache intentionally omitted from deps — we only want to run when
+    // messages change, and the !replyCache[id] guard prevents re-fetch loops.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [group?.id, messages]);
+
   const toggleSelection = (msgId) => { if (!isAdmin) return; hapticSelect(); setSelectedMessages((prev) => (prev.includes(msgId) ? prev.filter((id) => id !== msgId) : [...prev, msgId])); };
   // Long-press opens the reaction tray only. Selection is available from the
   // tray's "Select" action (admin), not from long-press itself.
@@ -878,6 +990,44 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
     setActiveReactionMsgId(msgId);
   }, []);
   const longPressHook = useLongPress(handleLongPressOpenReaction, 480);
+
+  // Jump/highlight helper shared by the pinned & confession banners and
+  // their "view all" list sheets below.
+  const jumpToMessage = useCallback(async (id) => {
+    const el = document.getElementById(`msg-${id}`);
+    if (el) {
+      el.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      setHighlightedMsgId(id);
+      setTimeout(() => setHighlightedMsgId(null), 2000);
+      return;
+    }
+    // Target isn't in the current window — fetch it + nearby context (same
+    // path as deep-link resolution) then scroll once it's merged in.
+    if (!group?.id || !id) return;
+    try {
+      const { data: row } = await supabase
+        .from('group_messages')
+        .select('*, profiles(avatar_url)')
+        .eq('group_id', group.id)
+        .eq('id', id)
+        .maybeSingle();
+      if (!row) return;
+      const [{ data: olderCtx }, { data: newerCtx }] = await Promise.all([
+        supabase.from('group_messages').select('*, profiles(avatar_url)').eq('group_id', group.id).lte('created_at', row.created_at).order('created_at', { ascending: false }).limit(MESSAGE_LIMIT),
+        supabase.from('group_messages').select('*, profiles(avatar_url)').eq('group_id', group.id).gt('created_at', row.created_at).order('created_at', { ascending: true }).limit(MESSAGE_LIMIT),
+      ]);
+      const context = await attachConfessionIds([...(olderCtx || []), ...(newerCtx || [])]);
+      setMessages((prev) => {
+        const existingIds = new Set(prev.map((m) => m.id));
+        const additions = context.filter((m) => !existingIds.has(m.id));
+        if (additions.length === 0) return prev;
+        return [...prev, ...additions].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+      });
+      setPendingJumpId(row.id);
+    } catch (err) {
+      console.error('Failed to jump to message:', err);
+    }
+  }, [group?.id, attachConfessionIds]);
 
   // Deletes one or more group_messages rows *and* everything that would
   // otherwise block or orphan that delete:
@@ -1025,7 +1175,9 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
     if (cooldownPercent > 0) { showToast('Please wait a few seconds before sending another message.', 'info'); return; }
 
     const tempId = `temp-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-    const replyToId = replyingTo?.id ?? null;
+    // Never pass an optimistic temp-* id as reply_to_id — Postgres rejects non-UUIDs.
+    const rawReplyId = replyingTo?.id ?? null;
+    const replyToId = rawReplyId && !String(rawReplyId).startsWith('temp-') ? rawReplyId : null;
     const senderName = currentSenderName();
     const optimisticMsg = {
       id: tempId, group_id: group.id, user_id: session.user.id, sender_name: senderName, text: trimmed,
@@ -1088,7 +1240,7 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
       const { data: publicUrlData } = supabase.storage.from('media').getPublicUrl(path);
       if (!publicUrlData?.publicUrl) throw new Error('NO_URL');
 
-      const { error: insertError } = await supabase.from('group_messages').insert({ group_id: group.id, user_id: session.user.id, sender_name: currentSenderName(), text: caption.trim() || null, media_url: publicUrlData.publicUrl, media_type: type, reply_to_id: replyingTo?.id ?? null, is_anon: isAnonMode });
+      const { error: insertError } = await supabase.from('group_messages').insert({ group_id: group.id, user_id: session.user.id, sender_name: currentSenderName(), text: caption.trim() || null, media_url: publicUrlData.publicUrl, media_type: type, reply_to_id: (replyingTo?.id && !String(replyingTo.id).startsWith('temp-')) ? replyingTo.id : null, is_anon: isAnonMode });
       if (insertError) throw insertError;
       URL.revokeObjectURL(pendingFile.previewUrl); setPendingFile(null); setCaption(''); setReplyingTo(null); cooldownRef.current?.start();
     } catch (err) {
@@ -1108,7 +1260,7 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
     setMessages((prev) => [{ id: tempId, group_id: group.id, user_id: session.user.id, sender_name: senderName, text: null, media_url: url, media_type: mediaType, reply_to_id: replyToId, mentioned_user_ids: [], is_anon: isAnonMode, is_confession: false, created_at: new Date().toISOString(), profiles: isAnonMode ? null : { avatar_url: profile?.avatar_url || null }, _pending: true }, ...prev]);
     setReplyingTo(null); playSend(); hapticSend(); cooldownRef.current?.start();
 
-    const { data, error } = await supabase.from('group_messages').insert({ group_id: group.id, user_id: session.user.id, sender_name: senderName, media_url: url, media_type: mediaType, reply_to_id: replyToId, is_anon: isAnonMode }).select('*, profiles(avatar_url)').single();
+    const { data, error } = await supabase.from('group_messages').insert({ group_id: group.id, user_id: session.user.id, sender_name: senderName, media_url: url, media_type: mediaType, reply_to_id: replyToId && !String(replyToId).startsWith('temp-') ? replyToId : null, is_anon: isAnonMode }).select('*, profiles(avatar_url)').single();
     if (error) {
       showToast(friendlyDbError(), 'error');
       setMessages((prev) => prev.map((m) => (m.id === tempId ? { ...m, _pending: false, _failed: true } : m)));
@@ -1149,7 +1301,7 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
     setInstagramLoading(true); const data = await scrapeInstagram(username); setInstagramLoading(false);
     if (!data) { showToast("Couldn't find that Instagram profile.", 'error'); return; }
     setInstagramModalOpen(false);
-    const payload = data.fallback ? { group_id: group.id, user_id: session.user.id, sender_name: currentSenderName(), instagram_username: data.username, reply_to_id: replyingTo?.id ?? null, is_anon: isAnonMode } : { group_id: group.id, user_id: session.user.id, sender_name: currentSenderName(), instagram_username: data.username, reply_to_id: replyingTo?.id ?? null, is_anon: isAnonMode, instagram_pfp_url: data.pfp_url, instagram_full_name: data.full_name, instagram_bio: data.bio, instagram_followers: data.followers, instagram_following: data.following, instagram_posts: data.posts, instagram_is_verified: data.is_verified, instagram_is_private: data.is_private };
+    const payload = data.fallback ? { group_id: group.id, user_id: session.user.id, sender_name: currentSenderName(), instagram_username: data.username, reply_to_id: (replyingTo?.id && !String(replyingTo.id).startsWith('temp-')) ? replyingTo.id : null, is_anon: isAnonMode } : { group_id: group.id, user_id: session.user.id, sender_name: currentSenderName(), instagram_username: data.username, reply_to_id: (replyingTo?.id && !String(replyingTo.id).startsWith('temp-')) ? replyingTo.id : null, is_anon: isAnonMode, instagram_pfp_url: data.pfp_url, instagram_full_name: data.full_name, instagram_bio: data.bio, instagram_followers: data.followers, instagram_following: data.following, instagram_posts: data.posts, instagram_is_verified: data.is_verified, instagram_is_private: data.is_private };
     const { error } = await supabase.from('group_messages').insert(payload);
     if (error) showToast(friendlyDbError(), 'error');
     else { setReplyingTo(null); cooldownRef.current?.start(); }
@@ -1200,16 +1352,22 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
     return m.text?.toLowerCase().includes(q) || m.sender_name?.toLowerCase().includes(q);
   });
 
+
   if (groupStatus === 'loading') return <div className="no-copy-text" style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--ink)' }}><div style={{ color: 'var(--ember)' }}>{Vectors.Spinner}</div></div>;
-  if (groupStatus === 'error') return <div className="no-copy-text" style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--ink)', flexDirection: 'column', gap: 16 }}><p style={{ color: 'var(--dim)' }}>Failed to load group.</p><button onClick={onBack} style={{ background: 'var(--ember)', color: '#fff', border: 'none', padding: '8px 16px', borderRadius: 12, cursor: 'pointer' }}>Go Back</button></div>;
+  if (groupStatus === 'error') return <div className="no-copy-text" style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--ink)', flexDirection: 'column', gap: 16 }}><p style={{ color: 'var(--dim)' }}>Failed to load group.</p><button onClick={onBack} style={{ background: 'var(--ember)', color: '#fff', border: 'none', padding: '8px 16px', borderRadius: 16, cursor: 'pointer' }}>Go Back</button></div>;
+
+  const allPinnedMessages = messages.filter((m) => m.is_pinned);
+  const allConfessionMessages = messages.filter((m) => m.is_confession);
 
   return (
     <div className="no-copy-text" style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', position: 'relative', height: '100%', overflow: 'hidden', zIndex: 1, userSelect: 'none', WebkitUserSelect: 'none', background: 'var(--ink)' }}>
-      
-      {/* HEADER */}
+
+      {/* HEADER — rendered as its own floating rounded card, separated
+          from the message list by margin rather than a full-bleed bar
+          with a hairline border, so it reads as a distinct element. */}
       {selectedMessages.length > 0 ? (
-        <header style={{ flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 20px', background: 'var(--ember)', color: '#fff', zIndex: 20 }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}><button onClick={() => setSelectedMessages([])} style={{ border: 'none', background: 'transparent', color: '#fff', cursor: 'pointer', padding: '4px', marginLeft: '-8px' }}>{Vectors.Close}</button><span style={{ fontWeight: 700, fontSize: 16 }}>{selectedMessages.length} Selected</span></div>
+        <header style={{ flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '12px 20px', margin: '8px 10px 0', borderRadius: 22, background: 'var(--ember)', color: '#fff', zIndex: 20, boxShadow: '0 4px 18px rgba(0,0,0,0.22)' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}><button onClick={() => setSelectedMessages([])} style={{ border: 'none', background: 'rgba(255,255,255,0.14)', color: '#fff', cursor: 'pointer', padding: '6px', borderRadius: '50%', display: 'flex' }}>{Vectors.Close}</button><span style={{ fontWeight: 700, fontSize: 16 }}>{selectedMessages.length} Selected</span></div>
           <div style={{ display: 'flex', alignItems: 'center', gap: 18 }}>
             {selectedMessages.length === 1 && (
               <button onClick={handleTogglePinSelected} disabled={pinning} style={{ border: 'none', background: 'transparent', color: '#fff', cursor: pinning ? 'default' : 'pointer', display: 'flex', alignItems: 'center', gap: 6, fontWeight: 600, opacity: pinning ? 0.6 : 1 }}>
@@ -1220,8 +1378,31 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
           </div>
         </header>
       ) : (
-        <header style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', background: 'var(--header-bg)', borderBottom: '1px solid var(--separator)', backdropFilter: 'blur(24px) saturate(160%)', WebkitBackdropFilter: 'blur(24px) saturate(160%)', zIndex: 20 }}>
-          <button onClick={onBack} style={{ border: 'none', background: 'transparent', color: 'var(--paper)', cursor: 'pointer', padding: '4px', marginLeft: '-4px', flexShrink: 0 }}>{Vectors.Back}</button>
+        <div style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: 8, margin: '8px 10px 0', zIndex: 20 }}>
+          {/* Back button — separate round chip outside the header card. */}
+          <button
+            onClick={onBack}
+            aria-label="Back"
+            style={{
+              border: '1px solid var(--glass-border)',
+              background: 'rgba(255,255,255,0.08)',
+              color: 'var(--paper)',
+              cursor: 'pointer',
+              width: 42,
+              height: 42,
+              borderRadius: '50%',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              flexShrink: 0,
+              backdropFilter: 'blur(20px) saturate(160%)',
+              WebkitBackdropFilter: 'blur(20px) saturate(160%)',
+              boxShadow: '0 4px 14px rgba(0,0,0,0.12)',
+            }}
+          >
+            {Vectors.Back}
+          </button>
+          <header style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', gap: 12, padding: '10px 14px', borderRadius: 22, background: 'var(--header-bg)', border: '1px solid var(--glass-border)', backdropFilter: 'blur(24px) saturate(160%)', WebkitBackdropFilter: 'blur(24px) saturate(160%)', boxShadow: '0 4px 18px rgba(0,0,0,0.18)' }}>
           <button onClick={() => setGroupCardOpen(true)} style={{ border: 'none', background: 'transparent', padding: 0, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 10, flex: 1, minWidth: 0, textAlign: 'left' }}>
             <LiquidAvatar identity={{ name: group.name, avatar_url: group.cover_url, is_admin: false }} size={36} kind="group" />
             <div style={{ display: 'flex', flexDirection: 'column', justifyContent: 'center', minWidth: 0, flex: 1 }}>
@@ -1234,19 +1415,44 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
             <div ref={menuRef} style={{ position: 'relative' }}>
               <button onClick={() => setMenuOpen((v) => !v)} style={{ border: 'none', background: 'transparent', color: 'var(--paper)', cursor: 'pointer', padding: 8, display: 'flex', alignItems: 'center', justifyContent: 'center', borderRadius: '50%' }}>{Vectors.ThreeDots}</button>
               {menuOpen && (
-                <div style={{ position: 'absolute', right: 0, top: '100%', marginTop: 4, zIndex: 30, minWidth: 160, padding: 6, background: 'var(--menu-bg)', borderRadius: 16, border: '1px solid var(--glass-border)', boxShadow: 'var(--shadow-card)', backdropFilter: 'blur(20px) saturate(140%)', WebkitBackdropFilter: 'blur(20px) saturate(140%)' }}>
-                  <button onClick={() => { setIsSearching(true); setMenuOpen(false); }} style={{ width: '100%', padding: '10px 14px', border: 'none', background: 'transparent', color: 'var(--paper)', textAlign: 'left', borderRadius: 10, cursor: 'pointer', fontSize: 14, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8 }}>{Vectors.SearchSmall} Search Chat</button>
-                  <button onClick={() => { navigator.clipboard.writeText(`${getCanonicalOrigin()}${window.location.pathname}`); setMenuOpen(false); showToast('Link copied to clipboard!', 'info'); }} style={{ width: '100%', padding: '10px 14px', border: 'none', background: 'transparent', color: 'var(--paper)', textAlign: 'left', borderRadius: 10, cursor: 'pointer', fontSize: 14, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8 }}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg> Share link</button>
+                <div style={{ position: 'absolute', right: 0, top: '100%', marginTop: 4, zIndex: 30, minWidth: 190, padding: 6, background: 'var(--menu-bg)', borderRadius: 18, border: '1px solid var(--glass-border)', boxShadow: 'var(--shadow-card)', backdropFilter: 'blur(20px) saturate(140%)', WebkitBackdropFilter: 'blur(20px) saturate(140%)' }}>
+                  <button onClick={() => { setIsSearching(true); setMenuOpen(false); }} style={{ width: '100%', padding: '10px 14px', border: 'none', background: 'transparent', color: 'var(--paper)', textAlign: 'left', borderRadius: 14, cursor: 'pointer', fontSize: 14, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8 }}>{Vectors.SearchSmall} Search Chat</button>
+                  <button onClick={() => { navigator.clipboard.writeText(`${getCanonicalOrigin()}${window.location.pathname}`); setMenuOpen(false); showToast('Link copied to clipboard!', 'info'); }} style={{ width: '100%', padding: '10px 14px', border: 'none', background: 'transparent', color: 'var(--paper)', textAlign: 'left', borderRadius: 14, cursor: 'pointer', fontSize: 14, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8 }}><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path></svg> Share link</button>
+                  {session && onLeaveGroup && group && (
+                    <button
+                      onClick={() => {
+                        setMenuOpen(false);
+                        onLeaveGroup(group);
+                      }}
+                      style={{ width: '100%', padding: '10px 14px', border: 'none', background: 'transparent', color: 'var(--paper)', textAlign: 'left', borderRadius: 14, cursor: 'pointer', fontSize: 14, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8 }}
+                    >
+                      {Vectors.Close} Leave group
+                    </button>
+                  )}
+                  {isAdmin && onDeleteGroup && group && (
+                    <button
+                      onClick={() => {
+                        setMenuOpen(false);
+                        if (window.confirm(`Delete “${group.name}” for everyone? This cannot be undone.`)) {
+                          onDeleteGroup(group);
+                        }
+                      }}
+                      style={{ width: '100%', padding: '10px 14px', border: 'none', background: 'transparent', color: '#FF6B6B', textAlign: 'left', borderRadius: 14, cursor: 'pointer', fontSize: 14, fontWeight: 600, display: 'flex', alignItems: 'center', gap: 8 }}
+                    >
+                      {Vectors.Trash} Delete group
+                    </button>
+                  )}
                 </div>
               )}
             </div>
           </div>
         </header>
+        </div>
       )}
 
       {/* SEARCH BAR */}
       {isSearching && (
-        <div style={{ background: 'var(--header-bg)', borderBottom: '1px solid var(--separator)', padding: '10px 16px', display: 'flex', alignItems: 'center', gap: 10, zIndex: 19 }}>
+        <div style={{ background: 'var(--header-bg)', margin: '8px 10px 0', borderRadius: 20, border: '1px solid var(--glass-border)', padding: '10px 16px', display: 'flex', alignItems: 'center', gap: 10, zIndex: 19 }}>
           <div style={{ flex: 1, position: 'relative' }}>
             <span style={{ position: 'absolute', left: 12, top: '50%', transform: 'translateY(-50%)', color: 'var(--dim)', pointerEvents: 'none' }}>{Vectors.SearchSmall}</span>
             <input autoFocus type="search" name="group-chat-search-f" autoComplete="off-nope" autoCorrect="off" autoCapitalize="off" spellCheck="false" data-lpignore="true" data-1p-ignore data-form-type="other" value={chatSearchQuery} onChange={(e) => setChatSearchQuery(e.target.value)} placeholder="Search or type @username..." style={{ width: '100%', padding: '8px 12px 8px 36px', borderRadius: 16, border: 'none', background: 'var(--ink-2)', color: 'var(--paper)', fontSize: 14, outline: 'none', boxSizing: 'border-box' }} />
@@ -1255,156 +1461,68 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
         </div>
       )}
 
-      {(() => {
-        // Hide confession/pin strip entirely on channels.
-        if (group?.is_channel) return null;
-        const confessionMessages = messages.filter((m) => m.is_confession);
-        const hasConfessions = confessionMessages.length > 0;
-        const pinnedMessages = messages.filter((m) => m.is_pinned);
-        const hasPinned = pinnedMessages.length > 0;
-        const showBar = !isSearching && !!session;
-        if (!showBar) return null;
-        const chipBase = {
-          width: 28, height: 28, borderRadius: '50%', flexShrink: 0,
-          display: 'flex', alignItems: 'center', justifyContent: 'center',
-          border: '1px solid var(--glass-border)',
-          background: 'var(--glass-white)',
-          color: 'var(--paper)', cursor: 'pointer',
-          transition: 'transform 0.12s ease-out, background 0.15s ease',
-          padding: 0,
-        };
-        // Collapsed: only a downward chevron tab. Expanded: the 3 action chips
-        // slide open under the header (zero-height layout row so messages
-        // aren't covered by a full-width strip).
-        return (
-          <div
-            style={{
-              position: 'relative',
-              height: 0,
-              flexShrink: 0,
-              zIndex: 19,
-              overflow: 'visible',
-              pointerEvents: 'none',
-            }}
-          >
-            <div
-              style={{
-                position: 'absolute',
-                top: 0,
-                right: 10,
-                left: 'auto',
-                display: 'inline-flex',
-                flexDirection: 'column',
-                alignItems: 'flex-end',
-                width: 'auto',
-                maxWidth: 'max-content',
-                pointerEvents: 'auto',
-              }}
-            >
-              <div
-                style={{
-                  display: 'inline-flex',
-                  alignItems: 'center',
-                  gap: notchOpen ? 5 : 0,
-                  padding: notchOpen ? '5px 6px 6px' : '2px 4px 3px',
-                  borderRadius: '0 0 14px 14px',
-                  background: 'var(--header-bg)',
-                  border: '1px solid var(--separator)',
-                  borderTop: 'none',
-                  backdropFilter: 'blur(24px) saturate(160%)',
-                  WebkitBackdropFilter: 'blur(24px) saturate(160%)',
-                  boxShadow: 'var(--shadow-float)',
-                  transition: 'padding 0.22s cubic-bezier(0.2, 0.8, 0.2, 1), gap 0.22s ease',
-                  lineHeight: 0,
-                }}
-              >
-                {/* Expandable chip row */}
-                <div
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: 6,
-                    maxWidth: notchOpen ? 120 : 0,
-                    opacity: notchOpen ? 1 : 0,
-                    overflow: 'hidden',
-                    transform: notchOpen ? 'translateY(0) scale(1)' : 'translateY(-6px) scale(0.92)',
-                    transformOrigin: 'top left',
-                    transition: 'max-width 0.28s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.2s ease, transform 0.28s cubic-bezier(0.2, 0.8, 0.2, 1)',
-                    pointerEvents: notchOpen ? 'auto' : 'none',
-                  }}
-                >
-                  <button
-                    title="Previous Confession"
-                    disabled={!hasConfessions}
-                    onClick={() => {
-                      if (confessionMessages.length === 0) return;
-                      const nextIdx = confessionNavIndex + 1 >= confessionMessages.length ? 0 : confessionNavIndex + 1;
-                      setConfessionNavIndex(nextIdx);
-                      const el = document.getElementById(`msg-${confessionMessages[nextIdx].id}`);
-                      if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); setHighlightedMsgId(confessionMessages[nextIdx].id); setTimeout(() => setHighlightedMsgId(null), 2000); }
-                    }}
-                    style={{ ...chipBase, opacity: hasConfessions ? 1 : 0.4, color: hasConfessions ? 'var(--ember)' : 'var(--dim)' }}
-                    onMouseDown={(e) => { e.currentTarget.style.transform = 'scale(0.92)'; }}
-                    onMouseUp={(e) => { e.currentTarget.style.transform = 'scale(1)'; }}
-                    onMouseLeave={(e) => { e.currentTarget.style.transform = 'scale(1)'; }}
-                  >
-                    {Vectors.GhostSm}
-                  </button>
+      {/* PINNED MESSAGE / CONFESSION BANNERS — Telegram-style bars docked
+          under the header. Each shows the active item (tap cycles through
+          every pinned message / confession in the group) and a list
+          button that opens MessageListOverlay with the full set. The
+          confession banner also carries a "+" so posting a new confession
+          doesn't require opening the attachment sheet. Hidden on channels
+          (broadcast-only) and while the search bar is open.
 
+          The pinned-message banner is intentionally shown to signed-out
+          visitors too — pins are group content anyone browsing the group
+          should be able to see, not a signed-in-only feature. The
+          confession banner keeps requiring a session, since posting a
+          confession does. */}
+      {!group?.is_channel && !isSearching && (
+        <div style={{ flexShrink: 0, zIndex: 19, display: 'flex', flexDirection: 'column', gap: 6, paddingBottom: 2 }}>
+          {allPinnedMessages.length > 0 && (() => {
+            const activeIdx = pinNavIndex >= 0 && pinNavIndex < allPinnedMessages.length ? pinNavIndex : 0;
+            const active = allPinnedMessages[activeIdx];
+            return (
+              <TelegramBanner
+                label={allPinnedMessages.length > 1 ? `Pinned Message (${activeIdx + 1}/${allPinnedMessages.length})` : 'Pinned Message'}
+                accentColor="var(--ember)"
+                previewText={generateReplySnippet(active)}
+                onTap={() => {
+                  const nextIdx = activeIdx + 1 >= allPinnedMessages.length ? 0 : activeIdx + 1;
+                  setPinNavIndex(nextIdx);
+                  jumpToMessage(allPinnedMessages[nextIdx].id);
+                }}
+                onOpenList={() => setPinnedListOpen(true)}
+              />
+            );
+          })()}
+
+          {!!session && (() => {
+            const activeIdx = confessionNavIndex >= 0 && confessionNavIndex < allConfessionMessages.length ? confessionNavIndex : allConfessionMessages.length - 1;
+            const active = allConfessionMessages[activeIdx] || null;
+            return (
+              <TelegramBanner
+                label="Confession"
+                accentColor="#A695E7"
+                previewText={active ? generateReplySnippet(active) : 'No confessions yet — be the first'}
+                onTap={() => {
+                  if (allConfessionMessages.length === 0) { setConfessionModalOpen(true); return; }
+                  const nextIdx = activeIdx + 1 >= allConfessionMessages.length ? 0 : activeIdx + 1;
+                  setConfessionNavIndex(nextIdx);
+                  jumpToMessage(allConfessionMessages[nextIdx].id);
+                }}
+                onOpenList={() => setConfessionListOpen(true)}
+                rightExtra={
                   <button
-                    title="Post Confession"
-                    onClick={() => setConfessionModalOpen(true)}
-                    style={{ ...chipBase, background: 'var(--ember-soft)', border: '1px solid color-mix(in srgb, var(--ember) 35%, transparent)', color: 'var(--ember)' }}
-                    onMouseDown={(e) => { e.currentTarget.style.transform = 'scale(0.92)'; }}
-                    onMouseUp={(e) => { e.currentTarget.style.transform = 'scale(1)'; }}
-                    onMouseLeave={(e) => { e.currentTarget.style.transform = 'scale(1)'; }}
+                    onClick={(e) => { e.stopPropagation(); setConfessionModalOpen(true); }}
+                    title="Add confession"
+                    style={{ width: 26, height: 26, borderRadius: '50%', border: 'none', background: 'rgba(166,149,231,0.18)', color: '#A695E7', display: 'flex', alignItems: 'center', justifyContent: 'center', cursor: 'pointer', flexShrink: 0 }}
                   >
                     {Vectors.Plus}
                   </button>
-
-                  <button
-                    title="Pinned"
-                    disabled={!hasPinned}
-                    onClick={() => {
-                      if (pinnedMessages.length === 0) return;
-                      const nextIdx = pinNavIndex + 1 >= pinnedMessages.length ? 0 : pinNavIndex + 1;
-                      setPinNavIndex(nextIdx);
-                      const el = document.getElementById(`msg-${pinnedMessages[nextIdx].id}`);
-                      if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); setHighlightedMsgId(pinnedMessages[nextIdx].id); setTimeout(() => setHighlightedMsgId(null), 2000); }
-                    }}
-                    style={{ ...chipBase, opacity: hasPinned ? 1 : 0.4 }}
-                    onMouseDown={(e) => { e.currentTarget.style.transform = 'scale(0.92)'; }}
-                    onMouseUp={(e) => { e.currentTarget.style.transform = 'scale(1)'; }}
-                    onMouseLeave={(e) => { e.currentTarget.style.transform = 'scale(1)'; }}
-                  >
-                    {Vectors.PinSm}
-                  </button>
-                </div>
-
-                {/* Toggle chevron — always visible */}
-                <button
-                  type="button"
-                  title={notchOpen ? 'Hide tools' : 'Show tools'}
-                  aria-expanded={notchOpen}
-                  onClick={() => setNotchOpen((v) => !v)}
-                  style={{
-                    width: 18, height: 14, borderRadius: 4, flexShrink: 0,
-                    display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-                    border: 'none', background: 'transparent', color: 'var(--dim)',
-                    cursor: 'pointer', padding: 0, margin: 0, lineHeight: 0,
-                    transition: 'transform 0.28s cubic-bezier(0.2, 0.8, 0.2, 1), color 0.15s ease',
-                    transform: notchOpen ? 'rotate(180deg)' : 'rotate(0deg)',
-                  }}
-                >
-                  <span style={{ display: 'flex', width: 14, height: 14, alignItems: 'center', justifyContent: 'center' }}>
-                    {Vectors.ChevronDown}
-                  </span>
-                </button>
-              </div>
-            </div>
-          </div>
-        );
-      })()}
+                }
+              />
+            );
+          })()}
+        </div>
+      )}
 
       {/* REFRESH SPINNER */}
       <div style={{ position: 'absolute', top: 120, left: 0, right: 0, height: 60, display: 'flex', alignItems: 'center', justifyContent: 'center', zIndex: 5, transform: `translateY(${Math.min(pullDistance - 60, 0)}px)`, opacity: pullDistance > 10 ? 1 : 0, transition: isRefreshing ? 'transform 0.3s cubic-bezier(0.2, 0.8, 0.2, 1)' : 'none', color: 'var(--ember)' }}>
@@ -1433,11 +1551,18 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
           const isAdminMsg = isSenderAdmin(message);
           const isConfession = message.is_confession === true;
           const isInstagram = !!message.instagram_username;
+          // Telegram-style per-sender color, used for the name label,
+          // avatar ring and this message's own reply-quote accent when
+          // someone replies to it.
+          const senderColor = isAdminMsg ? 'var(--admin-1)' : (isAnonMsg ? 'var(--dim)' : getSenderColor(message.user_id || message.sender_name));
 
           const olderMessage = filteredMessages[index + 1];
           const showDayDivider = !olderMessage || dayKey(message.created_at) !== dayKey(olderMessage.created_at);
 
-          const repliedMessage = message.reply_to_id ? messages.find((m) => m.id === message.reply_to_id) || null : null;
+          const repliedMessage = message.reply_to_id
+            ? (messages.find((m) => m.id === message.reply_to_id) || replyCache[message.reply_to_id] || null)
+            : null;
+          const replyColor = repliedMessage && !repliedMessage.is_anon ? getSenderColor(repliedMessage.user_id || repliedMessage.sender_name) : 'var(--dim)';
           const isStickerOrGif = message.media_type === 'gif' || message.media_type === 'sticker';
           const senderAvatarUrl = message.profiles?.avatar_url || message.bot_avatar_url || null;
 
@@ -1482,7 +1607,7 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
                   
                   {isConfession ? (
                      <div id={`msg-${message.id}`} className={isHighlighted ? 'highlight-flash' : ''} style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', width: '100%', margin: '16px 0', padding: '0 12px' }}>
-                       <div style={{ width: '100%', maxWidth: 440, background: isSelected ? 'rgba(47,111,255, 0.15)' : 'transparent', borderRadius: 16 }}>
+                       <div style={{ width: '100%', maxWidth: 440, background: isSelected ? 'rgba(47,111,255, 0.15)' : 'transparent', borderRadius: 20 }}>
                          <ConfessionBubble confession={{ id: message.confession_id || message.id, text: message.text, photo_url: message.media_url, media_type: message.media_type, is_anon: message.is_anon, created_at: message.created_at, story_style: message.story_style, author_username: message.is_anon ? null : message.sender_name, author_avatar_url: message.is_anon ? null : (message.profiles?.avatar_url || null) }} onReply={() => { if (selectedMessages.length === 0) startReply(message); }} onPhotoClick={(c) => setViewerMedia({ url: c.photo_url || c.media_url, type: c.media_type || 'image' })} userId={ownUserId} size="inline" />
                          
                          <div style={{ marginTop: 8, display: 'flex', justifyContent: 'center', width: '100%' }}>
@@ -1549,7 +1674,7 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
                        </div>
                      </div>
                   ) : (
-                    <div id={`msg-${message.id}`} className={isHighlighted ? 'highlight-flash' : ''} style={{ display: 'flex', flexDirection: 'column', width: '100%', marginBottom: 10, borderRadius: 16, padding: '2px 2px', background: isSelected ? 'rgba(47,111,255, 0.15)' : 'transparent', animation: 'slideUpFade 0.3s cubic-bezier(0.2, 0.8, 0.2, 1) both', transition: 'background 0.2s' }}>
+                    <div id={`msg-${message.id}`} className={isHighlighted ? 'highlight-flash' : ''} style={{ display: 'flex', flexDirection: 'column', width: '100%', marginBottom: 10, borderRadius: 20, padding: '2px 2px', background: isSelected ? 'rgba(47,111,255, 0.15)' : 'transparent', animation: 'slideUpFade 0.3s cubic-bezier(0.2, 0.8, 0.2, 1) both', transition: 'background 0.2s' }}>
                       {selectedMessages.length > 0 && isAdmin && (
                         <div style={{ display: 'flex', justifyContent: isOwn ? 'flex-end' : 'flex-start', margin: '0 0 6px', color: isSelected ? 'var(--ember)' : 'rgba(255,255,255,0.1)' }}>
                           {isSelected ? Vectors.CheckCircle : <div style={{ width: 18, height: 18, borderRadius: '50%', border: '2px solid currentColor' }} />}
@@ -1562,7 +1687,7 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
                           <button onClick={(e) => { e.stopPropagation(); if (!isAnonMsg && selectedMessages.length === 0) setProfileCardUserId(message.is_bot ? (message.bot_id || message.user_id) : message.user_id); }} disabled={isAnonMsg || selectedMessages.length > 0 || (!message.user_id && !message.bot_id)} style={{ border: 'none', background: 'transparent', padding: 0, display: 'flex', cursor: isAnonMsg ? 'default' : 'pointer' }}>
                             <LiquidAvatar identity={{ name: message.sender_name, avatar_url: senderAvatarUrl, is_admin: isAdminMsg }} size={24} isAnon={isAnonMsg} />
                           </button>
-                          <button onClick={(e) => { e.stopPropagation(); if (!isAnonMsg && selectedMessages.length === 0) setProfileCardUserId(message.is_bot ? (message.bot_id || message.user_id) : message.user_id); }} disabled={isAnonMsg || selectedMessages.length > 0 || (!message.user_id && !message.bot_id)} style={{ fontSize: 12, fontWeight: 700, color: isAdminMsg ? 'var(--admin-1)' : (isAnonMsg ? 'var(--dim)' : 'var(--paper)'), display: 'flex', alignItems: 'center', gap: 4, border: 'none', background: 'transparent', padding: 0, cursor: isAnonMsg ? 'default' : 'pointer' }}>
+                          <button onClick={(e) => { e.stopPropagation(); if (!isAnonMsg && selectedMessages.length === 0) setProfileCardUserId(message.is_bot ? (message.bot_id || message.user_id) : message.user_id); }} disabled={isAnonMsg || selectedMessages.length > 0 || (!message.user_id && !message.bot_id)} style={{ fontSize: 12, fontWeight: 700, color: senderColor, display: 'flex', alignItems: 'center', gap: 4, border: 'none', background: 'transparent', padding: 0, cursor: isAnonMsg ? 'default' : 'pointer' }}>
                             {isAnonMsg ? 'Anonymous' : (isAdminMsg ? ADMIN_DISPLAY_NAME : message.sender_name)} {isAdminMsg && !isAnonMsg && Vectors.AdminShield}
                           </button>
                         </div>
@@ -1570,21 +1695,16 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
 
                       {/* Tight edge margin on the near side; larger opposite gap (ratio ~1:4) */}
                       <div style={{ display: 'flex', flexDirection: 'column', alignItems: isOwn ? 'flex-end' : 'flex-start', maxWidth: '78%', marginLeft: isOwn ? 0 : 28, marginRight: isOwn ? 0 : 'auto', alignSelf: isOwn ? 'flex-end' : 'flex-start' }}>
-                        <div style={{ maxWidth: '100%', padding: isInstagram ? '3px' : ((message.media_url && !isStickerOrGif) ? '3px' : (isStickerOrGif ? 0 : '8px 12px')), borderRadius: isStickerOrGif ? 0 : 18, borderBottomRightRadius: isStickerOrGif ? 0 : (isOwn ? 5 : 18), borderBottomLeftRadius: isStickerOrGif ? 0 : (isOwn ? 18 : 5), background: bubbleBackground, color: bubbleColor, border: bubbleBorder, boxShadow: isStickerOrGif ? 'none' : '0 2px 8px rgba(0,0,0,0.18)', backdropFilter: bubbleGlass, WebkitBackdropFilter: bubbleGlass, fontSize: 14, lineHeight: 1.35, wordBreak: 'break-word' }}>
+                        <div style={{ maxWidth: '100%', padding: isInstagram ? '3px' : ((message.media_url && !isStickerOrGif) ? '3px' : (isStickerOrGif ? 0 : '8px 12px')), borderRadius: isStickerOrGif ? 0 : 20, borderBottomRightRadius: isStickerOrGif ? 0 : (isOwn ? 6 : 20), borderBottomLeftRadius: isStickerOrGif ? 0 : (isOwn ? 20 : 6), background: bubbleBackground, color: bubbleColor, border: bubbleBorder, boxShadow: isStickerOrGif ? 'none' : '0 2px 8px rgba(0,0,0,0.18)', backdropFilter: bubbleGlass, WebkitBackdropFilter: bubbleGlass, fontSize: 14, lineHeight: 1.35, wordBreak: 'break-word' }}>
                           {message.reply_to_id && (
                             <div 
                               onClick={(e) => {
                                 e.stopPropagation();
-                                const targetEl = document.getElementById(`msg-${message.reply_to_id}`);
-                                if (targetEl) {
-                                  targetEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
-                                  targetEl.classList.add('highlight-flash');
-                                  setTimeout(() => targetEl.classList.remove('highlight-flash'), 2000);
-                                }
+                                jumpToMessage(message.reply_to_id);
                               }}
-                              style={{ display: 'flex', flexDirection: 'column', gap: 2, padding: '6px 10px', marginBottom: 8, marginTop: (message.media_url || isInstagram) ? 4 : 0, borderRadius: 10, background: 'var(--ink-2)', borderLeft: `3px solid ${isOwn ? 'var(--dim)' : 'var(--ember)'}`, cursor: 'pointer' }}
+                              style={{ display: 'flex', flexDirection: 'column', gap: 2, padding: '6px 10px', marginBottom: 8, marginTop: (message.media_url || isInstagram) ? 4 : 0, borderRadius: 14, background: 'var(--ink-2)', borderLeft: `3px solid ${replyColor}`, cursor: 'pointer' }}
                             >
-                              <span style={{ fontSize: 12, fontWeight: 700, color: 'var(--paper)' }}>{repliedMessage ? (repliedMessage.is_anon ? 'Anonymous' : repliedMessage.sender_name) : 'Original'}</span>
+                              <span style={{ fontSize: 12, fontWeight: 700, color: replyColor }}>{repliedMessage ? (repliedMessage.is_anon ? 'Anonymous' : repliedMessage.sender_name) : 'Original'}</span>
                               <span className="no-copy-text" style={{ fontSize: 13, color: 'var(--dim)', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{generateReplySnippet(repliedMessage)}</span>
                             </div>
                           )}
@@ -1604,18 +1724,18 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
                             <div style={{ display: 'flex', flexDirection: 'column', gap: message.text ? 6 : 0 }}>
                               {isStickerOrGif ? (
                                 <button onClick={(e) => { e.stopPropagation(); setViewerMedia({ url: message.media_url, type: message.media_type }); }} disabled={selectedMessages.length > 0} style={{ border: 'none', background: 'none', padding: 0, cursor: 'pointer', display: 'block' }}>
-                                  <img src={message.media_url} alt="Sticker/GIF" style={{ maxWidth: 160, maxHeight: 160, display: 'block', borderRadius: 12 }} />
+                                  <img src={message.media_url} alt="Sticker/GIF" style={{ maxWidth: 160, maxHeight: 160, display: 'block', borderRadius: 16 }} />
                                 </button>
                               ) : message.media_type === 'image' ? (
                                 <button onClick={(e) => { e.stopPropagation(); setViewerMedia({ url: message.media_url, type: 'image' }); }} disabled={selectedMessages.length > 0} style={{ border: 'none', background: 'none', padding: 0, cursor: 'pointer', display: 'block', width: '100%' }}>
-                                  <img src={message.media_url} alt="Attachment" style={{ maxWidth: 260, maxHeight: 260, borderRadius: 16, display: 'block', objectFit: 'cover' }} />
+                                  <img src={message.media_url} alt="Attachment" style={{ maxWidth: 260, maxHeight: 260, borderRadius: 18, display: 'block', objectFit: 'cover' }} />
                                 </button>
                               ) : message.media_type === 'video' ? (
                                 <VideoBubble src={message.media_url} />
                               ) : message.media_type === 'audio' ? (
                                 <AudioBubble src={message.media_url} isOwn={isOwn} />
                               ) : (
-                                <a href={message.media_url} onClick={e=>e.stopPropagation()} target="_blank" rel="noopener noreferrer" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px', background: 'var(--ink-2)', borderRadius: 16, textDecoration: 'none', border: '1px solid var(--separator)' }}>
+                                <a href={message.media_url} onClick={e=>e.stopPropagation()} target="_blank" rel="noopener noreferrer" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '12px 16px', background: 'var(--ink-2)', borderRadius: 18, textDecoration: 'none', border: '1px solid var(--separator)' }}>
                                   <div style={{ color: 'var(--paper)' }}>{Vectors.FileText}</div><span style={{ color: 'var(--paper)', fontSize: 14, fontWeight: 600 }}>Document</span>
                                 </a>
                               )}
@@ -1704,7 +1824,7 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
 
               {showDayDivider && !isSearching && (
                 <div style={{ textAlign: 'center', margin: '14px 0 10px', position: 'relative', zIndex: 1 }}>
-                  <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--dim)', background: 'var(--glass-white)', padding: '4px 12px', borderRadius: 12, border: '1px solid var(--glass-border)' }}>
+                  <span style={{ fontSize: 11, fontWeight: 600, color: 'var(--dim)', background: 'var(--glass-white)', padding: '4px 12px', borderRadius: 14, border: '1px solid var(--glass-border)' }}>
                     {formatDayLabel(message.created_at)}
                   </span>
                 </div>
@@ -1730,18 +1850,12 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
         <button onClick={handleJumpToMention} style={{ position: 'absolute', right: 16, bottom: 80, width: 40, height: 40, borderRadius: '50%', background: 'var(--ember)', color: '#fff', border: 'none', boxShadow: 'var(--shadow-float)', zIndex: 30, display: 'flex', alignItems: 'center', justifyContent: 'center', fontWeight: 800, fontSize: 18, cursor: 'pointer', animation: 'pop-in 0.3s cubic-bezier(0.2, 0.8, 0.2, 1)' }}>@</button>
       )}
 
-      {/* COMPOSER
-          `background` set explicitly here to match the composer form's own
-          `var(--ink-2)` — previously this wrapper was transparent, so its own
-          safe-area bottom padding (see .safe-bottom in tokens.css) showed
-          the page background (var(--ink)) through it: a visible dark seam
-          between the composer bar and the true bottom edge that didn't
-          match either color. Setting the same solid color here removes the
-          seam by making the padding area indistinguishable from the bar
-          it's padding. */}
-      <div className="safe-bottom" style={{ flexShrink: 0, zIndex: 20, position: 'sticky', bottom: 0, background: 'var(--composer-bg)' }}>
+      {/* COMPOSER — a separate floating rounded card, detached from the
+          screen edges by margin/padding rather than a full-bleed bar with
+          a hairline top border, matching the header treatment above. */}
+      <div className="safe-bottom" style={{ flexShrink: 0, zIndex: 20, position: 'sticky', bottom: 0, background: 'transparent', padding: '0 10px 8px', overflow: 'visible' }}>
         {!session ? (
-          <div style={{ padding: '16px', background: 'var(--ink-2)', borderTop: '1px solid var(--separator)' }}>
+          <div style={{ padding: '16px', background: 'var(--ink-2)', borderRadius: 22, border: '1px solid var(--glass-border)', boxShadow: '0 4px 18px rgba(0,0,0,0.18)' }}>
             <button onClick={() => setAuthOpen(true)} style={{ width: '100%', padding: '14px 0', borderRadius: 20, border: 'none', background: 'var(--ember)', color: '#fff', fontWeight: 700, fontSize: 15, cursor: 'pointer', boxShadow: 'var(--shadow-float)' }}>Sign in to send message</button>
             {group?.is_channel && (
               <div style={{ marginTop: 10, textAlign: 'center', fontSize: 12.5, color: 'var(--dim)', fontWeight: 500 }}>
@@ -1750,16 +1864,16 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
             )}
           </div>
         ) : isChannelLocked ? (
-          <div style={{ padding: '16px', background: 'var(--ink-2)', borderTop: '1px solid var(--separator)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, color: 'var(--dim)', fontSize: 14, fontWeight: 600 }}>
+          <div style={{ padding: '16px', background: 'var(--ink-2)', borderRadius: 22, border: '1px solid var(--glass-border)', boxShadow: '0 4px 18px rgba(0,0,0,0.18)', display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 8, color: 'var(--dim)', fontSize: 14, fontWeight: 600 }}>
             {Vectors.Lock}
             <span>Only admins can send messages in this channel</span>
           </div>
         ) : (
-          <>
+          <div style={{ position: 'relative', overflow: 'visible' }}>
             {pendingFile && (
-              <div style={{ position: 'absolute', bottom: '100%', left: 0, right: 0, background: 'var(--ink-2)', borderTop: '1px solid var(--separator)', padding: '12px 16px', zIndex: 21 }}>
+              <div style={{ position: 'absolute', bottom: '100%', left: 0, right: 0, marginBottom: 8, background: 'var(--ink-2)', borderRadius: 22, border: '1px solid var(--glass-border)', boxShadow: '0 4px 18px rgba(0,0,0,0.2)', padding: '12px 16px', zIndex: 21 }}>
                 <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 10 }}>
-                  {pendingFile.type === 'image' ? <img src={pendingFile.previewUrl} alt="" style={{ width: 56, height: 56, borderRadius: 12, objectFit: 'cover' }} /> : pendingFile.type === 'video' ? <video src={pendingFile.previewUrl} style={{ width: 56, height: 56, borderRadius: 12, objectFit: 'cover' }} /> : pendingFile.type === 'audio' ? <div style={{ width: 56, height: 56, borderRadius: 12, background: 'rgba(255,255,255,0.06)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--paper)' }}>{Vectors.Smiley}</div> : <div style={{ width: 56, height: 56, borderRadius: 12, background: 'rgba(255,255,255,0.06)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--paper)' }}>{Vectors.FileText}</div>}
+                  {pendingFile.type === 'image' ? <img src={pendingFile.previewUrl} alt="" style={{ width: 56, height: 56, borderRadius: 16, objectFit: 'cover' }} /> : pendingFile.type === 'video' ? <video src={pendingFile.previewUrl} style={{ width: 56, height: 56, borderRadius: 16, objectFit: 'cover' }} /> : pendingFile.type === 'audio' ? <div style={{ width: 56, height: 56, borderRadius: 16, background: 'rgba(255,255,255,0.06)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--paper)' }}>{Vectors.Smiley}</div> : <div style={{ width: 56, height: 56, borderRadius: 16, background: 'rgba(255,255,255,0.06)', display: 'flex', alignItems: 'center', justifyContent: 'center', color: 'var(--paper)' }}>{Vectors.FileText}</div>}
                   <div style={{ flex: 1, minWidth: 0 }}>
                     <span style={{ fontSize: 13, fontWeight: 700, color: 'var(--paper)', display: 'block', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{pendingFile.file.name}</span>
                     {uploading && <span style={{ fontSize: 12, color: 'var(--dim)' }}>Uploading… {uploadSecondsLeft}s</span>}
@@ -1773,7 +1887,7 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
               </div>
             )}
 
-            <div style={{ position: 'absolute', bottom: pendingFile ? undefined : '100%', top: pendingFile ? '100%' : undefined, left: 0, right: 0, background: 'var(--ink-2)', borderTop: '1px solid var(--separator)', display: 'flex', alignItems: 'center', padding: '10px 16px', gap: 12, transition: 'all 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.1)', transform: replyingTo && !pendingFile ? 'translateY(0)' : 'translateY(100%)', opacity: replyingTo && !pendingFile ? 1 : 0, visibility: replyingTo && !pendingFile ? 'visible' : 'hidden', zIndex: 19 }}>
+            <div style={{ position: 'absolute', bottom: pendingFile ? undefined : '100%', top: pendingFile ? '100%' : undefined, left: 0, right: 0, marginTop: pendingFile ? 8 : 0, marginBottom: pendingFile ? 0 : 8, background: 'var(--ink-2)', borderRadius: 22, border: '1px solid var(--glass-border)', boxShadow: '0 4px 18px rgba(0,0,0,0.2)', display: 'flex', alignItems: 'center', padding: '10px 16px', gap: 12, transition: 'all 0.35s cubic-bezier(0.175, 0.885, 0.32, 1.1)', transform: replyingTo && !pendingFile ? 'translateY(0)' : 'translateY(100%)', opacity: replyingTo && !pendingFile ? 1 : 0, visibility: replyingTo && !pendingFile ? 'visible' : 'hidden', zIndex: 19 }}>
               <div style={{ color: 'var(--dim)' }}>{Vectors.ReplyAction}</div>
               <div style={{ width: 3, height: 34, borderRadius: 2, background: 'var(--dim)', flexShrink: 0 }} />
               <div style={{ flex: 1, minWidth: 0, display: 'flex', flexDirection: 'column', justifyContent: 'center' }}>
@@ -1801,6 +1915,7 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
                    {typingName} is typing…
                  </div>
                )}
+
                {/* paddingBottom is a plain 12px, not the earlier
                    `calc(12px + var(--keyboard-inset))`. This page's whole
                    root is already resized against the real visible
@@ -1814,12 +1929,23 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
                    visibly ballooned to swallow most of the remaining
                    screen the moment the keyboard opened. One source of
                    truth (the outer resize) is enough. */}
-               <form onSubmit={handleSend} autoComplete="off-nope" data-form-type="other" style={{ display: 'flex', alignItems: 'flex-end', gap: 8, padding: '8px 10px', background: 'var(--composer-bg)', borderTop: replyingTo ? 'none' : '1px solid var(--separator)', position: 'relative', zIndex: 20, backdropFilter: 'blur(20px) saturate(150%)', WebkitBackdropFilter: 'blur(20px) saturate(150%)', boxSizing: 'border-box', width: '100%', maxWidth: '100%' }}>
-              <EmojiGifPicker open={pickerOpen} onClose={() => setPickerOpen(false)} onEmoji={(char) => setText(p=>p+char)} onMedia={handleMediaPicked} />
+               <form onSubmit={handleSend} autoComplete="off-nope" data-form-type="other" style={{ display: 'flex', alignItems: 'flex-end', gap: 8, padding: '8px 10px', background: 'var(--composer-bg)', borderRadius: 26, border: '1px solid var(--glass-border)', boxShadow: '0 4px 18px rgba(0,0,0,0.18)', position: 'relative', zIndex: 20, overflow: 'visible', backdropFilter: 'blur(20px) saturate(150%)', WebkitBackdropFilter: 'blur(20px) saturate(150%)', boxSizing: 'border-box', width: '100%', maxWidth: '100%' }}>
               <button type="button" onClick={() => setAttachSheetOpen(true)} disabled={uploading || cooldownPercent > 0 || selectedMessages.length > 0} style={{ width: 34, height: 34, borderRadius: '50%', border: 'none', background: 'transparent', color: 'var(--dim)', cursor: 'pointer', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 2 }}>{uploading ? Vectors.Spinner : Vectors.Attach}</button>
               <input ref={fileInputRef} type="file" onChange={handleAttachmentSelected} style={{ position: 'absolute', width: 1, height: 1, padding: 0, margin: -1, overflow: 'hidden', clip: 'rect(0,0,0,0)', whiteSpace: 'nowrap', border: 0, opacity: 0, pointerEvents: 'none' }} />
               <input ref={cameraInputRef} type="file" accept="image/*,video/*" onChange={handleAttachmentSelected} style={{ position: 'absolute', width: 1, height: 1, padding: 0, margin: -1, overflow: 'hidden', clip: 'rect(0,0,0,0)', whiteSpace: 'nowrap', border: 0, opacity: 0, pointerEvents: 'none' }} />
-              <button type="button" onClick={() => setPickerOpen((v) => !v)} disabled={uploading || selectedMessages.length > 0} style={{ width: 34, height: 34, borderRadius: '50%', border: 'none', background: pickerOpen ? 'rgba(255,255,255,0.06)' : 'transparent', color: pickerOpen ? 'var(--paper)' : 'var(--dim)', cursor: 'pointer', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 2 }}>{Vectors.Smiley}</button>
+              <button type="button" onClick={() => {
+                setPickerOpen((v) => {
+                  if (v) return false;
+                  // Dismiss keyboard first; open dock after viewport settles
+                  // so the bar doesn't jump up then drop when the keyboard closes.
+                  messageInputRef.current?.blur();
+                  if (typeof document !== 'undefined' && document.activeElement?.blur) {
+                    document.activeElement.blur();
+                  }
+                  window.setTimeout(() => setPickerOpen(true), 180);
+                  return false;
+                });
+              }} disabled={uploading || selectedMessages.length > 0} style={{ width: 34, height: 34, borderRadius: '50%', border: 'none', background: pickerOpen ? 'rgba(255,255,255,0.06)' : 'transparent', color: pickerOpen ? 'var(--paper)' : 'var(--dim)', cursor: 'pointer', flexShrink: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', marginBottom: 2 }}>{Vectors.Smiley}</button>
               <textarea
                 ref={messageInputRef}
                 name="group-chat-message-f"
@@ -1869,28 +1995,94 @@ export default function GroupChat({ groupSlug, onBack, onGroupResolved }) {
                   fontFamily: 'inherit',
                 }}
               />
-              <div style={{ flexShrink: 0, marginBottom: 2 }}>
+              <div
+                style={{
+                  flexShrink: 0,
+                  marginBottom: 2,
+                  width: 42,
+                  height: 42,
+                  borderRadius: '50%',
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  background: text.trim() && !sending && !uploading && cooldownPercent === 0
+                    ? 'var(--ember)'
+                    : 'rgba(255,255,255,0.08)',
+                  border: '1px solid var(--glass-border)',
+                  backdropFilter: 'blur(20px) saturate(160%)',
+                  WebkitBackdropFilter: 'blur(20px) saturate(160%)',
+                  boxShadow: text.trim() && !sending && !uploading && cooldownPercent === 0
+                    ? '0 4px 14px rgba(0,0,0,0.2)'
+                    : '0 2px 8px rgba(0,0,0,0.1)',
+                  transition: 'background 0.2s, box-shadow 0.2s',
+                }}
+              >
                 <SendButton canSend={!!text.trim()} sending={sending || uploading} cooldownPercent={cooldownPercent} />
               </div>
             </form>
-          </>
+            {pickerOpen && (
+              <div
+                style={{
+                  height: 'min(320px, 40dvh)',
+                  flexShrink: 0,
+                  marginTop: 8,
+                  overflow: 'hidden',
+                  borderRadius: '20px 20px 0 0',
+                  border: '1px solid var(--glass-border)',
+                  borderBottom: 'none',
+                  background: 'var(--glass-white)',
+                }}
+              >
+                <EmojiGifPicker
+                  open={pickerOpen}
+                  placement="dock"
+                  onClose={() => setPickerOpen(false)}
+                  onEmoji={(char) => setText((p) => p + char)}
+                  onMedia={handleMediaPicked}
+                />
+              </div>
+            )}
+          </div>
         )}
       </div>
       <AttachmentSheet open={attachSheetOpen} onClose={() => setAttachSheetOpen(false)} onOpenCamera={() => { setAttachSheetOpen(false); cameraInputRef.current?.click(); }} onPickInstagram={() => { setAttachSheetOpen(false); setInstagramModalOpen(true); }} onPickConfession={() => { setAttachSheetOpen(false); setConfessionModalOpen(true); }} />
       <ConfessionModal open={confessionModalOpen} onClose={() => setConfessionModalOpen(false)} onSubmit={handleConfessionSubmit} />
       <InstagramModal open={instagramModalOpen} onClose={() => !instagramLoading && setInstagramModalOpen(false)} onSubmit={handleInstagramSubmit} loading={instagramLoading} />
+      <MessageListOverlay
+        open={pinnedListOpen}
+        title="Pinned Messages"
+        accentColor="var(--ember)"
+        messages={allPinnedMessages}
+        onClose={() => setPinnedListOpen(false)}
+        onSelect={(id) => { setPinnedListOpen(false); jumpToMessage(id); }}
+      />
+      <MessageListOverlay
+        open={confessionListOpen}
+        title="Confessions"
+        accentColor="#A695E7"
+        messages={allConfessionMessages}
+        onClose={() => setConfessionListOpen(false)}
+        onSelect={(id) => { setConfessionListOpen(false); jumpToMessage(id); }}
+      />
       <MediaViewer mediaUrl={viewerMedia?.url} mediaType={viewerMedia?.type} open={viewerMedia !== null} onClose={() => setViewerMedia(null)} />
       <ProfileCard userId={profileCardUserId} open={!!profileCardUserId} onClose={() => setProfileCardUserId(null)} />
       {groupCardOpen && <GroupCard groupSlug={groupSlug} open={groupCardOpen} onClose={() => setGroupCardOpen(false)} />}
       <AuthModal open={authOpen} onClose={() => setAuthOpen(false)} initialTab="signin" onVerified={() => setAuthOpen(false)} />
       {sharingMessage && (
+        // Confessions are now customizable too when shared as a story —
+        // `customizable` is always true and `lockedStyle` is always null,
+        // so ShareStorySheet lets the person pick a fresh style instead of
+        // being locked to whatever the confession was originally posted
+        // with. The confession's original story_style (if any) still rides
+        // along as `initialStyle`, used only as the sheet's starting point.
         <ShareStorySheet
           mode="message"
           open={!!sharingMessage}
           onClose={() => setSharingMessage(null)}
           message={sharingMessage}
-          customizable={!sharingMessage.is_confession}
-          lockedStyle={sharingMessage.is_confession ? (sharingMessage.story_style || null) : null}
+          customizable
+          initialStyle={sharingMessage.story_style || null}
+          lockedStyle={null}
         />
       )}
     </div>

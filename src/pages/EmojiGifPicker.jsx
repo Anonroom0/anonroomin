@@ -464,7 +464,7 @@ function EmojiGrid({ onPick }) {
 
 // --- 6. MAIN PICKER -----------------------------------------------------------
 
-export default function EmojiGifPicker({ open, onClose, onEmoji, onMedia, mode = 'full' }) {
+export default function EmojiGifPicker({ open, onClose, onEmoji, onMedia, mode = 'full', placement = 'above' }) {
   const [tab, setTab] = useState('emoji'); // 'emoji' | 'gif' | 'sticker'
   const panelRef = useRef(null);
 
@@ -482,10 +482,15 @@ export default function EmojiGifPicker({ open, onClose, onEmoji, onMedia, mode =
         onClose();
       }
     }
-    document.addEventListener('mousedown', handleClick);
+    // Defer so the same pointer event that opened the picker doesn't
+    // immediately count as an outside click and close it again.
+    const timer = window.setTimeout(() => {
+      document.addEventListener('pointerdown', handleClick, true);
+    }, 0);
     document.addEventListener('keydown', handleKey);
     return () => {
-      document.removeEventListener('mousedown', handleClick);
+      window.clearTimeout(timer);
+      document.removeEventListener('pointerdown', handleClick, true);
       document.removeEventListener('keydown', handleKey);
     };
   }, [open, onClose]);
@@ -501,11 +506,15 @@ export default function EmojiGifPicker({ open, onClose, onEmoji, onMedia, mode =
   ];
 
   const activeTab = mode === 'emoji-only' ? 'emoji' : tab;
+  const placementClass =
+    placement === 'below' ? 'picker-panel--below'
+    : placement === 'dock' ? 'picker-panel--dock'
+    : '';
 
   return (
     <div 
       ref={panelRef} 
-      className={`glass-panel bubble-enter picker-panel ${mode === 'emoji-only' ? 'picker-panel--emoji-only' : ''}`} 
+      className={`glass-panel bubble-enter picker-panel ${mode === 'emoji-only' ? 'picker-panel--emoji-only' : ''} ${placementClass}`.trim()} 
       role="dialog" 
       aria-label="Emoji, GIF, and sticker picker"
     >
@@ -543,15 +552,41 @@ export default function EmojiGifPicker({ open, onClose, onEmoji, onMedia, mode =
 const PICKER_STYLES = `
 .picker-panel {
   position: absolute;
-  bottom: 100%;
-  left: 8px;
-  right: 8px;
-  margin-bottom: 8px;
-  height: 360px;
+  bottom: calc(100% + 8px);
+  left: 0;
+  right: 0;
+  margin-bottom: 0;
+  height: min(360px, 45dvh);
   display: flex;
   flex-direction: column;
-  z-index: 30;
-  /* Appearance is handled by .glass-panel */
+  z-index: 40;
+  overflow: hidden;
+  border-radius: 24px;
+  border: 1px solid var(--glass-border);
+  background: var(--glass-white);
+  backdrop-filter: blur(36px) saturate(180%);
+  -webkit-backdrop-filter: blur(36px) saturate(180%);
+  box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+}
+
+/* Optional under-composer placement (desktop / non-sticky bars only). */
+.picker-panel--below {
+  top: calc(100% + 8px);
+  bottom: auto;
+}
+
+/* In-flow dock: sits under the composer and replaces the keyboard area.
+   Parent supplies the height; we fill it with no absolute offsets. */
+.picker-panel--dock {
+  position: relative;
+  bottom: auto;
+  left: 0;
+  right: 0;
+  width: 100%;
+  height: 100%;
+  margin: 0;
+  border-radius: 20px 20px 0 0;
+  box-shadow: none;
 }
 
 .picker-panel--emoji-only {

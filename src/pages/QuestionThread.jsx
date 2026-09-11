@@ -21,10 +21,17 @@
  * small, optional "Sign up" pill is offered in the header for a signed-out
  * visitor who wants one, but nothing in the reply flow requires it.
  *
- * NEW: Reply-to-story. When the signed-in viewer IS the question's author
+ * Reply-to-story: when the signed-in viewer IS the question's author
  * (session.user.id === question.author_id), every reply bubble gets a small
  * share icon. Tapping it hands that single reply off to onShareReply, which
- * Home.jsx wires to <ShareStorySheet> OR handles it locally if mounted standalone.
+ * Home.jsx wires to <ShareStorySheet> OR handles it locally if mounted
+ * standalone.
+ *
+ * Layout below is split into small, single-purpose sub-components (section
+ * 4) rather than one long JSX tree in the return statement — PageSkeleton,
+ * ErrorState, QuestionHeaderCard, MetaChips, ReplyBubble, EmptyReplies and
+ * ComposerBar each own one part of the screen, so the main component (section
+ * 5) reads as a sequence of named regions instead of nested markup to parse.
  *
  * Dependencies: React, Supabase, AuthContext, src/lib/visitorId.js,
  * src/lib/subdomain.js, src/components/MessageSkeleton.jsx,
@@ -38,11 +45,10 @@ import supabase from '../lib/supabaseClient';
 import { useAuth } from '../lib/authContext';
 import { useViewportHeight } from '../lib/useViewportHeight';
 import { getOrCreateVisitorId } from '../lib/visitorId';
-import { ROOT_PATH, isShortId , navigateInApp } from '../lib/subdomain';
+import { ROOT_PATH, isShortId, navigateInApp } from '../lib/subdomain';
 import { showToast, friendlyDbError } from '../lib/toast';
 import { playSend } from '../lib/soundManager';
 import { hapticSend } from '../lib/haptics';
-import MessageSkeleton from '../components/shared/MessageSkeleton';
 import SendButton from '../components/shared/SendButton';
 import AuthModal from './AuthModal';
 import ShareStorySheet from '../components/questions/ShareStorySheet';
@@ -53,6 +59,7 @@ import BbssmBanner from '../components/shared/BbssmBanner';
 // ============================================================================
 const REPLY_LIMIT = 200; // mirrors GroupChat.jsx's MESSAGE_LIMIT
 const MAX_TEXT_LENGTH = 500;
+const FONT_STACK = '-apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Inter", system-ui, sans-serif';
 
 const TYPE_META = {
   personal: { label: 'Personal', gradient: 'linear-gradient(135deg, var(--ember) 0%, #ff9966 100%)' },
@@ -64,13 +71,13 @@ const TYPE_META = {
 // ============================================================================
 const Icons = {
   Back: (
-    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
       <path d="M19 12H5" />
       <path d="M12 19l-7-7 7-7" />
     </svg>
   ),
   Ghost: (
-    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
       <path d="M9 10h.01" />
       <path d="M15 10h.01" />
       <path d="M12 2a8 8 0 0 0-8 8v12l3-3 2.5 2.5L12 19l2.5 2.5L17 19l3 3V10a8 8 0 0 0-8-8z" />
@@ -83,7 +90,7 @@ const Icons = {
     </svg>
   ),
   Spinner: (
-    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+    <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" className="refresh-spin">
       <line x1="12" y1="2" x2="12" y2="6" /><line x1="12" y1="18" x2="12" y2="22" />
       <line x1="4.93" y1="4.93" x2="7.76" y2="7.76" /><line x1="16.24" y1="16.24" x2="19.07" y2="19.07" />
       <line x1="2" y1="12" x2="6" y2="12" /><line x1="18" y1="12" x2="22" y2="12" />
@@ -91,18 +98,28 @@ const Icons = {
     </svg>
   ),
   User: (
-    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+    <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
       <path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
       <circle cx="12" cy="7" r="4" />
     </svg>
   ),
   Share: (
-    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
       <circle cx="18" cy="5" r="3" />
       <circle cx="6" cy="12" r="3" />
       <circle cx="18" cy="19" r="3" />
       <line x1="8.59" y1="13.51" x2="15.42" y2="17.49" />
       <line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
+    </svg>
+  ),
+  AlertBubble: (
+    <svg width="30" height="30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" />
+    </svg>
+  ),
+  Sparkle: (
+    <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+      <path d="M12 3v4M12 17v4M3 12h4M17 12h4M5.6 5.6l2.8 2.8M15.6 15.6l2.8 2.8M18.4 5.6l-2.8 2.8M8.4 15.6l-2.8 2.8" />
     </svg>
   ),
 };
@@ -139,12 +156,112 @@ function extractReplyBodyText(row) {
 // 4. SUB-COMPONENTS
 // ============================================================================
 
+/**
+ * A single, page-owned <style> block for the shimmer sweep the skeleton
+ * pieces below use. Scoped by class name only (no CSS modules in this
+ * project), defined once here rather than depending on a global stylesheet
+ * having it already — this file stays self-contained.
+ */
+function SkeletonStyles() {
+  return (
+    <style>{`
+      @keyframes qt-shimmer {
+        0% { background-position: -300px 0; }
+        100% { background-position: 300px 0; }
+      }
+      .qt-shimmer {
+        background: linear-gradient(
+          90deg,
+          var(--glass-border) 25%,
+          rgba(255,255,255,0.10) 37%,
+          var(--glass-border) 63%
+        );
+        background-size: 600px 100%;
+        animation: qt-shimmer 1.6s ease-in-out infinite;
+      }
+    `}</style>
+  );
+}
+
+function SkeletonBar({ width = '100%', height = 12, radius = 6, style }) {
+  return <div className="qt-shimmer" style={{ width, height, borderRadius: radius, ...style }} />;
+}
+
+function SkeletonReplyBubble({ align = 'center', width = '92%' }) {
+  return (
+    <div style={{ display: 'flex', justifyContent: align, padding: '4px 16px', marginBottom: 14 }}>
+      <div style={{ width, maxWidth: 460, padding: '14px 18px', borderRadius: 20, background: 'var(--glass-white)', border: '1px solid var(--glass-border)' }}>
+        <SkeletonBar width="88%" height={11} />
+        <SkeletonBar width="56%" height={11} style={{ marginTop: 8 }} />
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Replaces the old full-screen "spinner and nothing else" loading state.
+ * Renders the real shell of the page immediately — header bar, a shimmering
+ * stand-in for the question card, a couple of shimmering reply bubbles, and
+ * a disabled composer — so the layout that's about to appear is legible
+ * from the first frame instead of jumping in all at once behind a spinner.
+ */
+function PageSkeleton({ pageHeight, onBack }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', height: pageHeight, width: '100%', overflow: 'hidden', background: 'var(--ink)', fontFamily: FONT_STACK }}>
+      <SkeletonStyles />
+      <header style={{ flexShrink: 0, display: 'flex', alignItems: 'center', gap: 12, padding: '14px 16px', background: 'var(--glass-white)', borderBottom: '1px solid var(--glass-border)' }}>
+        <button onClick={onBack} aria-label="Back" style={{ border: 'none', background: 'transparent', color: 'var(--paper)', cursor: 'pointer', padding: 4, display: 'flex', flexShrink: 0 }}>
+          {Icons.Back}
+        </button>
+        <span style={{ fontWeight: 700, fontSize: 16, color: 'var(--paper)', flex: 1, letterSpacing: '-0.01em' }}>Anonymous Question</span>
+        <SkeletonBar width={64} height={24} radius={999} />
+      </header>
+
+      <div style={{ margin: '16px 16px 8px', padding: '20px 22px', borderRadius: 22, background: 'var(--glass-white)', border: '1px solid var(--glass-border)', flexShrink: 0 }}>
+        <SkeletonBar width={84} height={20} radius={999} />
+        <SkeletonBar width="94%" height={16} style={{ marginTop: 16 }} />
+        <SkeletonBar width="68%" height={16} style={{ marginTop: 9 }} />
+        <SkeletonBar width={44} height={11} style={{ marginTop: 16 }} />
+      </div>
+
+      <div style={{ flex: 1, minHeight: 0, overflow: 'hidden', paddingTop: 8, display: 'flex', flexDirection: 'column', justifyContent: 'flex-end' }}>
+        <SkeletonReplyBubble width="70%" />
+        <SkeletonReplyBubble width="85%" />
+        <SkeletonReplyBubble width="60%" />
+      </div>
+
+      <div style={{ flexShrink: 0, padding: '12px', borderTop: '1px solid var(--separator)', background: 'var(--composer-bg, var(--header-bg))' }}>
+        <SkeletonBar height={44} radius={22} />
+      </div>
+    </div>
+  );
+}
+
+function ErrorState({ onBack }) {
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', width: '100%', background: 'var(--ink)', alignItems: 'center', justifyContent: 'center', gap: 16, fontFamily: FONT_STACK, padding: 24, boxSizing: 'border-box', textAlign: 'center' }}>
+      <div style={{ color: 'var(--dim)' }}>{Icons.AlertBubble}</div>
+      <div>
+        <h1 style={{ margin: 0, fontSize: 18, fontWeight: 700, color: 'var(--paper)', letterSpacing: '-0.01em' }}>This question couldn't be found</h1>
+        <p style={{ margin: '6px 0 0', fontSize: 14, color: 'var(--dim)', lineHeight: 1.5 }}>It may have been removed, or the link may be out of date.</p>
+      </div>
+      <button
+        onClick={onBack}
+        style={{ background: 'var(--ember)', color: '#fff', border: 'none', padding: '13px 26px', borderRadius: 18, fontWeight: 700, fontSize: 15, cursor: 'pointer' }}
+      >
+        Back to AnonRoom
+      </button>
+    </div>
+  );
+}
+
 function QuestionHeaderCard({ question, isPrivate, isAuthor }) {
   const normalizedType = (question?.question_type || question?.type || 'general').toLowerCase();
   const typeMeta = TYPE_META[normalizedType] || TYPE_META.general;
 
   return (
     <div
+      className="pop-in"
       style={{
         margin: '16px 16px 8px',
         padding: '20px 22px',
@@ -153,7 +270,7 @@ function QuestionHeaderCard({ question, isPrivate, isAuthor }) {
         border: '1px solid var(--glass-border)',
         backdropFilter: 'blur(20px) saturate(115%)',
         WebkitBackdropFilter: 'blur(20px) saturate(115%)',
-        boxShadow: '0 10px 30px rgba(0,0,0,0.4)',
+        boxShadow: '0 10px 30px rgba(0,0,0,0.35)',
         color: 'var(--paper)',
         flexShrink: 0,
         position: 'relative',
@@ -170,8 +287,8 @@ function QuestionHeaderCard({ question, isPrivate, isAuthor }) {
           height: 160,
           borderRadius: '50%',
           background: typeMeta.gradient,
-          opacity: 0.18,
-          filter: 'blur(30px)',
+          opacity: 0.16,
+          filter: 'blur(34px)',
           pointerEvents: 'none',
         }}
       />
@@ -187,10 +304,9 @@ function QuestionHeaderCard({ question, isPrivate, isAuthor }) {
             background: typeMeta.gradient,
             color: '#fff',
             fontSize: 11,
-            fontWeight: 800,
-            textTransform: 'uppercase',
-            letterSpacing: 0.5,
-            boxShadow: '0 4px 12px rgba(0,0,0,0.25)',
+            fontWeight: 700,
+            letterSpacing: 0.2,
+            boxShadow: '0 4px 12px rgba(0,0,0,0.22)',
           }}
         >
           {typeMeta.label}
@@ -216,10 +332,10 @@ function QuestionHeaderCard({ question, isPrivate, isAuthor }) {
         )}
       </div>
 
-      <p style={{ margin: '14px 0 0', fontSize: 18, lineHeight: 1.5, whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontWeight: 700, position: 'relative' }}>
+      <p style={{ margin: '15px 0 0', fontSize: 18, lineHeight: 1.5, whiteSpace: 'pre-wrap', wordBreak: 'break-word', fontWeight: 600, letterSpacing: '-0.01em', position: 'relative' }}>
         {extractQuestionBodyText(question)}
       </p>
-      <span style={{ display: 'block', marginTop: 12, fontSize: 12, color: 'var(--dim)', position: 'relative' }}>
+      <span style={{ display: 'block', marginTop: 13, fontSize: 12, color: 'var(--dim)', position: 'relative' }}>
         {formatRelativeTime(question?.created_at)}
       </span>
     </div>
@@ -259,15 +375,14 @@ function ReplyBubble({ reply, isOwn, canShare, onShare }) {
               fontSize: 11,
               fontWeight: 700,
               color: 'var(--ember)',
-              textTransform: 'uppercase',
-              letterSpacing: 0.4,
+              letterSpacing: 0.2,
               marginBottom: 6,
             }}
           >
             {Icons.Ghost} You (anonymous)
           </span>
         )}
-        <p style={{ margin: 0, paddingRight: canShare ? 34 : 0, fontSize: 15, fontWeight: 600, lineHeight: 1.45, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+        <p style={{ margin: 0, paddingRight: canShare ? 34 : 0, fontSize: 15, fontWeight: 500, lineHeight: 1.45, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
           {extractReplyBodyText(reply)}
         </p>
         <span style={{ display: 'block', marginTop: 8, fontSize: 11, color: 'var(--dim)', textAlign: 'right' }}>
@@ -294,11 +409,35 @@ function ReplyBubble({ reply, isOwn, canShare, onShare }) {
               alignItems: 'center',
               justifyContent: 'center',
               cursor: 'pointer',
+              transition: 'transform 0.15s cubic-bezier(0.2, 0.8, 0.2, 1)',
             }}
+            onMouseDown={(e) => { e.currentTarget.style.transform = 'scale(0.88)'; }}
+            onMouseUp={(e) => { e.currentTarget.style.transform = 'scale(1)'; }}
+            onMouseLeave={(e) => { e.currentTarget.style.transform = 'scale(1)'; }}
           >
             {Icons.Share}
           </button>
         )}
+      </div>
+    </div>
+  );
+}
+
+function EmptyReplies({ isPrivate, isAuthor }) {
+  return (
+    <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 32px' }}>
+      <div style={{ textAlign: 'center', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: 10 }}>
+        <div style={{ color: 'var(--dim)' }}>{Icons.Sparkle}</div>
+        <div style={{ background: 'var(--glass-border)', display: 'inline-block', padding: '8px 16px', borderRadius: 20, fontSize: 14, color: 'var(--dim)', fontWeight: 600 }}>
+          No responses yet
+        </div>
+        <p style={{ margin: 0, maxWidth: 240, fontSize: 12.5, color: 'var(--dim)', lineHeight: 1.45 }}>
+          {isPrivate
+            ? (isAuthor
+                ? 'Responses to this question are private — only you can see them.'
+                : 'Your response will only be visible to the question owner.')
+            : 'Be the first to share an honest, anonymous response.'}
+        </p>
       </div>
     </div>
   );
@@ -354,6 +493,144 @@ function IdentityPill({ session, profile, onSignUp }) {
   );
 }
 
+/** The small row of status chips sitting just above the composer input. */
+function MetaChips({ isPrivate, showConfessionsChip }) {
+  const chipStyle = {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: 5,
+    padding: '3px 10px',
+    borderRadius: 999,
+    fontSize: 11,
+    fontWeight: 700,
+    whiteSpace: 'nowrap',
+    flexShrink: 0,
+  };
+
+  return (
+    <div style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '8px 12px 0', flexWrap: 'nowrap', overflow: 'hidden' }}>
+      <span style={{ ...chipStyle, background: 'var(--glass)', color: 'var(--dim)', minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', flexShrink: 1 }}>
+        {Icons.Ghost} Anonymous
+      </span>
+      {isPrivate && (
+        <span style={{ ...chipStyle, background: 'var(--glass)', color: 'var(--dim)' }}>
+          {Icons.Lock} Private
+        </span>
+      )}
+      {showConfessionsChip && (
+        <span style={{ ...chipStyle, background: 'var(--ember-soft)', color: 'var(--ember)' }}>
+          + Confessions
+        </span>
+      )}
+    </div>
+  );
+}
+
+/**
+ * The whole sticky bottom bar — meta chips + reply input — as one region.
+ * Kept as a component (rather than inline JSX in the main return) so the
+ * composer's own layout concerns don't compete with the message-list JSX
+ * around it.
+ */
+function ComposerBar({
+  isPrivate,
+  isAuthor,
+  addToConfessions,
+  onToggleConfessions,
+  replyText,
+  onChangeReplyText,
+  onFocusInput,
+  sending,
+  onSubmit,
+}) {
+  return (
+    <div
+      className="safe-bottom"
+      style={{
+        flexShrink: 0,
+        zIndex: 20,
+        position: 'sticky',
+        bottom: 0,
+        width: '100%',
+        background: 'var(--composer-bg, var(--header-bg))',
+        backdropFilter: 'blur(20px) saturate(140%)',
+        WebkitBackdropFilter: 'blur(20px) saturate(140%)',
+        borderTop: '1px solid var(--separator)',
+      }}
+    >
+      <MetaChips isPrivate={isPrivate} showConfessionsChip={isAuthor && addToConfessions} />
+
+      <form
+        onSubmit={onSubmit}
+        autoComplete="off-nope"
+        data-form-type="other"
+        style={{ display: 'flex', alignItems: 'center', gap: 8, width: '100%', padding: '10px 12px', boxSizing: 'border-box' }}
+      >
+        {isAuthor && (
+          <button
+            type="button"
+            onClick={onToggleConfessions}
+            aria-pressed={addToConfessions}
+            title={addToConfessions ? 'Will also post to Confessions' : 'Also add this reply to Confessions'}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              width: 40,
+              height: 40,
+              borderRadius: '50%',
+              flexShrink: 0,
+              border: 'none',
+              background: addToConfessions ? 'var(--ember)' : 'var(--surface-2, var(--glass-border))',
+              color: addToConfessions ? '#fff' : 'var(--dim)',
+              cursor: 'pointer',
+              transition: 'background 0.15s ease, color 0.15s ease, transform 0.15s cubic-bezier(0.2, 0.8, 0.2, 1)',
+            }}
+            onMouseDown={(e) => { e.currentTarget.style.transform = 'scale(0.9)'; }}
+            onMouseUp={(e) => { e.currentTarget.style.transform = 'scale(1)'; }}
+            onMouseLeave={(e) => { e.currentTarget.style.transform = 'scale(1)'; }}
+          >
+            {Icons.Ghost}
+          </button>
+        )}
+        <input
+          type="search"
+          name="question-reply-f"
+          autoComplete="off-nope"
+          autoCorrect="off"
+          autoCapitalize="off"
+          spellCheck="false"
+          data-lpignore="true"
+          data-1p-ignore
+          data-form-type="other"
+          value={replyText}
+          onChange={(e) => onChangeReplyText(e.target.value.slice(0, MAX_TEXT_LENGTH))}
+          maxLength={MAX_TEXT_LENGTH}
+          onFocus={onFocusInput}
+          placeholder="Anonymous reply…"
+          aria-label="Reply"
+          disabled={sending}
+          style={{
+            flex: 1,
+            minWidth: 0,
+            border: '1px solid var(--separator)',
+            outline: 'none',
+            background: 'var(--surface)',
+            color: 'var(--paper)',
+            borderRadius: 22,
+            padding: '12px 16px',
+            fontSize: 16,
+            fontFamily: 'inherit',
+          }}
+        />
+        <div style={{ flexShrink: 0 }}>
+          <SendButton canSend={!!replyText.trim()} sending={sending} cooldownPercent={0} />
+        </div>
+      </form>
+    </div>
+  );
+}
+
 // ============================================================================
 // 5. MAIN COMPONENT
 // ============================================================================
@@ -373,7 +650,7 @@ export default function QuestionThread({ questionId, onBack, onShareReply }) {
   const [addToConfessions, setAddToConfessions] = useState(false);
   const [visitorId, setVisitorId] = useState(null);
   const [authOpen, setAuthOpen] = useState(false);
-  
+
   // Local state for standalone sharing
   const [sharingReplyLocal, setSharingReplyLocal] = useState(null);
 
@@ -588,7 +865,7 @@ export default function QuestionThread({ questionId, onBack, onShareReply }) {
   // --------------------------------------------------------------------------
   function handleShareReply(reply) {
     if (!isAuthor) return; // defensive
-    
+
     // If mounted by Home.jsx, pass it up. Otherwise, open local sheet.
     if (onShareReply) {
       onShareReply(question, reply);
@@ -601,23 +878,13 @@ export default function QuestionThread({ questionId, onBack, onShareReply }) {
   // RENDER
   // --------------------------------------------------------------------------
   if (questionStatus === 'loading') {
-    return (
-      <div style={{ display: 'flex', flexDirection: 'column', height: pageHeight, width: '100%', background: 'var(--ink)', alignItems: 'center', justifyContent: 'center' }}>
-        <div style={{ color: 'var(--dim)' }}>{Icons.Spinner}</div>
-      </div>
-    );
+    return <PageSkeleton pageHeight={pageHeight} onBack={handleBack} />;
   }
 
   if (questionStatus === 'error') {
     return (
-      <div style={{ display: 'flex', flexDirection: 'column', height: pageHeight, width: '100%', background: 'var(--ink)', alignItems: 'center', justifyContent: 'center', gap: 16 }}>
-        <p style={{ color: 'var(--dim)', fontSize: 15 }}>This question couldn't be found.</p>
-        <button
-          onClick={handleBack}
-          style={{ background: 'var(--ember)', color: '#fff', border: 'none', padding: '12px 24px', borderRadius: 20, fontWeight: 700, fontSize: 15, cursor: 'pointer' }}
-        >
-          Back to AnonRoom
-        </button>
+      <div style={{ height: pageHeight, width: '100%' }}>
+        <ErrorState onBack={handleBack} />
       </div>
     );
   }
@@ -630,6 +897,7 @@ export default function QuestionThread({ questionId, onBack, onShareReply }) {
         height: pageHeight,
         width: '100%',
         overflow: 'hidden',
+        fontFamily: FONT_STACK,
         background: 'radial-gradient(circle at 50% 0%, rgba(59,130,246,0.06), transparent 55%), var(--ink)',
         transform: viewportOffsetTop ? `translateY(${viewportOffsetTop}px)` : undefined,
       }}
@@ -657,7 +925,7 @@ export default function QuestionThread({ questionId, onBack, onShareReply }) {
         >
           {Icons.Back}
         </button>
-        <span style={{ fontWeight: 700, fontSize: 16, color: 'var(--paper)', flex: 1 }}>Anonymous Question</span>
+        <span style={{ fontWeight: 700, fontSize: 16, color: 'var(--paper)', flex: 1, letterSpacing: '-0.01em' }}>Anonymous Question</span>
 
         <IdentityPill session={session} profile={profile} onSignUp={() => setAuthOpen(true)} />
       </header>
@@ -683,24 +951,17 @@ export default function QuestionThread({ questionId, onBack, onShareReply }) {
           paddingBottom: 8,
         }}
       >
-        {repliesLoading && <MessageSkeleton variant="message" count={4} />}
-
-        {!repliesLoading && replies.length === 0 && (
-          <div style={{ flex: 1, display: 'flex', alignItems: 'center', justifyContent: 'center', padding: '0 32px' }}>
-            <div style={{ textAlign: 'center' }}>
-              <div style={{ background: 'var(--glass-border)', display: 'inline-block', padding: '8px 16px', borderRadius: 20, fontSize: 14, color: 'var(--dim)', fontWeight: 600 }}>
-                No responses yet
-              </div>
-              <p style={{ marginTop: 10, fontSize: 12.5, color: 'var(--dim)', lineHeight: 1.4 }}>
-                {isPrivate
-                  ? (isAuthor
-                      ? 'Responses to this question are private — only you can see them.'
-                      : 'Your response will only be visible to the question owner.')
-                  : 'Be the first to share an honest, anonymous response.'}
-              </p>
-            </div>
-          </div>
+        {repliesLoading && (
+          <>
+            <SkeletonStyles />
+            <SkeletonReplyBubble width="70%" />
+            <SkeletonReplyBubble width="85%" />
+            <SkeletonReplyBubble width="60%" />
+            <SkeletonReplyBubble width="78%" />
+          </>
         )}
+
+        {!repliesLoading && replies.length === 0 && <EmptyReplies isPrivate={isPrivate} isAuthor={isAuthor} />}
 
         {!repliesLoading &&
           replies.map((reply) => (
@@ -714,168 +975,20 @@ export default function QuestionThread({ questionId, onBack, onShareReply }) {
           ))}
       </div>
 
-      <div
-        className="safe-bottom"
-        style={{
-          flexShrink: 0,
-          zIndex: 20,
-          position: 'sticky',
-          bottom: 0,
-          width: '100%',
-          background: 'var(--composer-bg, var(--header-bg))',
-          backdropFilter: 'blur(20px) saturate(140%)',
-          WebkitBackdropFilter: 'blur(20px) saturate(140%)',
-          borderTop: '1px solid var(--separator)',
-        }}
-      >
-        {/* Single compact meta row — never stacks into 3 bars that steal height */}
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 8,
-            padding: '8px 12px 0',
-            flexWrap: 'nowrap',
-            overflow: 'hidden',
-          }}
-        >
-          <span
-            style={{
-              display: 'inline-flex',
-              alignItems: 'center',
-              gap: 5,
-              padding: '3px 10px',
-              borderRadius: 999,
-              background: 'var(--glass)',
-              color: 'var(--dim)',
-              fontSize: 11,
-              fontWeight: 700,
-              whiteSpace: 'nowrap',
-              flexShrink: 1,
-              minWidth: 0,
-              overflow: 'hidden',
-              textOverflow: 'ellipsis',
-            }}
-          >
-            {Icons.Ghost} Anonymous
-          </span>
-          {isPrivate && (
-            <span
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 5,
-                padding: '3px 10px',
-                borderRadius: 999,
-                background: 'var(--glass)',
-                color: 'var(--dim)',
-                fontSize: 11,
-                fontWeight: 700,
-                whiteSpace: 'nowrap',
-                flexShrink: 0,
-              }}
-            >
-              {Icons.Lock} Private
-            </span>
-          )}
-          {isAuthor && addToConfessions && (
-            <span
-              style={{
-                display: 'inline-flex',
-                alignItems: 'center',
-                gap: 5,
-                padding: '3px 10px',
-                borderRadius: 999,
-                background: 'var(--ember-soft)',
-                color: 'var(--ember)',
-                fontSize: 11,
-                fontWeight: 700,
-                whiteSpace: 'nowrap',
-                flexShrink: 0,
-              }}
-            >
-              + Confessions
-            </span>
-          )}
-        </div>
+      <ComposerBar
+        isPrivate={isPrivate}
+        isAuthor={isAuthor}
+        addToConfessions={addToConfessions}
+        onToggleConfessions={() => setAddToConfessions((v) => !v)}
+        replyText={replyText}
+        onChangeReplyText={setReplyText}
+        onFocusInput={() => { if (scrollRef.current) scrollRef.current.scrollTop = 0; }}
+        sending={sending}
+        onSubmit={handleSendReply}
+      />
 
-        {/* One input row, edge-to-edge — NO --keyboard-inset padding (parent
-            height already tracks the visual viewport; adding inset again
-            stretches this bar up the screen and hides the thread). */}
-        <form
-          onSubmit={handleSendReply}
-          autoComplete="off-nope"
-          data-form-type="other"
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            gap: 8,
-            width: '100%',
-            padding: '10px 12px',
-            boxSizing: 'border-box',
-          }}
-        >
-          {isAuthor && (
-            <button
-              type="button"
-              onClick={() => setAddToConfessions((v) => !v)}
-              aria-pressed={addToConfessions}
-              title={addToConfessions ? 'Will also post to Confessions' : 'Also add this reply to Confessions'}
-              style={{
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                width: 40,
-                height: 40,
-                borderRadius: '50%',
-                flexShrink: 0,
-                border: 'none',
-                background: addToConfessions ? 'var(--ember)' : 'var(--surface-2, var(--glass-border))',
-                color: addToConfessions ? '#fff' : 'var(--dim)',
-                cursor: 'pointer',
-                transition: 'background 0.15s ease, color 0.15s ease',
-              }}
-            >
-              {Icons.Ghost}
-            </button>
-          )}
-          <input
-            type="search"
-            name="question-reply-f"
-            autoComplete="off-nope"
-            autoCorrect="off"
-            autoCapitalize="off"
-            spellCheck="false"
-            data-lpignore="true"
-            data-1p-ignore
-            data-form-type="other"
-            value={replyText}
-            onChange={(e) => setReplyText(e.target.value.slice(0, MAX_TEXT_LENGTH))}
-            maxLength={MAX_TEXT_LENGTH}
-            onFocus={() => { if (scrollRef.current) scrollRef.current.scrollTop = 0; }}
-            placeholder="Anonymous reply…"
-            aria-label="Reply"
-            disabled={sending}
-            style={{
-              flex: 1,
-              minWidth: 0,
-              border: '1px solid var(--separator)',
-              outline: 'none',
-              background: 'var(--surface)',
-              color: 'var(--paper)',
-              borderRadius: 22,
-              padding: '12px 16px',
-              fontSize: 15,
-            }}
-          />
-          <div style={{ flexShrink: 0 }}>
-            <SendButton canSend={!!replyText.trim()} sending={sending} cooldownPercent={0} />
-          </div>
-        </form>
-      </div>
+      <AuthModal open={authOpen} onClose={() => setAuthOpen(false)} initialTab="signup" onVerified={() => setAuthOpen(false)} />
 
-     <AuthModal open={authOpen} onClose={() => setAuthOpen(false)} initialTab="signup" onVerified={() => setAuthOpen(false)} />
-      
       {/* Renders locally when mounted standalone without Home.jsx overriding it */}
       {sharingReplyLocal && (
         <ShareStorySheet

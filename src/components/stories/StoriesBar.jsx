@@ -183,7 +183,7 @@ function StoryCircle({ onClick, ring, name, children }) {
   );
 }
 
-export default function StoriesBar({ groups, userId, onOpenStory, initialTarget, onConsumeInitialTarget }) {
+export default function StoriesBar({ groups, userId, onOpenStory, initialTarget, onConsumeInitialTarget, onStoriesChange }) {
   const [groupIdsWithConfessions, setGroupIdsWithConfessions] = useState(() => new Set());
   const [groupLatestAt, setGroupLatestAt] = useState({}); // group_id -> iso
   const [confessionsLatestAt, setConfessionsLatestAt] = useState(null);
@@ -365,6 +365,15 @@ export default function StoriesBar({ groups, userId, onOpenStory, initialTarget,
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [highlightedGroups, groupLatestAt, confessionsUnseen, questionsUnseen, seenTick]
   );
+
+  // Tell Home whether the rail has anything — Home collapses the strip
+  // when this is 0 so an empty tray never reserves vertical space.
+  // Confessions is always in the list, so count is almost always >= 1 once
+  // data has settled; still report 0 while group queries haven't run if
+  // we later gate virtual channels on having content.
+  React.useEffect(() => {
+    onStoriesChange?.(items.length);
+  }, [items.length, onStoriesChange]);
 
   // Every circle renders at a fixed IG-style diameter (CIRCLE_SIZE) with a
   // fixed gap between them — never shrunk to fit. When there are more

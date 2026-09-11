@@ -51,6 +51,7 @@ import { subscribeToPush } from '../lib/pushNotifications';
 import { playTabSwitch, playRefreshComplete } from '../lib/soundManager';
 import { hapticTap, hapticSuccess } from '../lib/haptics';
 import { useViewportHeight } from '../lib/useViewportHeight';
+import { showToast, friendlyDbError } from '../lib/toast';
 
 import AuthModal from './AuthModal';
 import SearchUsers from './SearchUsers';
@@ -288,7 +289,7 @@ function DarkGlassBackground() {
           floating object — a slight neutral-grey tint desaturates the
           background just enough that translucent/blurred objects pop by
           contrast, without meaningfully lightening the page. */}
-      <div style={{ position: 'absolute', inset: 0, background: 'rgba(132, 134, 142, 0.07)' }} />
+      <div style={{ position: 'absolute', inset: 0, background: 'rgba(150, 155, 170, 0.12)' }} />
       <div style={{ position: 'absolute', top: '-15%', left: '-10%', width: '60vw', height: '60vw', borderRadius: '50%', background: 'radial-gradient(circle, var(--ink-2), transparent 60%)', animation: 'floatOrb 22s ease-in-out infinite', filter: 'blur(40px)' }} />
       <div style={{ position: 'absolute', bottom: '-20%', right: '-10%', width: '70vw', height: '70vw', borderRadius: '50%', background: 'radial-gradient(circle, var(--ink-2), transparent 60%)', animation: 'floatOrb 28s ease-in-out infinite reverse', filter: 'blur(50px)' }} />
       <style>{`
@@ -308,18 +309,18 @@ function DarkGlassBackground() {
           margin: 6px 12px 10px 12px;
           width: calc(100% - 24px);
           box-sizing: border-box;
-          background: rgba(255, 255, 255, 0.055);
-          backdrop-filter: blur(18px) saturate(160%);
-          -webkit-backdrop-filter: blur(18px) saturate(160%);
-          border: 1px solid rgba(255, 255, 255, 0.09);
-          border-radius: 18px; 
+          background: rgba(255, 255, 255, 0.08);
+          backdrop-filter: blur(28px) saturate(180%);
+          -webkit-backdrop-filter: blur(28px) saturate(180%);
+          border: 1px solid rgba(255, 255, 255, 0.14);
+          border-radius: 20px; 
           color: var(--paper);
           text-align: left;
-          transition: all 0.25s cubic-bezier(0.2, 0.8, 0.2, 1); 
+          transition: transform 0.22s cubic-bezier(0.2, 0.8, 0.2, 1), background 0.22s ease, box-shadow 0.22s ease; 
           touch-action: manipulation;
           cursor: pointer;
           overflow: visible;
-          box-shadow: 0 4px 15px rgba(0,0,0,0.08);
+          box-shadow: 0 8px 24px rgba(0,0,0,0.06), inset 0 1px 0 rgba(255,255,255,0.08);
         }
         
         .chat-row:active { 
@@ -334,9 +335,9 @@ function DarkGlassBackground() {
         }
 
         .chat-row.active-chat {
-          background: rgba(255, 255, 255, 0.1);
-          border-color: rgba(255,255,255,0.22);
-          box-shadow: 0 6px 20px rgba(0,0,0,0.18);
+          background: rgba(255, 255, 255, 0.14);
+          border-color: rgba(255,255,255,0.28);
+          box-shadow: 0 10px 28px rgba(0,0,0,0.12), inset 0 1px 0 rgba(255,255,255,0.12);
           transform: translateY(-1px);
         }
 
@@ -365,9 +366,10 @@ function DarkGlassBackground() {
            same translucent-blur look as chat rows but as a full container
            rather than a list item. */
         .glass-surface {
-          background: rgba(255, 255, 255, 0.045);
-          backdrop-filter: blur(24px) saturate(180%);
-          -webkit-backdrop-filter: blur(24px) saturate(180%);
+          background: rgba(255, 255, 255, 0.1);
+          backdrop-filter: blur(40px) saturate(190%);
+          -webkit-backdrop-filter: blur(40px) saturate(190%);
+          border: 1px solid rgba(255,255,255,0.12);
         }
 
         @keyframes tab-slide-in { 0% { opacity: 0; transform: translateX(20px); } 100% { opacity: 1; transform: translateX(0); } }
@@ -459,12 +461,12 @@ export default function Home() {
   
   const [initialStoryTarget, setInitialStoryTarget] = useState(null);
 
-  // Whether StoriesBar currently has anything to show. Defaults to true so
-  // the rail doesn't flash in on first paint; StoriesBar should call
-  // `onStoriesChange(count)` once it knows how many story-eligible
-  // channels it has, and the bar unmounts itself entirely when that's 0
-  // instead of always reserving an empty strip of space.
-  const [hasStories, setHasStories] = useState(true);
+  // Whether StoriesBar has anything to show. Starts null (unknown) so the
+  // bar still mounts once and can report its count. After the first report:
+  // true → visible rail, false → fully collapsed (no empty strip).
+  // StoriesBar stays mounted (hidden when empty) so realtime story updates
+  // can bring the rail back without a remount.
+  const [hasStories, setHasStories] = useState(null);
   
   const [createQuestionOpen, setCreateQuestionOpen] = useState(false);
   const [createQuestionType, setCreateQuestionType] = useState('general'); // Default fallback
@@ -583,7 +585,12 @@ const [sharingReply, setSharingReply] = useState(null); // NEW — { question, r
       }
 
       if (isMounted) {
-        setGroups(finalGroups);
+        setGroups([...finalGroups].sort((a, b) => {
+          const ua = isRowUnread(a) ? 1 : 0;
+          const ub = isRowUnread(b) ? 1 : 0;
+          if (ub !== ua) return ub - ua;
+          return 0;
+        }));
         setExploreGroups(finalExploreGroups);
         setThreads(finalThreads);
         setMyQuestions(finalQuestions);
@@ -598,30 +605,134 @@ const [sharingReply, setSharingReply] = useState(null); // NEW — { question, r
   // view, not a tab to swipe out of.
   const tabSwipe = useTabSwipe(activeTab, setActiveTab, showSearch, () => { playTabSwitch(); hapticTap(); });
 
-  // Badge counts live on group_threads/dm_threads rows now (see
-  // 0009_group_threads_and_dm_counters.sql), so a plain postgres_changes
-  // UPDATE subscription is enough to keep them current in real time —
-  // no more waiting on the next pull-to-refresh to see a new unread count.
-  // Also handles: reordering the updated row to the top of its list (so
-  // new activity behaves like a normal messaging app), and reacting to a
-  // group being deleted outright (removes it + its thread everywhere, and
-  // closes it if it was the one currently open).
+  // Badge counts + list order stay live on desktop and mobile.
+  // Previous version only listened to filtered UPDATEs on group_threads /
+  // dm_threads — those filters often miss events when REPLICA IDENTITY is
+  // not FULL, so the list looked frozen until a manual reload. We now:
+  //   1. Subscribe without column filters and match user_id client-side
+  //   2. Also watch group_messages / dm_messages INSERTs and re-pull the
+  //      matching thread row so a new message always bumps the home list
+  //   3. Debounce full fetchData as a safety net for brand-new threads
   useEffect(() => {
     if (!userId) return undefined;
 
+    let cancelled = false;
+    let refetchTimer = null;
+    const scheduleFullRefetch = () => {
+      if (refetchTimer) clearTimeout(refetchTimer);
+      refetchTimer = setTimeout(() => {
+        if (!cancelled) fetchData({ soft: true });
+      }, 400);
+    };
+
+    const applyGroupThreadRow = (row) => {
+      if (!row || row.user_id !== userId) return;
+      setGroups((prev) => {
+        const exists = prev.some((g) => g.id === row.group_id);
+        if (!exists) {
+          scheduleFullRefetch();
+          return prev;
+        }
+        const updated = prev.map((g) =>
+          g.id === row.group_id
+            ? {
+                ...g,
+                unread_count: row.unread_count || 0,
+                unread_mention: !!row.mention,
+                last_message_at: row.last_read_at || g.last_message_at || new Date().toISOString(),
+              }
+            : g
+        );
+        return moveToFront(updated, (g) => g.id === row.group_id);
+      });
+    };
+
+    const applyDmThreadRow = (row) => {
+      if (!row) return;
+      const isUserA = row.user_a === userId;
+      const isUserB = row.user_b === userId;
+      if (!isUserA && !isUserB) return;
+      setThreads((prev) => {
+        const exists = prev.some((t) => t.id === row.id);
+        if (!exists) {
+          scheduleFullRefetch();
+          return prev;
+        }
+        const updated = prev.map((t) =>
+          t.id === row.id
+            ? {
+                ...t,
+                unread_count: (isUserA ? row.unread_count_a : row.unread_count_b) || 0,
+                unread_mention: !!(isUserA ? row.mention_a : row.mention_b),
+                last_message_preview: row.last_message_preview,
+                last_message_at: row.last_message_at,
+              }
+            : t
+        );
+        return moveToFront(updated, (t) => t.id === row.id);
+      });
+    };
+
+    // Soft-pull one group_threads row after a message lands in that group.
+    const refreshGroupBadge = async (groupId) => {
+      if (!groupId) return;
+      const active = activeChatRef.current;
+      // Still refresh even if this group is open — unread may go to 0 via
+      // the other client's last_read update; the list preview/order should move.
+      const { data, error } = await supabase
+        .from('group_threads')
+        .select('group_id, user_id, unread_count, mention, last_read_at')
+        .eq('group_id', groupId)
+        .eq('user_id', userId)
+        .maybeSingle();
+      if (cancelled || error || !data) return;
+      applyGroupThreadRow(data);
+    };
+
+    const refreshDmBadge = async (threadId) => {
+      if (!threadId) return;
+      const { data, error } = await supabase
+        .from('dm_threads')
+        .select('id, user_a, user_b, bot_id, last_message_at, last_message_preview, unread_count_a, unread_count_b, mention_a, mention_b')
+        .eq('id', threadId)
+        .maybeSingle();
+      if (cancelled || error || !data) return;
+      applyDmThreadRow(data);
+    };
+
     const channel = supabase
       .channel(`home_badges:${userId}`)
+      // --- group_threads: no filter (client-side match) so UPDATE always arrives ---
       .on(
         'postgres_changes',
-        { event: 'UPDATE', schema: 'public', table: 'group_threads', filter: `user_id=eq.${userId}` },
+        { event: '*', schema: 'public', table: 'group_threads' },
         (payload) => {
-          const row = payload.new;
-          setGroups((prev) => {
-            const updated = prev.map((g) => (g.id === row.group_id ? { ...g, unread_count: row.unread_count || 0, unread_mention: !!row.mention } : g));
-            return moveToFront(updated, (g) => g.id === row.group_id);
-          });
+          if (payload.eventType === 'DELETE') {
+            const deletedId = payload.old?.group_id;
+            if (!deletedId) return;
+            // Only drop from list if *our* membership row was deleted
+            if (payload.old?.user_id && payload.old.user_id !== userId) return;
+            setGroups((prev) => prev.filter((g) => g.id !== deletedId));
+            return;
+          }
+          applyGroupThreadRow(payload.new);
         }
       )
+      // --- dm_threads: no filter ---
+      .on(
+        'postgres_changes',
+        { event: '*', schema: 'public', table: 'dm_threads' },
+        (payload) => {
+          if (payload.eventType === 'DELETE') {
+            const deletedId = payload.old?.id;
+            if (!deletedId) return;
+            setThreads((prev) => prev.filter((t) => t.id !== deletedId));
+            return;
+          }
+          applyDmThreadRow(payload.new);
+        }
+      )
+      // --- group deleted entirely ---
       .on(
         'postgres_changes',
         { event: 'DELETE', schema: 'public', table: 'groups' },
@@ -629,12 +740,8 @@ const [sharingReply, setSharingReply] = useState(null); // NEW — { question, r
           const deletedId = payload.old?.id;
           if (!deletedId) return;
           const deletedGroup = groupsRef.current.find((g) => g.id === deletedId);
-
           setGroups((prev) => prev.filter((g) => g.id !== deletedId));
           setExploreGroups((prev) => prev.filter((g) => g.id !== deletedId));
-
-          // If that group's thread is the one currently open, close it —
-          // the thread and every message in it are gone along with the group.
           const active = activeChatRef.current;
           if (deletedGroup && active.type === 'group' && active.id === deletedGroup.slug) {
             if (active.source === 'subdomain') {
@@ -647,32 +754,74 @@ const [sharingReply, setSharingReply] = useState(null); // NEW — { question, r
           }
         }
       )
+      // --- new messages: re-read the denormalized counters so desktop list moves live ---
       .on(
         'postgres_changes',
-        { event: 'UPDATE', schema: 'public', table: 'dm_threads', filter: `user_a=eq.${userId}` },
+        { event: 'INSERT', schema: 'public', table: 'group_messages' },
         (payload) => {
-          const row = payload.new;
-          setThreads((prev) => {
-            const updated = prev.map((t) => (t.id === row.id ? { ...t, unread_count: row.unread_count_a || 0, unread_mention: !!row.mention_a, last_message_preview: row.last_message_preview, last_message_at: row.last_message_at } : t));
-            return moveToFront(updated, (t) => t.id === row.id);
-          });
+          const groupId = payload.new?.group_id;
+          if (groupId) refreshGroupBadge(groupId);
         }
       )
       .on(
         'postgres_changes',
-        { event: 'UPDATE', schema: 'public', table: 'dm_threads', filter: `user_b=eq.${userId}` },
+        { event: 'INSERT', schema: 'public', table: 'dm_messages' },
         (payload) => {
-          const row = payload.new;
-          setThreads((prev) => {
-            const updated = prev.map((t) => (t.id === row.id ? { ...t, unread_count: row.unread_count_b || 0, unread_mention: !!row.mention_b, last_message_preview: row.last_message_preview, last_message_at: row.last_message_at } : t));
-            return moveToFront(updated, (t) => t.id === row.id);
-          });
+          const threadId = payload.new?.thread_id;
+          if (threadId) refreshDmBadge(threadId);
         }
       )
-      .subscribe();
+      .subscribe((status) => {
+        if (status === 'CHANNEL_ERROR' || status === 'TIMED_OUT') {
+          console.warn('[home] realtime badges channel:', status);
+        }
+      });
 
-    return () => { supabase.removeChannel(channel); };
+    return () => {
+      cancelled = true;
+      if (refetchTimer) clearTimeout(refetchTimer);
+      supabase.removeChannel(channel);
+    };
   }, [userId]);
+
+  // Live unread total → browser tab title (desktop + mobile) so notifications
+  // are visible even when the list panel isn't focused or another chat is open.
+  useEffect(() => {
+    if (typeof document === 'undefined') return undefined;
+    const groupUnread = groups.reduce((n, g) => n + (g.unread_count || 0) + (g.unread_mention ? 1 : 0), 0);
+    const dmUnread = threads.reduce((n, t) => n + (t.unread_count || 0) + (t.unread_mention ? 1 : 0), 0);
+    const total = groupUnread + dmUnread;
+    const base = 'Anonroom';
+    document.title = total > 0 ? `(${total > 99 ? '99+' : total}) ${base}` : base;
+    return undefined;
+  }, [groups, threads]);
+
+  // When an unread count increases while this tab is in the background (or
+  // the user is inside a different chat), surface a lightweight browser
+  // notification on desktop and mobile web alike — not mobile-only.
+  const prevUnreadRef = useRef(0);
+  useEffect(() => {
+    if (!userId) return;
+    const total = groups.reduce((n, g) => n + (g.unread_count || 0), 0)
+      + threads.reduce((n, t) => n + (t.unread_count || 0), 0);
+    const prev = prevUnreadRef.current;
+    prevUnreadRef.current = total;
+    if (total <= prev) return;
+    if (typeof document !== 'undefined' && document.visibilityState === 'visible' && !activeChatId) {
+      // List is already visible with badges — no extra toast needed.
+      return;
+    }
+    if (typeof window !== 'undefined' && 'Notification' in window && Notification.permission === 'granted') {
+      try {
+        const n = new Notification('Anonroom', {
+          body: total === 1 ? '1 new message' : `${total} unread messages`,
+          tag: 'anonroom-unread',
+          renotify: true,
+        });
+        n.onclick = () => { window.focus(); n.close(); };
+      } catch (_) { /* ignore */ }
+    }
+  }, [groups, threads, userId, activeChatId]);
 
   useEffect(() => {
     if (userId && 'Notification' in window) {
@@ -859,6 +1008,26 @@ const [sharingReply, setSharingReply] = useState(null); // NEW — { question, r
   // actually removes it from other clients' lists live; this just performs
   // the delete and optimistically clears it here too so the caller isn't
   // waiting on their own realtime round-trip.
+
+  // Leave a group: drops this user's group_threads row (membership + unread
+  // state). Does NOT delete the group itself — that's handleDeleteGroup and
+  // admin-only. After leaving, the channel disappears from the Chats list
+  // the same way a DM thread would if you cleared it.
+  async function handleLeaveGroup(group) {
+    if (!group?.id || !userId) return;
+    const wasActive = activeChatType === 'group' && activeChatId === group.slug;
+    setGroups((prev) => prev.filter((g) => g.id !== group.id));
+    if (wasActive) closeActiveChat();
+    const { error } = await supabase.from('group_threads').delete().eq('group_id', group.id).eq('user_id', userId);
+    if (error) {
+      console.error(error);
+      showToast(friendlyDbError(), 'error');
+      fetchData();
+    } else {
+      showToast('Left group.', 'info');
+    }
+  }
+
   async function handleDeleteGroup(group) {
     if (!group?.id) return;
     const wasActive = activeChatType === 'group' && activeChatId === group.slug;
@@ -1091,11 +1260,17 @@ const [sharingReply, setSharingReply] = useState(null); // NEW — { question, r
               </button>
             </div>
 
-              {/* Only mounted while there's something to show — StoriesBar
-                  is expected to call onStoriesChange(count) once it knows
-                  how many story-eligible channels/items it has, so an
-                  empty rail collapses away instead of sitting there blank. */}
-              {hasStories !== false && (
+              {/* StoriesBar always stays mounted so it can report count and
+                  react to new stories. The wrapper collapses to zero height
+                  when hasStories is false (no confessions / story items).
+                  null = still loading first count → allow natural height. */}
+              <div
+                style={{
+                  display: hasStories === false ? 'none' : undefined,
+                  overflow: 'hidden',
+                }}
+                aria-hidden={hasStories === false ? true : undefined}
+              >
                 <StoriesBar
                   groups={groups}
                   userId={userId}
@@ -1104,7 +1279,7 @@ const [sharingReply, setSharingReply] = useState(null); // NEW — { question, r
                   onConsumeInitialTarget={() => setInitialStoryTarget(null)}
                   onStoriesChange={(count) => setHasStories((count ?? 0) > 0)}
                 />
-              )}
+              </div>
             {/* Segmented Control - Elevated Z-Index */}
             <div style={{ padding: '8px 16px 12px', borderBottom: '1px solid var(--separator)', position: 'relative', zIndex: 40 }}>
               <div style={{ display: 'flex', background: 'var(--tab-track)', borderRadius: 20, padding: 4, boxShadow: 'inset 0 0 0 1px var(--separator)' }}>
@@ -1322,7 +1497,7 @@ const [sharingReply, setSharingReply] = useState(null); // NEW — { question, r
               activeChatType === 'dm' ? (
                 <DirectMessages key={`dm-${activeChatId}`} openThreadWithUserId={activeChatId} onBack={closeActiveChat} onThreadReady={handleThreadReady} />
               ) : activeChatType === 'group' ? (
-                <GroupChat key={`group-${activeChatId}`} groupSlug={activeChatId} onBack={closeActiveChat} onGroupResolved={handleGroupResolved} onDeleteGroup={handleDeleteGroup} />
+                <GroupChat key={`group-${activeChatId}`} groupSlug={activeChatId} onBack={closeActiveChat} onGroupResolved={handleGroupResolved} onDeleteGroup={handleDeleteGroup} onLeaveGroup={handleLeaveGroup} />
               ) : activeChatType === 'question' ? (
                 
   <QuestionThread
