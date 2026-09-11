@@ -100,7 +100,9 @@ jobs:
       - name: Add location permissions
         run: |
           sed -i '/<uses-permission android:name="android.permission.INTERNET" \/>/a\    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />\n    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />' android/app/src/main/AndroidManifest.xml
-
+      - name: Add install-packages permission (needed for in-app APK install)
+        run: |
+          sed -i '/<uses-permission android:name="android.permission.INTERNET" \/>/a\    <uses-permission android:name="android.permission.REQUEST_INSTALL_PACKAGES" />' android/app/src/main/AndroidManifest.xml
       - name: Add App Links intent filters
         # Lets https://anonroom.in/... links opened elsewhere on the device
         # (browser, notifications, other apps) open directly in this app
