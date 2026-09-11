@@ -10,6 +10,21 @@ import { Capacitor } from '@capacitor/core';
  * - Single "Ask Question" button implemented with premium Group Chat style layout.
  * - Solid Matte colors enforced globally. 
  * - Z-indexes completely re-tiered to guarantee perfect layering.
+ * - GUEST GROUPS: signed-out users now see every public group directly in the
+ *   main Chats list (previously they only ever saw an empty list + "Explore
+ *   more", since group membership only exists for logged-in users).
+ * - STORIES BAR now hides itself entirely when there's nothing to show,
+ *   instead of always reserving space for an empty rail.
+ * - Backdrop is now a dull, slightly desaturated grey-black instead of flat
+ *   black, so foreground "objects" (rows, sheets, headers) read as distinct
+ *   surfaces sitting on top of it.
+ * - GROUP DELETION: a realtime DELETE on `groups` now prunes the group (and
+ *   its thread) from every list immediately, and closes it if it was open.
+ * - REALTIME REORDER: any thread/group that gets new activity jumps to the
+ *   top of its list live, the way a normal messaging app behaves.
+ * - UNREAD ROWS are now fully bold (name + preview), not just the badge.
+ * - GLASS EFFECT: rows, panels, and sheets are translucent + blurred so the
+ *   background shows through, instead of solid matte fills.
  * 
  * Dependencies: React, Supabase, AuthContext, Shared Components
  * ============================================================================
@@ -147,6 +162,26 @@ function displayIdentity(user) {
   };
 }
 
+// A row counts as "unread" if it has an unread count OR an unread mention —
+// used both to bold the row's text and to decide whether it should jump to
+// the top on realtime activity.
+function isRowUnread(row) {
+  return !!(row?.unread_mention || (row?.unread_count || 0) > 0);
+}
+
+// Moves the item matching `matchFn` to the front of the array (if found),
+// leaving relative order of everything else untouched. Used so a thread or
+// group that just received new activity jumps to the top of its list live,
+// instead of waiting for the next full refetch to reorder itself.
+function moveToFront(list, matchFn) {
+  const idx = list.findIndex(matchFn);
+  if (idx <= 0) return list;
+  const next = list.slice();
+  const [item] = next.splice(idx, 1);
+  next.unshift(item);
+  return next;
+}
+
 function usePullToRefresh(onRefresh, scrollRef) {
   const [pullDistance, setPullDistance] = useState(0);
   const [isRefreshing, setIsRefreshing] = useState(false);
@@ -247,6 +282,13 @@ function useTabSwipe(activeTab, setActiveTab, disabled, onSwitch) {
 function DarkGlassBackground() {
   return (
     <div aria-hidden="true" style={{ position: 'fixed', inset: 0, overflow: 'hidden', zIndex: -1, pointerEvents: 'none', background: 'var(--ink)' }}>
+      {/* Dull grey wash over the raw --ink canvas. Pure black/near-black
+          made every glass surface on top of it (rows, headers, sheets)
+          blend straight into the backdrop instead of reading as a distinct
+          floating object — a slight neutral-grey tint desaturates the
+          background just enough that translucent/blurred objects pop by
+          contrast, without meaningfully lightening the page. */}
+      <div style={{ position: 'absolute', inset: 0, background: 'rgba(132, 134, 142, 0.07)' }} />
       <div style={{ position: 'absolute', top: '-15%', left: '-10%', width: '60vw', height: '60vw', borderRadius: '50%', background: 'radial-gradient(circle, var(--ink-2), transparent 60%)', animation: 'floatOrb 22s ease-in-out infinite', filter: 'blur(40px)' }} />
       <div style={{ position: 'absolute', bottom: '-20%', right: '-10%', width: '70vw', height: '70vw', borderRadius: '50%', background: 'radial-gradient(circle, var(--ink-2), transparent 60%)', animation: 'floatOrb 28s ease-in-out infinite reverse', filter: 'blur(50px)' }} />
       <style>{`
@@ -254,7 +296,9 @@ function DarkGlassBackground() {
         .touch-bounce { transition: transform 0.15s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.15s ease-in-out; cursor: pointer; touch-action: manipulation; }
         .touch-bounce:active { transform: scale(0.95); opacity: 0.85; }
 
-        /* Professional Matte Chat Row Shape */
+        /* Glass Chat Row Shape — translucent + blurred so the dull
+           grey-black backdrop (and drifting orbs) show through, instead
+           of a flat matte fill. */
         .chat-row { 
           position: relative;
           display: flex;
@@ -264,8 +308,10 @@ function DarkGlassBackground() {
           margin: 6px 12px 10px 12px;
           width: calc(100% - 24px);
           box-sizing: border-box;
-          background: var(--ink-2); /* Solid Matte */
-          border: 1px solid var(--separator);
+          background: rgba(255, 255, 255, 0.055);
+          backdrop-filter: blur(18px) saturate(160%);
+          -webkit-backdrop-filter: blur(18px) saturate(160%);
+          border: 1px solid rgba(255, 255, 255, 0.09);
           border-radius: 18px; 
           color: var(--paper);
           text-align: left;
@@ -273,7 +319,7 @@ function DarkGlassBackground() {
           touch-action: manipulation;
           cursor: pointer;
           overflow: visible;
-          box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+          box-shadow: 0 4px 15px rgba(0,0,0,0.08);
         }
         
         .chat-row:active { 
@@ -288,9 +334,9 @@ function DarkGlassBackground() {
         }
 
         .chat-row.active-chat {
-          background: var(--ink-2);
-          border-color: rgba(255,255,255,0.18);
-          box-shadow: 0 6px 20px rgba(0,0,0,0.15);
+          background: rgba(255, 255, 255, 0.1);
+          border-color: rgba(255,255,255,0.22);
+          box-shadow: 0 6px 20px rgba(0,0,0,0.18);
           transform: translateY(-1px);
         }
 
@@ -314,6 +360,15 @@ function DarkGlassBackground() {
         }
         
         .chat-row-content { flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: center; }
+
+        /* Reusable glass surface for panels/sheets/modals that want the
+           same translucent-blur look as chat rows but as a full container
+           rather than a list item. */
+        .glass-surface {
+          background: rgba(255, 255, 255, 0.045);
+          backdrop-filter: blur(24px) saturate(180%);
+          -webkit-backdrop-filter: blur(24px) saturate(180%);
+        }
 
         @keyframes tab-slide-in { 0% { opacity: 0; transform: translateX(20px); } 100% { opacity: 1; transform: translateX(0); } }
         .tab-animated { animation: tab-slide-in 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.05) forwards; }
@@ -365,6 +420,15 @@ export default function Home() {
   const [activeChatId, setActiveChatId] = useState(null); 
   const [activeChatType, setActiveChatType] = useState(null); 
   const [activeChatSource, setActiveChatSource] = useState(null);
+
+  // Kept in sync with the state above via the effect below, so realtime
+  // callbacks registered once (on `userId` change) can still read the
+  // *current* active chat instead of whatever it was when the subscription
+  // was first created.
+  const activeChatRef = useRef({ id: null, type: null, source: null });
+  useEffect(() => {
+    activeChatRef.current = { id: activeChatId, type: activeChatType, source: activeChatSource };
+  }, [activeChatId, activeChatType, activeChatSource]);
   
   const [activeTab, setActiveTab] = useState('chats'); 
   const [searchQuery, setSearchQuery] = useState('');
@@ -394,6 +458,13 @@ export default function Home() {
   const [viewingStory, setViewingStory] = useState(null);
   
   const [initialStoryTarget, setInitialStoryTarget] = useState(null);
+
+  // Whether StoriesBar currently has anything to show. Defaults to true so
+  // the rail doesn't flash in on first paint; StoriesBar should call
+  // `onStoriesChange(count)` once it knows how many story-eligible
+  // channels it has, and the bar unmounts itself entirely when that's 0
+  // instead of always reserving an empty strip of space.
+  const [hasStories, setHasStories] = useState(true);
   
   const [createQuestionOpen, setCreateQuestionOpen] = useState(false);
   const [createQuestionType, setCreateQuestionType] = useState('general'); // Default fallback
@@ -414,6 +485,14 @@ const [sharingReply, setSharingReply] = useState(null); // NEW — { question, r
 
   const scrollRef = useRef(null);
 
+  // Mirrors `groups` so the realtime group-DELETE handler (registered once
+  // per `userId`) can look up a deleted group's slug from its id — the
+  // DELETE payload's `old` row is often just the primary key, never the
+  // slug, so this is the only reliable way to know if the deleted group is
+  // the one currently open.
+  const groupsRef = useRef([]);
+  useEffect(() => { groupsRef.current = groups; }, [groups]);
+
   const fetchData = useCallback(async () => {
     let isMounted = true;
     if (isInitialLoad) setLoadingList(true);
@@ -423,8 +502,12 @@ const [sharingReply, setSharingReply] = useState(null); // NEW — { question, r
         .from('groups').select('id, slug, name, description, cover_url, created_at').order('created_at', { ascending: false });
       if (groupsError) throw groupsError;
       const allGroups = allGroupsData || [];
-      let finalGroups = [];
-      let finalExploreGroups = allGroups;
+      // Signed-out visitors have no memberships to filter by — show them
+      // every public group directly in the main Chats list instead of an
+      // empty list with everything hidden behind "Explore more" (that
+      // panel is specifically for groups a logged-in user hasn't joined).
+      let finalGroups = userId ? [] : allGroups;
+      let finalExploreGroups = userId ? allGroups : [];
       let finalThreads = [];
       let finalQuestions = [];
 
@@ -519,6 +602,10 @@ const [sharingReply, setSharingReply] = useState(null); // NEW — { question, r
   // 0009_group_threads_and_dm_counters.sql), so a plain postgres_changes
   // UPDATE subscription is enough to keep them current in real time —
   // no more waiting on the next pull-to-refresh to see a new unread count.
+  // Also handles: reordering the updated row to the top of its list (so
+  // new activity behaves like a normal messaging app), and reacting to a
+  // group being deleted outright (removes it + its thread everywhere, and
+  // closes it if it was the one currently open).
   useEffect(() => {
     if (!userId) return undefined;
 
@@ -529,7 +616,35 @@ const [sharingReply, setSharingReply] = useState(null); // NEW — { question, r
         { event: 'UPDATE', schema: 'public', table: 'group_threads', filter: `user_id=eq.${userId}` },
         (payload) => {
           const row = payload.new;
-          setGroups((prev) => prev.map((g) => (g.id === row.group_id ? { ...g, unread_count: row.unread_count || 0, unread_mention: !!row.mention } : g)));
+          setGroups((prev) => {
+            const updated = prev.map((g) => (g.id === row.group_id ? { ...g, unread_count: row.unread_count || 0, unread_mention: !!row.mention } : g));
+            return moveToFront(updated, (g) => g.id === row.group_id);
+          });
+        }
+      )
+      .on(
+        'postgres_changes',
+        { event: 'DELETE', schema: 'public', table: 'groups' },
+        (payload) => {
+          const deletedId = payload.old?.id;
+          if (!deletedId) return;
+          const deletedGroup = groupsRef.current.find((g) => g.id === deletedId);
+
+          setGroups((prev) => prev.filter((g) => g.id !== deletedId));
+          setExploreGroups((prev) => prev.filter((g) => g.id !== deletedId));
+
+          // If that group's thread is the one currently open, close it —
+          // the thread and every message in it are gone along with the group.
+          const active = activeChatRef.current;
+          if (deletedGroup && active.type === 'group' && active.id === deletedGroup.slug) {
+            if (active.source === 'subdomain') {
+              navigateInApp(ROOT_PATH || '/');
+            } else {
+              setActiveChatId(null); setActiveChatType(null); setActiveChatSource(null);
+              window.history.pushState({}, '', ROOT_PATH);
+            }
+            showToast('This group was deleted.', 'info');
+          }
         }
       )
       .on(
@@ -537,7 +652,10 @@ const [sharingReply, setSharingReply] = useState(null); // NEW — { question, r
         { event: 'UPDATE', schema: 'public', table: 'dm_threads', filter: `user_a=eq.${userId}` },
         (payload) => {
           const row = payload.new;
-          setThreads((prev) => prev.map((t) => (t.id === row.id ? { ...t, unread_count: row.unread_count_a || 0, unread_mention: !!row.mention_a, last_message_preview: row.last_message_preview, last_message_at: row.last_message_at } : t)));
+          setThreads((prev) => {
+            const updated = prev.map((t) => (t.id === row.id ? { ...t, unread_count: row.unread_count_a || 0, unread_mention: !!row.mention_a, last_message_preview: row.last_message_preview, last_message_at: row.last_message_at } : t));
+            return moveToFront(updated, (t) => t.id === row.id);
+          });
         }
       )
       .on(
@@ -545,7 +663,10 @@ const [sharingReply, setSharingReply] = useState(null); // NEW — { question, r
         { event: 'UPDATE', schema: 'public', table: 'dm_threads', filter: `user_b=eq.${userId}` },
         (payload) => {
           const row = payload.new;
-          setThreads((prev) => prev.map((t) => (t.id === row.id ? { ...t, unread_count: row.unread_count_b || 0, unread_mention: !!row.mention_b, last_message_preview: row.last_message_preview, last_message_at: row.last_message_at } : t)));
+          setThreads((prev) => {
+            const updated = prev.map((t) => (t.id === row.id ? { ...t, unread_count: row.unread_count_b || 0, unread_mention: !!row.mention_b, last_message_preview: row.last_message_preview, last_message_at: row.last_message_at } : t));
+            return moveToFront(updated, (t) => t.id === row.id);
+          });
         }
       )
       .subscribe();
@@ -733,6 +854,30 @@ const [sharingReply, setSharingReply] = useState(null); // NEW — { question, r
     handleOpenGroup(group.slug);
   }
 
+  // Deletes a group outright (and, via DB cascade, every group_threads row
+  // and message tied to it). The realtime DELETE handler above is what
+  // actually removes it from other clients' lists live; this just performs
+  // the delete and optimistically clears it here too so the caller isn't
+  // waiting on their own realtime round-trip.
+  async function handleDeleteGroup(group) {
+    if (!group?.id) return;
+    const wasActive = activeChatType === 'group' && activeChatId === group.slug;
+    setGroups((prev) => prev.filter((g) => g.id !== group.id));
+    setExploreGroups((prev) => prev.filter((g) => g.id !== group.id));
+    if (wasActive) closeActiveChat();
+
+    const { error } = await supabase.from('groups').delete().eq('id', group.id);
+    if (error) {
+      console.error(error);
+      showToast(friendlyDbError(), 'error');
+      // Roll back — refetch is simplest since we don't know which list
+      // (joined vs explore) it belongs back in without re-deriving that.
+      fetchData();
+    } else {
+      showToast('Group deleted.', 'success');
+    }
+  }
+
   // Now accepts an initialItemId so the viewer can jump directly to that story
   function handleOpenStory(channels, startIndex, initialItemId = null) {
     setViewingStory({ channels, startIndex, initialItemId });
@@ -798,11 +943,12 @@ const [sharingReply, setSharingReply] = useState(null); // NEW — { question, r
             ------------------------------------------------------------------ */}
         {(!isMobile || !isChatActive) && (
           <div 
+            className="glass-surface"
             style={{ 
               display: 'flex', flexDirection: 'column',
               width: isMobile ? '100%' : '25%', minWidth: isMobile ? '100%' : 280, 
               height: '100dvh', borderRight: '1px solid var(--separator)', 
-              zIndex: 10, background: 'var(--ink-2)', position: 'relative'
+              zIndex: 10, position: 'relative'
             }}
           >
             {/* Header — Apple-style: title + icon search; expands to full search */}
@@ -945,13 +1091,20 @@ const [sharingReply, setSharingReply] = useState(null); // NEW — { question, r
               </button>
             </div>
 
-              <StoriesBar
-                groups={groups}
-                userId={userId}
-                onOpenStory={handleOpenStory}
-                initialTarget={initialStoryTarget}
-                onConsumeInitialTarget={() => setInitialStoryTarget(null)}
-              />
+              {/* Only mounted while there's something to show — StoriesBar
+                  is expected to call onStoriesChange(count) once it knows
+                  how many story-eligible channels/items it has, so an
+                  empty rail collapses away instead of sitting there blank. */}
+              {hasStories !== false && (
+                <StoriesBar
+                  groups={groups}
+                  userId={userId}
+                  onOpenStory={handleOpenStory}
+                  initialTarget={initialStoryTarget}
+                  onConsumeInitialTarget={() => setInitialStoryTarget(null)}
+                  onStoriesChange={(count) => setHasStories((count ?? 0) > 0)}
+                />
+              )}
             {/* Segmented Control - Elevated Z-Index */}
             <div style={{ padding: '8px 16px 12px', borderBottom: '1px solid var(--separator)', position: 'relative', zIndex: 40 }}>
               <div style={{ display: 'flex', background: 'var(--tab-track)', borderRadius: 20, padding: 4, boxShadow: 'inset 0 0 0 1px var(--separator)' }}>
@@ -998,29 +1151,34 @@ const [sharingReply, setSharingReply] = useState(null); // NEW — { question, r
                         <>
                           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '18px 24px 6px' }}>
                             <span style={{ fontSize: 13, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5, color: 'var(--dim)' }}>Groups</span>
-                            <button
-                              className="touch-bounce"
-                              onClick={() => { hapticTap(); setExploreOpen(true); }}
-                              style={{ display: 'inline-flex', alignItems: 'center', gap: 5, border: 'none', background: 'var(--tab-track)', color: 'var(--paper)', padding: '5px 12px', borderRadius: 999, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}
-                            >
-                              {Icons.Compass} Explore more
-                            </button>
+                            {userId && (
+                              <button
+                                className="touch-bounce"
+                                onClick={() => { hapticTap(); setExploreOpen(true); }}
+                                style={{ display: 'inline-flex', alignItems: 'center', gap: 5, border: 'none', background: 'var(--tab-track)', color: 'var(--paper)', padding: '5px 12px', borderRadius: 999, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}
+                              >
+                                {Icons.Compass} Explore more
+                              </button>
+                            )}
                           </div>
                           {groups.length === 0 ? (
                             <div style={{ padding: '4px 24px 8px' }}>
-                              <p style={{ fontSize: 13.5, color: 'var(--dim)', lineHeight: 1.4 }}>You haven't joined any channels yet — tap Explore more to find one.</p>
+                              <p style={{ fontSize: 13.5, color: 'var(--dim)', lineHeight: 1.4 }}>
+                                {userId ? "You haven't joined any channels yet — tap Explore more to find one." : 'No public groups yet.'}
+                              </p>
                             </div>
                           ) : (
                             <>
                               {groups.map((group, index) => {
                                 const isActive = activeChatId === group.slug && activeChatType === 'group';
+                                const isUnread = isRowUnread(group);
                                 const identity = { name: group.name, avatar_url: group.cover_url, is_admin: false };
                                 return (
                                   <button key={group.id} className={`chat-row stagger-item ${isActive ? 'active-chat' : ''}`} style={{ animationDelay: `${index * 0.04}s` }} onClick={() => handleOpenGroup(group.slug)}>
                                     <LiquidAvatar identity={identity} size={50} kind="group" />
                                     <div className="chat-row-content">
-                                      <span style={{ fontWeight: 600, fontSize: 16, display: 'block', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{group.name}</span>
-                                      <span style={{ fontSize: 14, color: 'var(--dim)', display: 'block', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>{group.description || 'Public Channel'}</span>
+                                      <span style={{ fontWeight: isUnread ? 800 : 600, fontSize: 16, display: 'block', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{group.name}</span>
+                                      <span style={{ fontWeight: isUnread ? 700 : 400, fontSize: 14, color: isUnread ? 'var(--paper)' : 'var(--dim)', display: 'block', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>{group.description || 'Public Channel'}</span>
                                     </div>
                                     <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0, marginLeft: 8 }}>
                                       {group.unread_mention && <div style={{ width: 22, height: 22, borderRadius: '50%', background: 'var(--ember)', color: '#fff', fontSize: 12, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>@</div>}
@@ -1041,13 +1199,14 @@ const [sharingReply, setSharingReply] = useState(null); // NEW — { question, r
                               {threads.map((thread, index) => {
                                 const otherId = thread.bot_id || (thread.user_a === userId ? thread.user_b : thread.user_a);
                                 const isActive = activeChatId === otherId && activeChatType === 'dm';
+                                const isUnread = isRowUnread(thread);
                                 const identity = displayIdentity(thread.otherUser); 
                                 return (
                                   <button key={thread.id} className={`chat-row stagger-item ${isActive ? 'active-chat' : ''}`} style={{ animationDelay: `${(groups.length + index) * 0.04}s` }} onClick={() => handleOpenChat(otherId, 'dm', thread.otherUser?.username)}>
                                     <LiquidAvatar identity={identity} size={50} />
                                     <div className="chat-row-content">
                                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 2 }}>
-                                        <span style={{ fontWeight: 600, fontSize: 16, display: 'flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{identity.name}{identity.is_admin && <span style={{ color: 'var(--admin-1)' }}>{Icons.AdminShield}</span>}</span>
+                                        <span style={{ fontWeight: isUnread ? 800 : 600, fontSize: 16, display: 'flex', alignItems: 'center', gap: 4, whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{identity.name}{identity.is_admin && <span style={{ color: 'var(--admin-1)' }}>{Icons.AdminShield}</span>}</span>
                                         <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0, paddingLeft: 8 }}>
                                           {thread.unread_mention && <div style={{ width: 18, height: 18, borderRadius: '50%', background: 'var(--ember)', color: '#fff', fontSize: 11, fontWeight: 700, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>@</div>}
                                           {(thread.unread_count || 0) > 0 && (
@@ -1058,7 +1217,7 @@ const [sharingReply, setSharingReply] = useState(null); // NEW — { question, r
                                           <span style={{ fontSize: 12, color: 'var(--dim)' }}>{formatTelegramTime(thread.last_message_at || thread.created_at)}</span>
                                         </div>
                                       </div>
-                                      <span style={{ fontSize: 14, color: 'var(--dim)', display: 'block', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>{thread.last_message_preview || 'Tap to view messages'}</span>
+                                      <span style={{ fontWeight: isUnread ? 700 : 400, fontSize: 14, color: isUnread ? 'var(--paper)' : 'var(--dim)', display: 'block', textOverflow: 'ellipsis', overflow: 'hidden', whiteSpace: 'nowrap' }}>{thread.last_message_preview || 'Tap to view messages'}</span>
                                     </div>
                                   </button>
                                 );
@@ -1066,13 +1225,9 @@ const [sharingReply, setSharingReply] = useState(null); // NEW — { question, r
                             </>
                           )}
                           {!userId && (
-                            <div style={{ padding: '50px 24px', textAlign: 'center' }}>
-                              <div style={{ width: 64, height: 64, background: 'var(--ink-2)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px', color: 'var(--dim)', boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.06)' }}>
-                                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
-                              </div>
-                              <p style={{ fontSize: 17, marginBottom: 12, fontWeight: 700, color: 'var(--paper)' }}>Private Messaging</p>
-                              <p style={{ fontSize: 15, marginBottom: 24, color: 'var(--dim)', lineHeight: 1.4 }}>Sign in to unlock your private chats and connect securely.</p>
-                              <button className="touch-bounce" onClick={() => setAuthOpen(true)} style={{ background: 'var(--ember)', color: '#fff', border: 'none', padding: '14px 28px', borderRadius: 24, fontWeight: 700, fontSize: 15, boxShadow: '0 8px 24px rgba(47,111,255,0.3)' }}>Sign In to Chat</button>
+                            <div style={{ padding: '30px 24px', textAlign: 'center' }}>
+                              <p style={{ fontSize: 15, color: 'var(--dim)', lineHeight: 1.4 }}>Sign in to unlock private messages, mentions, and unread badges.</p>
+                              <button className="touch-bounce" onClick={() => setAuthOpen(true)} style={{ marginTop: 12, background: 'var(--ember)', color: '#fff', border: 'none', padding: '12px 24px', borderRadius: 24, fontWeight: 700, fontSize: 14, boxShadow: '0 8px 24px rgba(47,111,255,0.3)' }}>Sign In</button>
                             </div>
                           )}
                         </>
@@ -1167,7 +1322,7 @@ const [sharingReply, setSharingReply] = useState(null); // NEW — { question, r
               activeChatType === 'dm' ? (
                 <DirectMessages key={`dm-${activeChatId}`} openThreadWithUserId={activeChatId} onBack={closeActiveChat} onThreadReady={handleThreadReady} />
               ) : activeChatType === 'group' ? (
-                <GroupChat key={`group-${activeChatId}`} groupSlug={activeChatId} onBack={closeActiveChat} onGroupResolved={handleGroupResolved} />
+                <GroupChat key={`group-${activeChatId}`} groupSlug={activeChatId} onBack={closeActiveChat} onGroupResolved={handleGroupResolved} onDeleteGroup={handleDeleteGroup} />
               ) : activeChatType === 'question' ? (
                 
   <QuestionThread
@@ -1198,7 +1353,7 @@ const [sharingReply, setSharingReply] = useState(null); // NEW — { question, r
       {/* Push Notification Prompt */}
       {showPushPrompt && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 9999, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', backdropFilter: 'blur(10px)', animation: 'pop-in 0.3s ease-out' }}>
-          <div style={{ width: '100%', maxWidth: 400, background: 'var(--ink-2)', borderRadius: '28px 28px 0 0', padding: '32px 24px 40px', border: '1px solid var(--separator)', borderBottom: 'none', boxShadow: 'var(--shadow-sheet)', textAlign: 'center', animation: 'slide-up-modal 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.05)' }}>
+          <div className="glass-surface" style={{ width: '100%', maxWidth: 400, borderRadius: '28px 28px 0 0', padding: '32px 24px 40px', border: '1px solid var(--separator)', borderBottom: 'none', boxShadow: 'var(--shadow-sheet)', textAlign: 'center', animation: 'slide-up-modal 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.05)' }}>
             <div style={{ color: 'var(--ember)', marginBottom: 16, display: 'inline-flex', padding: 12, background: 'rgba(63,120,255,0.06)', borderRadius: '50%' }}>{Icons.Bell}</div>
             <h2 style={{ margin: '0 0 12px 0', fontSize: 22, fontWeight: 800, color: 'var(--paper)' }}>Enable Notifications</h2>
             <p style={{ margin: '0 0 24px 0', color: 'var(--dim)', fontSize: 15, lineHeight: 1.4 }}>Get instantly notified about new messages, mentions, and replies.</p>
