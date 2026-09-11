@@ -1,0 +1,12 @@
+[
+  {
+    "relation": ["delegate_permission/common.handle_all_urls"],
+    "target": {
+      "namespace": "android_app",
+      "package_name": "in.anonroom.app",
+      "sha256_cert_fingerprints": [
+        "63:18:0B:3F:19:E3:3E:EE:57:4A:94:6D:F9:DE:54:ED:36:07:E0:14:6C:83:3D:3C:51:F9:06:AA:1D:1B:AE:8D"
+      ]
+    }
+  }
+]

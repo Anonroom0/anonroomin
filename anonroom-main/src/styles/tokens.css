@@ -1,0 +1,255 @@
+/**
+ * ============================================================================
+ * ANONROOM — PROFESSIONAL DISTINGUISHABLE PALETTE
+ * ============================================================================
+ * Every role has a unique hex. Own ≠ Anon ≠ Received ≠ Surface ≠ Page.
+ * Light + dark both fully wired for chats, menus, composer, bubbles.
+ * ============================================================================
+ */
+
+:root,
+[data-theme="dark"] {
+  /* Surfaces — stepped, never the same */
+  --ink: #05070D;              /* page */
+  --ink-2: #0B1220;            /* elevated panels / sidebar */
+  --surface: #151D2E;          /* cards / received bubbles */
+  --surface-2: #1E283C;        /* inputs / secondary cards */
+  --paper: #F4F7FF;            /* primary text */
+  --dim: #8B95AD;              /* muted text */
+
+  /* Accents — unique roles */
+  --ember: #3B82F6;            /* primary CTA */
+  --ember-soft: rgba(59, 130, 246, 0.18);
+  --signal: #2DD4BF;           /* live / online */
+  --blue: #3B82F6;
+
+  /* Message bubbles — fully distinct */
+  --bubble-own: rgba(37, 99, 235, 0.92);
+  --bubble-own-text: #FFFFFF;
+  --bubble-anon: #5B4BDB;
+  --bubble-anon-text: #F5F3FF;
+  --bubble-other: rgba(30, 40, 58, 0.88);
+  --bubble-other-text: #E8EEF9;
+  --bubble-border-own: rgba(96, 165, 250, 0.22);
+  --bubble-border-anon: rgba(196, 181, 253, 0.35);
+  --bubble-border-other: rgba(150, 170, 210, 0.12);
+
+  /* Glass */
+  --glass-white: rgba(255, 255, 255, 0.06);
+  --glass-border: rgba(150, 170, 210, 0.14);
+  --glass-strong: rgba(255, 255, 255, 0.10);
+  --glass: rgba(255, 255, 255, 0.04);
+  --glass-tint: rgba(59, 130, 246, 0.12);
+
+  --header-bg: rgba(11, 18, 32, 0.92);
+  --composer-bg: rgba(11, 18, 32, 0.94);
+  --menu-bg: rgba(20, 28, 45, 0.94);
+  --separator: rgba(150, 170, 210, 0.12);
+  --sheet-bg: #12141C;
+  --sheet-bg-top: #1A1C26;
+  --input-bg: rgba(255, 255, 255, 0.06);
+  --notch-bg: rgba(15, 22, 38, 0.88);
+
+  /* Tabs */
+  --tab-track: #0F1729;
+  --tab-active: #1E2A42;
+  --tab-active-text: #F4F7FF;
+  --tab-idle-text: #8B95AD;
+
+  --bg: var(--ink);
+  --success: #22C55E;
+  --danger: #EF4444;
+  --admin-1: #67E8F9;
+  --admin-2: #3B82F6;
+
+  --radius-card: 20px;
+  --radius-sheet: 28px;
+  --radius-bubble: 18px;
+  --radius-pill: 999px;
+  --radius-round: 50%;
+  --radius-input: 22px;
+
+  --shadow-card: 0 4px 18px rgba(0, 0, 0, 0.32);
+  --shadow-sheet: 0 -8px 28px rgba(0, 0, 0, 0.35);
+  --shadow-float: 0 2px 12px rgba(0, 0, 0, 0.28);
+  --shadow-bubble: 0 2px 8px rgba(0, 0, 0, 0.18);
+  --shadow-avatar: 0 6px 20px rgba(47, 111, 255, 0.22);
+
+  color-scheme: dark;
+}
+
+[data-theme="light"] {
+  /* Apple-like: grey page, slightly lifted panels — avoid pure white glare */
+  --ink: #E8E8ED;              /* page background — soft grey */
+  --ink-2: #F2F2F7;            /* sidebar / header elevated */
+  --surface: #FFFFFF;          /* cards / rows sit on grey page */
+  --surface-2: #E8E8ED;        /* inputs / search field */
+  --paper: #1C1C1E;            /* primary text */
+  --dim: #6C6C70;              /* muted text */
+
+  --ember: #007AFF;            /* iOS blue */
+  --ember-soft: rgba(0, 122, 255, 0.12);
+  --signal: #34C759;
+  --blue: #007AFF;
+
+  --bubble-own: #007AFF;
+  --bubble-own-text: #FFFFFF;
+  --bubble-anon: #5856D6;
+  --bubble-anon-text: #F2F2F7;
+  --bubble-other: #FFFFFF;     /* received: white card on grey page */
+  --bubble-other-text: #1C1C1E;
+  --bubble-border-own: transparent;
+  --bubble-border-anon: rgba(88, 86, 214, 0.28);
+  --bubble-border-other: rgba(60, 60, 67, 0.12);
+
+  --glass-white: rgba(242, 242, 247, 0.78);
+  --glass-border: rgba(60, 60, 67, 0.12);
+  --glass-strong: rgba(242, 242, 247, 0.92);
+  --glass: rgba(229, 229, 234, 0.72);
+  --glass-tint: rgba(0, 122, 255, 0.08);
+
+  --header-bg: rgba(242, 242, 247, 0.92);
+  --composer-bg: rgba(242, 242, 247, 0.94);
+  --menu-bg: rgba(242, 242, 247, 0.96);
+  --separator: rgba(60, 60, 67, 0.14);
+  --sheet-bg: #F2F2F7;
+  --sheet-bg-top: #EBEBF0;
+  --input-bg: rgba(60, 60, 67, 0.06);
+  --notch-bg: rgba(242, 242, 247, 0.94);
+
+  --tab-track: #D1D1D6;
+  --tab-active: #F2F2F7;
+  --tab-active-text: #1C1C1E;
+  --tab-idle-text: #6C6C70;
+
+  --bg: var(--ink);
+  --success: #34C759;
+  --danger: #FF3B30;
+  --admin-1: #32ADE6;
+  --admin-2: #007AFF;
+
+  --radius-card: 20px;
+  --radius-sheet: 28px;
+  --radius-bubble: 18px;
+  --radius-pill: 999px;
+  --radius-round: 50%;
+  --radius-input: 22px;
+
+  --shadow-card: 0 2px 12px rgba(0, 0, 0, 0.08);
+  --shadow-sheet: 0 -4px 20px rgba(0, 0, 0, 0.08);
+  --shadow-float: 0 2px 10px rgba(0, 0, 0, 0.08);
+  --shadow-bubble: 0 1px 3px rgba(0, 0, 0, 0.06);
+  --shadow-avatar: 0 4px 14px rgba(0, 122, 255, 0.16);
+
+  color-scheme: light;
+}
+
+html { height: 100%; overflow: hidden; }
+* { box-sizing: border-box; }
+
+body {
+  position: fixed; inset: 0; margin: 0; padding: 0;
+  height: 100%; width: 100%;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  background-color: var(--ink);
+  color: var(--paper);
+  overflow: hidden;
+  overscroll-behavior: none;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  transition: background-color 0.22s ease, color 0.22s ease;
+}
+
+#root { height: 100%; width: 100%; }
+
+.glass-panel,
+.glass-sheet {
+  position: relative;
+  overflow: hidden;
+  background: var(--glass-white);
+  border: 1px solid var(--glass-border);
+  backdrop-filter: blur(22px) saturate(150%);
+  -webkit-backdrop-filter: blur(22px) saturate(150%);
+  box-shadow: var(--shadow-card);
+}
+.glass-panel { border-radius: var(--radius-card); }
+.glass-sheet { border-radius: var(--radius-sheet) var(--radius-sheet) 0 0; }
+
+.surface-card {
+  background: var(--surface);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-float);
+}
+
+.liquid-header {
+  background: var(--header-bg);
+  border-bottom: 1px solid var(--separator);
+  backdrop-filter: blur(20px) saturate(140%);
+  -webkit-backdrop-filter: blur(20px) saturate(140%);
+}
+
+.liquid-composer {
+  background: var(--composer-bg);
+  border-top: 1px solid var(--separator);
+  backdrop-filter: blur(20px) saturate(140%);
+  -webkit-backdrop-filter: blur(20px) saturate(140%);
+}
+
+.custom-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--dim) 30%, transparent) transparent;
+}
+.custom-scrollbar::-webkit-scrollbar { width: 4px; height: 4px; }
+.custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--dim) 30%, transparent);
+  border-radius: 10px;
+}
+.custom-scrollbar:hover::-webkit-scrollbar-thumb {
+  background: color-mix(in srgb, var(--dim) 50%, transparent);
+}
+
+@keyframes pop-in {
+  from { opacity: 0; transform: scale(0.96) translateY(6px); }
+  to { opacity: 1; transform: scale(1) translateY(0); }
+}
+.pop-in { animation: pop-in 300ms cubic-bezier(0.22, 1, 0.36, 1) both; }
+
+input:focus, textarea:focus, button:focus { outline: none; }
+
+@keyframes slideInFromRight {
+  from { transform: translateX(100%); }
+  to { transform: translateX(0); }
+}
+.mobile-chat-page {
+  animation: slideInFromRight 0.26s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.app-viewport { height: 100vh; }
+@supports (height: 100dvh) {
+  .app-viewport { height: 100dvh; }
+}
+.safe-bottom {
+  padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 10px);
+}
+
+input::-webkit-contacts-auto-fill-button,
+input::-webkit-credentials-auto-fill-button,
+input::-webkit-caps-lock-indicator,
+input::-webkit-strong-password-auto-fill-button,
+input::-webkit-clear-button {
+  visibility: hidden;
+  display: none !important;
+  pointer-events: none;
+  position: absolute;
+  right: 0;
+}
+
+.no-copy-text {
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+  user-select: none;
+}
