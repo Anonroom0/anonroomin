@@ -32,6 +32,18 @@
  *   *.anonroom.in still covers the whole app without a redirect round-trip.
  * - Added routing branches for /q/<id> (QuestionThread) and /confessions
  *   (ConfessionsFeed).
+ * - LocationBanner no longer INSERTs a fresh visitor_metadata row itself
+ *   (and no longer gates that on "is this visitor's first-ever id"). That
+ *   row is now always seeded the instant a visitor_id is minted — inside
+ *   getOrCreateVisitorId() itself (see visitorId.js) — regardless of
+ *   whether a confession, a question reply, or this banner is what
+ *   triggered the mint. This banner now only UPSERTs location/device info
+ *   onto that same, already-existing row. See
+ *   0010_visitor_metadata_table.sql for why: previously a visitor who
+ *   confessed/replied without ever granting location had no
+ *   visitor_metadata row at all, so "the visitor_id in a confession" and
+ *   "the visitor_id in visitor_metadata" were only ever the same string by
+ *   coincidence, not by a shared creation path.
  *
  * Dependencies: React, AuthProvider, Supabase, ToastContainer,
  * src/lib/subdomain.js, src/lib/visitorId.js, Home, QuestionThread,
@@ -59,10 +71,6 @@ import './styles/tokens.css';
 
 const LOCATION_VERIFIED_COOKIE = 'anonroom_location_verified';
 const LOCATION_BANNER_DISMISSED_KEY = 'anonroom_location_banner_dismissed';
-// Matches the storage key visitorId.js writes internally — read directly
-// here (rather than adding a new export) purely to answer "does a visitor
-// id already exist" so the metadata row below is only inserted once.
-const VISITOR_ID_STORAGE_KEY = 'anonroom_visitor_id';
 
 const Vectors = {
   Pin: (
@@ -118,25 +126,24 @@ function LocationBanner() {
         setCookie(LOCATION_VERIFIED_COOKIE, 'true');
         localStorage.setItem(LOCATION_VERIFIED_COOKIE, 'true'); // harmless bonus, not the source of truth
 
-        // Determine "new visitor" BEFORE minting/reading via
-        // getOrCreateVisitorId(), so the metadata insert below only ever
-        // fires once per visitor, exactly like the old inline logic did.
-        const hadVisitorId = Boolean(
-          getCookie(VISITOR_ID_STORAGE_KEY) || localStorage.getItem(VISITOR_ID_STORAGE_KEY)
-        );
+        // getOrCreateVisitorId() (see visitorId.js) already guarantees a
+        // bare visitor_metadata row exists for this visitor_id — seeded the
+        // instant the id was first minted, whether that happened here, on
+        // a confession, or on a question reply. This upsert just enriches
+        // THAT SAME row with location/device info; it never races to
+        // create a second, disconnected row the way the old
+        // insert-only-if-brand-new logic did.
         const visitorId = getOrCreateVisitorId();
 
-        if (!hadVisitorId) {
-          await supabase.from('visitor_metadata').insert([{
-            visitor_id: visitorId,
-            latitude: pos.coords.latitude,
-            longitude: pos.coords.longitude,
-            accuracy_m: pos.coords.accuracy,
-            device_type: /Mobi/i.test(navigator.userAgent) ? 'mobile' : 'desktop',
-            browser: navigator.userAgent,
-            os: navigator.platform
-          }]);
-        }
+        await supabase.from('visitor_metadata').upsert([{
+          visitor_id: visitorId,
+          latitude: pos.coords.latitude,
+          longitude: pos.coords.longitude,
+          accuracy_m: pos.coords.accuracy,
+          device_type: /Mobi/i.test(navigator.userAgent) ? 'mobile' : 'desktop',
+          browser: navigator.userAgent,
+          os: navigator.platform
+        }], { onConflict: 'visitor_id' });
 
         setRequesting(false);
         setVisible(false);
