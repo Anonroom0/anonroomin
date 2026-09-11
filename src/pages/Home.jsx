@@ -10,19 +10,6 @@ import { Capacitor } from '@capacitor/core';
  * - Single "Ask Question" button implemented with premium Group Chat style layout.
  * - Solid Matte colors enforced globally. 
  * - Z-indexes completely re-tiered to guarantee perfect layering.
- * - NEW: Unauthenticated visitors now see the full public group list (not an
- *   empty "sign in" placeholder) in the Chats tab — group_threads membership
- *   is only used to personalize order/unread badges once signed in.
- * - NEW: StoriesBar is unmounted entirely (not just rendered empty) whenever
- *   it has nothing to show — see `storiesAvailable` state, fed by an
- *   onAvailabilityChange callback StoriesBar is expected to call. Same flag
- *   hides the "Add Confession" quick-action so it never dead-ends into an
- *   empty feed.
- * - NEW: Dropped the flat `--separator` hairlines around the header, tab
- *   switcher and panel edge in favor of soft shadow-based separation, and
- *   redid `.chat-row` (especially group rows) as a layered glassmorphic
- *   "brushed metal" card — gradient border, inner bevel highlight/shadow,
- *   and real drop shadow instead of a solid 1px outline.
  * 
  * Dependencies: React, Supabase, AuthContext, Shared Components
  * ============================================================================
@@ -46,11 +33,9 @@ import {
   navigateInApp,
 } from '../lib/subdomain';
 import { subscribeToPush } from '../lib/pushNotifications';
-import { playTabSwitch, playRefreshComplete, playError, playTap } from '../lib/soundManager';
-import { hapticTap, hapticSuccess, hapticError } from '../lib/haptics';
+import { playTabSwitch, playRefreshComplete } from '../lib/soundManager';
+import { hapticTap, hapticSuccess } from '../lib/haptics';
 import { useViewportHeight } from '../lib/useViewportHeight';
-import { APP_VERSION, fetchLatestAppVersion, isNewerVersion } from '../lib/appVersion';
-import { downloadAndInstallUpdate } from '../lib/appUpdate';
 
 import AuthModal from './AuthModal';
 import SearchUsers from './SearchUsers';
@@ -128,20 +113,6 @@ const Icons = {
     <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
       <circle cx="12" cy="12" r="10" />
       <polygon points="16.24 7.76 14.12 14.12 7.76 16.24 9.88 9.88 16.24 7.76" />
-    </svg>
-  ),
-  Pin: (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <line x1="12" y1="17" x2="12" y2="22" />
-      <path d="M5 17h14v-1.76a2 2 0 0 0-1.11-1.79L16 12V6a1 1 0 0 1 1-1 1 1 0 0 0 1-1V3a1 1 0 0 0-1-1H7a1 1 0 0 0-1 1v1a1 1 0 0 0 1 1 1 1 0 0 1 1 1v6l-1.89 1.45A2 2 0 0 0 5 15.24Z" />
-    </svg>
-  ),
-  Trash: (
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-      <polyline points="3 6 5 6 21 6" />
-      <path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
-      <line x1="10" y1="11" x2="10" y2="17" />
-      <line x1="14" y1="11" x2="14" y2="17" />
     </svg>
   )
 };
@@ -283,13 +254,7 @@ function DarkGlassBackground() {
         .touch-bounce { transition: transform 0.15s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.15s ease-in-out; cursor: pointer; touch-action: manipulation; }
         .touch-bounce:active { transform: scale(0.95); opacity: 0.85; }
 
-        /* ------------------------------------------------------------------
-           Chat row — layered glassmorphic "brushed metal" card.
-           Separator hairlines are gone in favor of shadow-based depth, so
-           the border itself now carries a soft metallic gradient outline
-           (via ::after, masked to a ring) instead of a flat 1px line, plus
-           an inset highlight/shadow pair for a real bevel.
-           ------------------------------------------------------------------ */
+        /* Professional Matte Chat Row Shape */
         .chat-row { 
           position: relative;
           display: flex;
@@ -299,10 +264,8 @@ function DarkGlassBackground() {
           margin: 6px 12px 10px 12px;
           width: calc(100% - 24px);
           box-sizing: border-box;
-          background:
-            linear-gradient(155deg, rgba(255,255,255,0.07), rgba(255,255,255,0.01) 45%, rgba(0,0,0,0.06) 100%),
-            var(--ink-2);
-          border: none;
+          background: var(--ink-2); /* Solid Matte */
+          border: 1px solid var(--separator);
           border-radius: 18px; 
           color: var(--paper);
           text-align: left;
@@ -310,83 +273,25 @@ function DarkGlassBackground() {
           touch-action: manipulation;
           cursor: pointer;
           overflow: visible;
-          backdrop-filter: blur(16px) saturate(160%);
-          -webkit-backdrop-filter: blur(16px) saturate(160%);
-          box-shadow:
-            inset 0 1px 0 rgba(255,255,255,0.10),
-            inset 0 -1px 1px rgba(0,0,0,0.35),
-            0 10px 22px rgba(0,0,0,0.28),
-            0 2px 4px rgba(0,0,0,0.35);
-        }
-
-        /* Thin metallic ring drawn as a masked gradient border, replacing
-           the old flat var(--separator) outline. */
-        .chat-row::after {
-          content: '';
-          position: absolute;
-          inset: 0;
-          border-radius: 18px;
-          padding: 1px;
-          background: linear-gradient(135deg, rgba(255,255,255,0.32), rgba(255,255,255,0.02) 35%, rgba(255,255,255,0.14) 60%, rgba(255,255,255,0.30));
-          -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
-          -webkit-mask-composite: xor;
-                  mask-composite: exclude;
-          pointer-events: none;
+          box-shadow: 0 4px 15px rgba(0,0,0,0.05);
         }
         
         .chat-row:active { 
           transform: scale(0.96) translateY(2px);
-          /* Semi-transparent tint reads as a highlight over whichever
-             theme's --ink-2 is underneath, light or dark. */
-          background:
-            linear-gradient(155deg, rgba(255,255,255,0.10), rgba(255,255,255,0.02) 45%, rgba(0,0,0,0.06) 100%),
-            rgba(120, 170, 255, 0.16);
-          box-shadow:
-            inset 0 1px 0 rgba(255,255,255,0.10),
-            inset 0 -2px 3px rgba(0,0,0,0.4),
-            0 4px 10px rgba(0,0,0,0.25);
+          /* Was a hardcoded dark hex (#252630) that ignored the light
+             theme entirely, so tapping/selecting a row still flashed a
+             near-black background even with data-theme="light" — a
+             semi-transparent tint reads as a subtle highlight over
+             whichever theme's --ink-2 is underneath instead. */
+          background: rgba(120, 170, 255, 0.16);
+          box-shadow: 0 2px 8px rgba(0,0,0,0.1);
         }
 
         .chat-row.active-chat {
-          background:
-            linear-gradient(155deg, rgba(255,255,255,0.09), rgba(255,255,255,0.02) 45%, rgba(0,0,0,0.05) 100%),
-            var(--ink-2);
-          box-shadow:
-            inset 0 1px 0 rgba(255,255,255,0.16),
-            inset 0 -1px 1px rgba(0,0,0,0.35),
-            0 12px 26px rgba(0,0,0,0.32);
+          background: var(--ink-2);
+          border-color: rgba(255,255,255,0.18);
+          box-shadow: 0 6px 20px rgba(0,0,0,0.15);
           transform: translateY(-1px);
-        }
-        .chat-row.active-chat::after {
-          background: linear-gradient(135deg, rgba(255,255,255,0.5), rgba(255,255,255,0.05) 35%, rgba(255,255,255,0.24) 60%, rgba(255,255,255,0.5));
-        }
-
-        /* Group rows: brushed-steel variant — cooler, higher-contrast
-           metallic ring and a deeper bevel so they read as distinct,
-           slightly more "hardware" than a plain DM row. */
-        .chat-row.group-row {
-          background:
-            linear-gradient(160deg, rgba(255,255,255,0.09), rgba(255,255,255,0.01) 40%, rgba(0,0,0,0.12) 100%),
-            var(--ink-2);
-          box-shadow:
-            inset 0 1px 0 rgba(255,255,255,0.14),
-            inset 0 -2px 4px rgba(0,0,0,0.4),
-            0 12px 26px rgba(0,0,0,0.3),
-            0 2px 5px rgba(0,0,0,0.45);
-        }
-        .chat-row.group-row::after {
-          background: linear-gradient(135deg, #eef0f3 0%, #9a9da3 22%, #dfe1e5 42%, #6b6e75 60%, #e9eaed 78%, #8b8e95 100%);
-          opacity: 0.5;
-        }
-        .chat-row.group-row:active {
-          transform: scale(0.96) translateY(2px);
-          box-shadow:
-            inset 0 1px 0 rgba(255,255,255,0.10),
-            inset 0 -2px 4px rgba(0,0,0,0.5),
-            0 5px 12px rgba(0,0,0,0.35);
-        }
-        .chat-row.group-row.active-chat::after {
-          opacity: 0.85;
         }
 
         .chat-row::before {
@@ -484,30 +389,11 @@ export default function Home() {
   }, []);
   const [profileCardUserId, setProfileCardUserId] = useState(null);
   const [showPushPrompt, setShowPushPrompt] = useState(false);
-
-  // In-app update notification — same fetchLatestAppVersion/APP_VERSION
-  // pair EditProfile.jsx uses for its manual "Check for update" button,
-  // but here it's automatic (checked on load + kept live over realtime)
-  // so the update shows up as a banner without the user having to go
-  // digging in their profile settings for it.
-  const isNativeApp = typeof window !== 'undefined' && Capacitor.isNativePlatform();
-  const [updateInfo, setUpdateInfo] = useState(null); // { version, apkUrl } once a newer build is known
-  const [dismissedUpdateVersion, setDismissedUpdateVersion] = useState(null); // dismissing only hides that specific version
-  const [updateDownloadState, setUpdateDownloadState] = useState('idle'); // idle | downloading | error
-  const [updateDownloadProgress, setUpdateDownloadProgress] = useState(0);
   
   // Updated `viewingStory` state to accept an `initialItemId`
   const [viewingStory, setViewingStory] = useState(null);
   
   const [initialStoryTarget, setInitialStoryTarget] = useState(null);
-
-  // Whether StoriesBar currently has anything to show (stories AND/OR
-  // confessions). StoriesBar is expected to call onAvailabilityChange(bool)
-  // once it knows; until then we assume true so it isn't hidden pointlessly
-  // on first paint. When false, the whole bar unmounts — no empty strip —
-  // and the "Add Confession" quick action in Ask Me hides with it, since
-  // there's nowhere for that confession to surface as a story.
-  const [storiesAvailable, setStoriesAvailable] = useState(true);
   
   const [createQuestionOpen, setCreateQuestionOpen] = useState(false);
   const [createQuestionType, setCreateQuestionType] = useState('general'); // Default fallback
@@ -519,9 +405,6 @@ const [sharingReply, setSharingReply] = useState(null); // NEW — { question, r
   const [groups, setGroups] = useState([]);
   // Channels the user hasn't joined yet — only ever shown behind "Explore
   // more" (see the CHATS TAB render below), never mixed into `groups`.
-  // Always empty for signed-out visitors, since they now see every public
-  // group directly in the main list (see fetchData below) rather than
-  // behind a separate "Explore" step.
   const [exploreGroups, setExploreGroups] = useState([]);
   const [exploreOpen, setExploreOpen] = useState(false);
   const [joiningGroupId, setJoiningGroupId] = useState(null);
@@ -552,7 +435,7 @@ const [sharingReply, setSharingReply] = useState(null); // NEW — { question, r
         // entirely (see 0009_group_threads_and_dm_counters.sql).
         const { data: joinedRows, error: joinedError } = await supabase
           .from('group_threads')
-          .select('group_id, unread_count, mention, joined_at, pinned')
+          .select('group_id, unread_count, mention, joined_at')
           .eq('user_id', userId)
           .order('joined_at', { ascending: false });
         if (joinedError) throw joinedError;
@@ -562,10 +445,9 @@ const [sharingReply, setSharingReply] = useState(null); // NEW — { question, r
           .map((r) => {
             const g = groupsById[r.group_id];
             if (!g) return null; // group was deleted since joining
-            return { ...g, unread_mention: !!r.mention, unread_count: r.unread_count || 0, pinned: !!r.pinned };
+            return { ...g, unread_mention: !!r.mention, unread_count: r.unread_count || 0 };
           })
-          .filter(Boolean)
-          .sort((a, b) => (b.pinned === a.pinned ? 0 : b.pinned ? 1 : -1));
+          .filter(Boolean);
 
         const joinedIds = new Set(finalGroups.map((g) => g.id));
         finalExploreGroups = allGroups.filter((g) => !joinedIds.has(g.id));
@@ -615,13 +497,6 @@ const [sharingReply, setSharingReply] = useState(null); // NEW — { question, r
 
         const { data: questionsData, error: questionsError } = await supabase.from('questions').select('*').eq('author_id', userId).order('created_at', { ascending: false });
         if (!questionsError && questionsData) finalQuestions = questionsData;
-      } else {
-        // Signed out: skip the "Explore" detour entirely and show every
-        // public group directly in the main Chats list. There's no
-        // group_threads row to source unread/pinned state from, so those
-        // just default off — they only matter once someone signs in.
-        finalGroups = allGroups.map((g) => ({ ...g, unread_mention: false, unread_count: 0, pinned: false }));
-        finalExploreGroups = [];
       }
 
       if (isMounted) {
@@ -654,7 +529,7 @@ const [sharingReply, setSharingReply] = useState(null); // NEW — { question, r
         { event: 'UPDATE', schema: 'public', table: 'group_threads', filter: `user_id=eq.${userId}` },
         (payload) => {
           const row = payload.new;
-          setGroups((prev) => prev.map((g) => (g.id === row.group_id ? { ...g, unread_count: row.unread_count || 0, unread_mention: !!row.mention, pinned: !!row.pinned } : g)));
+          setGroups((prev) => prev.map((g) => (g.id === row.group_id ? { ...g, unread_count: row.unread_count || 0, unread_mention: !!row.mention } : g)));
         }
       )
       .on(
@@ -677,75 +552,6 @@ const [sharingReply, setSharingReply] = useState(null); // NEW — { question, r
 
     return () => { supabase.removeChannel(channel); };
   }, [userId]);
-
-  // Update notification: check once on load, then stay live via
-  // postgres_changes on app_releases — CI upserts that row (id='android')
-  // on every build (see .github/workflows/build-apk.yml), so the banner
-  // appears the moment a new version is published instead of waiting for
-  // someone to open Edit Profile and tap "Check for update".
-  const applyReleaseRow = useCallback((row) => {
-    if (!row || typeof row.version !== 'string' || !row.version.trim()) return;
-    const version = row.version.trim();
-    const apkUrl = (typeof row.apk_url === 'string' && row.apk_url.trim()) || 'https://anonroom.in/apk/download/';
-    if (isNewerVersion(version, APP_VERSION)) {
-      setUpdateInfo((prev) => (prev && prev.version === version ? prev : { version, apkUrl }));
-    }
-  }, []);
-
-  useEffect(() => {
-    if (!isNativeApp) return;
-    let cancelled = false;
-    (async () => {
-      try {
-        const latest = await fetchLatestAppVersion();
-        if (!cancelled) applyReleaseRow({ version: latest.version, apk_url: latest.apkUrl });
-      } catch (err) {
-        console.error('Update check failed:', err.message);
-      }
-    })();
-    return () => { cancelled = true; };
-  }, [isNativeApp, applyReleaseRow]);
-
-  useEffect(() => {
-    if (!isNativeApp) return undefined;
-
-    const channel = supabase
-      .channel('app_release_updates')
-      .on(
-        'postgres_changes',
-        { event: '*', schema: 'public', table: 'app_releases', filter: 'id=eq.android' },
-        (payload) => applyReleaseRow(payload.new)
-      )
-      .subscribe();
-
-    return () => { supabase.removeChannel(channel); };
-  }, [isNativeApp, applyReleaseRow]);
-
-  async function handleDownloadUpdate() {
-    if (!updateInfo?.apkUrl) return;
-    setUpdateDownloadState('downloading');
-    setUpdateDownloadProgress(0);
-    try {
-      await downloadAndInstallUpdate(updateInfo.apkUrl, {
-        onProgress: (fraction) => setUpdateDownloadProgress(fraction),
-      });
-      // Handed off to Android's installer sheet — leave the banner in
-      // place so it's still there (with its button) if the user backs
-      // out of that screen instead of confirming the install.
-      setUpdateDownloadState('idle');
-    } catch (err) {
-      console.error(err);
-      playError(); hapticError();
-      setUpdateDownloadState('error');
-    }
-  }
-
-  function handleDismissUpdateBanner() {
-    hapticTap(); playTap();
-    if (updateInfo?.version) setDismissedUpdateVersion(updateInfo.version);
-  }
-
-  const showUpdateBanner = isNativeApp && !!updateInfo && updateInfo.version !== dismissedUpdateVersion;
 
   useEffect(() => {
     if (userId && 'Notification' in window) {
@@ -912,7 +718,7 @@ const [sharingReply, setSharingReply] = useState(null); // NEW — { question, r
     hapticTap();
     setJoiningGroupId(group.id);
     setExploreGroups((prev) => prev.filter((g) => g.id !== group.id));
-    setGroups((prev) => (prev.some((g) => g.id === group.id) ? prev : [{ ...group, unread_count: 0, unread_mention: false, pinned: false }, ...prev]));
+    setGroups((prev) => (prev.some((g) => g.id === group.id) ? prev : [{ ...group, unread_count: 0, unread_mention: false }, ...prev]));
 
     const { error } = await supabase.from('group_threads').insert({ group_id: group.id, user_id: userId });
     setJoiningGroupId(null);
@@ -925,91 +731,6 @@ const [sharingReply, setSharingReply] = useState(null); // NEW — { question, r
     }
     setExploreOpen(false);
     handleOpenGroup(group.slug);
-  }
-
-  // Long-press / right-click context menu for a group row: Pin or Delete
-  // (delete = leave the channel, i.e. remove this user's group_threads row).
-  const [groupMenuFor, setGroupMenuFor] = useState(null); // group object or null
-  const [groupMenuBusy, setGroupMenuBusy] = useState(false);
-  const longPressTimer = useRef(null);
-  const longPressFired = useRef(false);
-
-  function openGroupMenu(group) {
-    hapticTap();
-    setGroupMenuFor(group);
-  }
-  function closeGroupMenu() {
-    if (groupMenuBusy) return;
-    setGroupMenuFor(null);
-  }
-  function handleGroupRowPressStart(group) {
-    longPressFired.current = false;
-    clearTimeout(longPressTimer.current);
-    longPressTimer.current = setTimeout(() => {
-      longPressFired.current = true;
-      openGroupMenu(group);
-    }, 450);
-  }
-  function handleGroupRowPressEnd() {
-    clearTimeout(longPressTimer.current);
-  }
-  function handleGroupRowClick(group) {
-    if (longPressFired.current) { longPressFired.current = false; return; }
-    handleOpenGroup(group.slug);
-  }
-  function handleGroupContextMenu(e, group) {
-    e.preventDefault();
-    openGroupMenu(group);
-  }
-
-  async function handleTogglePinGroup(group) {
-    if (!userId || groupMenuBusy) return;
-    setGroupMenuBusy(true);
-    hapticTap();
-    const nextPinned = !group.pinned;
-    setGroups((prev) => {
-      const updated = prev.map((g) => (g.id === group.id ? { ...g, pinned: nextPinned } : g));
-      return [...updated].sort((a, b) => (b.pinned === a.pinned ? 0 : b.pinned ? 1 : -1));
-    });
-    setGroupMenuFor(null);
-    const { error } = await supabase
-      .from('group_threads')
-      .update({ pinned: nextPinned })
-      .eq('group_id', group.id)
-      .eq('user_id', userId);
-    setGroupMenuBusy(false);
-    if (error) {
-      console.error(error);
-      // Roll back on failure
-      setGroups((prev) => {
-        const updated = prev.map((g) => (g.id === group.id ? { ...g, pinned: !nextPinned } : g));
-        return [...updated].sort((a, b) => (b.pinned === a.pinned ? 0 : b.pinned ? 1 : -1));
-      });
-    }
-  }
-
-  async function handleDeleteGroupThread(group) {
-    if (!userId || groupMenuBusy) return;
-    setGroupMenuBusy(true);
-    hapticTap();
-    const wasActive = activeChatId === group.slug && activeChatType === 'group';
-    setGroups((prev) => prev.filter((g) => g.id !== group.id));
-    setExploreGroups((prev) => (prev.some((g) => g.id === group.id) ? prev : [group, ...prev]));
-    setGroupMenuFor(null);
-    if (wasActive) closeActiveChat();
-
-    const { error } = await supabase
-      .from('group_threads')
-      .delete()
-      .eq('group_id', group.id)
-      .eq('user_id', userId);
-    setGroupMenuBusy(false);
-    if (error) {
-      console.error(error);
-      // Roll back on failure
-      setGroups((prev) => (prev.some((g) => g.id === group.id) ? prev : [...prev, group]));
-      setExploreGroups((prev) => prev.filter((g) => g.id !== group.id));
-    }
   }
 
   // Now accepts an initialItemId so the viewer can jump directly to that story
@@ -1080,9 +801,8 @@ const [sharingReply, setSharingReply] = useState(null); // NEW — { question, r
             style={{ 
               display: 'flex', flexDirection: 'column',
               width: isMobile ? '100%' : '25%', minWidth: isMobile ? '100%' : 280, 
-              height: '100dvh',
-              zIndex: 10, background: 'var(--glass-panel)', backdropFilter: 'blur(28px) saturate(180%)', WebkitBackdropFilter: 'blur(28px) saturate(180%)', position: 'relative',
-              boxShadow: isMobile ? 'none' : '8px 0 30px rgba(0,0,0,0.22)'
+              height: '100dvh', borderRight: '1px solid var(--separator)', 
+              zIndex: 10, background: 'var(--ink-2)', position: 'relative'
             }}
           >
             {/* Header — Apple-style: title + icon search; expands to full search */}
@@ -1092,6 +812,7 @@ const [sharingReply, setSharingReply] = useState(null); // NEW — { question, r
                 display: 'flex',
                 alignItems: 'center',
                 gap: 10,
+                borderBottom: '1px solid var(--separator)',
                 zIndex: 50,
                 position: 'relative',
                 background: 'var(--header-bg)',
@@ -1099,7 +820,6 @@ const [sharingReply, setSharingReply] = useState(null); // NEW — { question, r
                 WebkitBackdropFilter: 'blur(20px) saturate(180%)',
                 minHeight: 56,
                 boxSizing: 'border-box',
-                boxShadow: '0 8px 16px -12px rgba(0,0,0,0.35)'
               }}
             >
               {(searchFocused || searchQuery.trim().length > 0) ? (
@@ -1225,93 +945,16 @@ const [sharingReply, setSharingReply] = useState(null); // NEW — { question, r
               </button>
             </div>
 
-            {/* Update available notification — realtime via app_releases,
-                see the app_release_updates channel above. */}
-            {showUpdateBanner && (
-              <div
-                style={{
-                  margin: '10px 12px 0', padding: '12px 14px', borderRadius: 14,
-                  background: 'var(--surface-2)', border: '1px solid var(--glass-border)',
-                  display: 'flex', flexDirection: 'column', gap: 10, position: 'relative', zIndex: 45,
-                }}
-              >
-                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 13.5, fontWeight: 700, color: 'var(--paper)' }}>Update available</div>
-                    <div style={{ fontSize: 12.5, color: 'var(--dim)', marginTop: 2 }}>
-                      {updateDownloadState === 'downloading'
-                        ? `Downloading… ${Math.round(updateDownloadProgress * 100)}%`
-                        : updateDownloadState === 'error'
-                        ? 'Download failed — tap to retry'
-                        : `Version ${updateInfo.version} is ready to install`}
-                    </div>
-                  </div>
-                  {updateDownloadState !== 'downloading' && (
-                    <button
-                      type="button"
-                      className="touch-bounce"
-                      onClick={handleDismissUpdateBanner}
-                      aria-label="Dismiss"
-                      style={{
-                        width: 28, height: 28, borderRadius: '50%', border: 'none', flexShrink: 0,
-                        background: 'transparent', color: 'var(--dim)', display: 'flex',
-                        alignItems: 'center', justifyContent: 'center', cursor: 'pointer', padding: 0,
-                      }}
-                    >
-                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
-                    </button>
-                  )}
-                </div>
-                <button
-                  type="button"
-                  className="touch-bounce"
-                  onClick={handleDownloadUpdate}
-                  disabled={updateDownloadState === 'downloading'}
-                  style={{
-                    width: '100%', border: 'none', background: 'var(--ember)', color: '#fff',
-                    borderRadius: 12, padding: '10px 14px', fontWeight: 700, fontSize: 13.5,
-                    cursor: updateDownloadState === 'downloading' ? 'default' : 'pointer',
-                    opacity: updateDownloadState === 'downloading' ? 0.7 : 1,
-                  }}
-                >
-                  {updateDownloadState === 'downloading'
-                    ? 'Downloading…'
-                    : updateDownloadState === 'error'
-                    ? 'Retry download'
-                    : 'Update now'}
-                </button>
-                {updateDownloadState === 'downloading' && (
-                  <div style={{ width: '100%', height: 6, borderRadius: 999, background: 'rgba(255,255,255,0.08)', overflow: 'hidden' }}>
-                    <div
-                      style={{
-                        width: `${Math.max(4, Math.round(updateDownloadProgress * 100))}%`,
-                        height: '100%', borderRadius: 999, background: 'var(--ember)',
-                        transition: 'width 0.2s ease',
-                      }}
-                    />
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Stories/confessions bar — fully unmounted (not just empty)
-                when there's nothing to show. StoriesBar reports that back
-                via onAvailabilityChange(bool); until it reports, we render
-                it (storiesAvailable defaults true) so it isn't flashed away
-                on first paint. */}
-            {storiesAvailable && (
               <StoriesBar
                 groups={groups}
                 userId={userId}
                 onOpenStory={handleOpenStory}
                 initialTarget={initialStoryTarget}
                 onConsumeInitialTarget={() => setInitialStoryTarget(null)}
-                onAvailabilityChange={setStoriesAvailable}
               />
-            )}
             {/* Segmented Control - Elevated Z-Index */}
-            <div style={{ padding: '8px 16px 12px', position: 'relative', zIndex: 40, boxShadow: '0 8px 16px -12px rgba(0,0,0,0.3)' }}>
-              <div style={{ display: 'flex', background: 'var(--tab-track)', borderRadius: 20, padding: 4, boxShadow: 'inset 0 1px 3px rgba(0,0,0,0.25), inset 0 -1px 0 rgba(255,255,255,0.04)' }}>
+            <div style={{ padding: '8px 16px 12px', borderBottom: '1px solid var(--separator)', position: 'relative', zIndex: 40 }}>
+              <div style={{ display: 'flex', background: 'var(--tab-track)', borderRadius: 20, padding: 4, boxShadow: 'inset 0 0 0 1px var(--separator)' }}>
                 <button 
                   className="touch-bounce" onClick={() => { playTabSwitch(); hapticTap(); setActiveTab('chats'); }} 
                   style={{ flex: 1, padding: '8px 0', borderRadius: 16, border: 'none', background: activeTab === 'chats' ? 'var(--tab-active)' : 'transparent', color: activeTab === 'chats' ? 'var(--tab-active-text)' : 'var(--tab-idle-text)', boxShadow: activeTab === 'chats' ? 'var(--shadow-float)' : 'none', fontWeight: 600, fontSize: 14, cursor: 'pointer', transition: 'background 0.2s ease, color 0.2s ease' }}
@@ -1355,25 +998,17 @@ const [sharingReply, setSharingReply] = useState(null); // NEW — { question, r
                         <>
                           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '18px 24px 6px' }}>
                             <span style={{ fontSize: 13, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5, color: 'var(--dim)' }}>Groups</span>
-                            {/* Only meaningful once signed in — signed-out
-                                visitors already see every public group in
-                                the list below, so there's nothing left to
-                                "explore" separately. */}
-                            {userId && (
-                              <button
-                                className="touch-bounce"
-                                onClick={() => { hapticTap(); setExploreOpen(true); }}
-                                style={{ display: 'inline-flex', alignItems: 'center', gap: 5, border: 'none', background: 'var(--tab-track)', color: 'var(--paper)', padding: '5px 12px', borderRadius: 999, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}
-                              >
-                                {Icons.Compass} Explore more
-                              </button>
-                            )}
+                            <button
+                              className="touch-bounce"
+                              onClick={() => { hapticTap(); setExploreOpen(true); }}
+                              style={{ display: 'inline-flex', alignItems: 'center', gap: 5, border: 'none', background: 'var(--tab-track)', color: 'var(--paper)', padding: '5px 12px', borderRadius: 999, fontSize: 12, fontWeight: 700, cursor: 'pointer' }}
+                            >
+                              {Icons.Compass} Explore more
+                            </button>
                           </div>
                           {groups.length === 0 ? (
                             <div style={{ padding: '4px 24px 8px' }}>
-                              <p style={{ fontSize: 13.5, color: 'var(--dim)', lineHeight: 1.4 }}>
-                                {userId ? "You haven't joined any channels yet — tap Explore more to find one." : 'No public channels yet.'}
-                              </p>
+                              <p style={{ fontSize: 13.5, color: 'var(--dim)', lineHeight: 1.4 }}>You haven't joined any channels yet — tap Explore more to find one.</p>
                             </div>
                           ) : (
                             <>
@@ -1381,7 +1016,7 @@ const [sharingReply, setSharingReply] = useState(null); // NEW — { question, r
                                 const isActive = activeChatId === group.slug && activeChatType === 'group';
                                 const identity = { name: group.name, avatar_url: group.cover_url, is_admin: false };
                                 return (
-                                  <button key={group.id} className={`chat-row group-row stagger-item ${isActive ? 'active-chat' : ''}`} style={{ animationDelay: `${index * 0.04}s` }} onClick={() => handleOpenGroup(group.slug)}>
+                                  <button key={group.id} className={`chat-row stagger-item ${isActive ? 'active-chat' : ''}`} style={{ animationDelay: `${index * 0.04}s` }} onClick={() => handleOpenGroup(group.slug)}>
                                     <LiquidAvatar identity={identity} size={50} kind="group" />
                                     <div className="chat-row-content">
                                       <span style={{ fontWeight: 600, fontSize: 16, display: 'block', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>{group.name}</span>
@@ -1431,9 +1066,13 @@ const [sharingReply, setSharingReply] = useState(null); // NEW — { question, r
                             </>
                           )}
                           {!userId && (
-                            <div style={{ padding: '32px 24px 12px', textAlign: 'center' }}>
-                              <p style={{ fontSize: 14, color: 'var(--dim)', lineHeight: 1.4, marginBottom: 16 }}>Sign in to send direct messages and unlock Ask Me.</p>
-                              <button className="touch-bounce" onClick={() => setAuthOpen(true)} style={{ background: 'var(--ember)', color: '#fff', border: 'none', padding: '12px 24px', borderRadius: 24, fontWeight: 700, fontSize: 14, boxShadow: '0 8px 24px rgba(47,111,255,0.3)' }}>Sign In</button>
+                            <div style={{ padding: '50px 24px', textAlign: 'center' }}>
+                              <div style={{ width: 64, height: 64, background: 'var(--ink-2)', borderRadius: '50%', display: 'flex', alignItems: 'center', justifyContent: 'center', margin: '0 auto 20px', color: 'var(--dim)', boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.06)' }}>
+                                <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+                              </div>
+                              <p style={{ fontSize: 17, marginBottom: 12, fontWeight: 700, color: 'var(--paper)' }}>Private Messaging</p>
+                              <p style={{ fontSize: 15, marginBottom: 24, color: 'var(--dim)', lineHeight: 1.4 }}>Sign in to unlock your private chats and connect securely.</p>
+                              <button className="touch-bounce" onClick={() => setAuthOpen(true)} style={{ background: 'var(--ember)', color: '#fff', border: 'none', padding: '14px 28px', borderRadius: 24, fontWeight: 700, fontSize: 15, boxShadow: '0 8px 24px rgba(47,111,255,0.3)' }}>Sign In to Chat</button>
                             </div>
                           )}
                         </>
@@ -1469,32 +1108,27 @@ const [sharingReply, setSharingReply] = useState(null); // NEW — { question, r
                           </button>
 
                           {/* "ADD CONFESSION" BUTTON — posts straight into the
-                              public Confessions feed, no separate composer page.
-                              Hidden entirely (not just disabled) whenever
-                              storiesAvailable is false, since there'd be no
-                              story feed for the confession to land in. */}
-                          {storiesAvailable && (
-                            <button
-                              className="chat-row stagger-item"
-                              style={{ animationDelay: '0.1s', marginBottom: 28, width: '100%', marginLeft: 0 }}
-                              onClick={(e) => { e.preventDefault(); hapticTap(); setCreateConfessionOpen(true); }}
-                            >
-                              <div style={{ width: 50, height: 50, borderRadius: '50%', background: 'var(--ink-2)', color: 'var(--ember)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.06)' }}>
-                                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M9 10h.01" /><path d="M15 10h.01" /><path d="M12 2a8 8 0 0 0-8 8v12l3-3 2.5 2.5L12 19l2.5 2.5L17 19l3 3V10a8 8 0 0 0-8-8z" /></svg>
-                              </div>
-                              <div className="chat-row-content">
-                                <span style={{ fontWeight: 600, fontSize: 16, display: 'block', color: 'var(--paper)', marginBottom: 2 }}>Add Confession</span>
-                                <span style={{ fontSize: 14, color: 'var(--dim)', display: 'block' }}>Post straight to the Confessions feed</span>
-                              </div>
-                            </button>
-                          )}
+                              public Confessions feed, no separate composer page */}
+                          <button
+                            className="chat-row stagger-item"
+                            style={{ animationDelay: '0.1s', marginBottom: 28, width: '100%', marginLeft: 0 }}
+                            onClick={(e) => { e.preventDefault(); hapticTap(); setCreateConfessionOpen(true); }}
+                          >
+                            <div style={{ width: 50, height: 50, borderRadius: '50%', background: 'var(--ink-2)', color: 'var(--ember)', display: 'flex', alignItems: 'center', justifyContent: 'center', flexShrink: 0, boxShadow: 'inset 0 0 0 1px rgba(255,255,255,0.06)' }}>
+                              <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M9 10h.01" /><path d="M15 10h.01" /><path d="M12 2a8 8 0 0 0-8 8v12l3-3 2.5 2.5L12 19l2.5 2.5L17 19l3 3V10a8 8 0 0 0-8-8z" /></svg>
+                            </div>
+                            <div className="chat-row-content">
+                              <span style={{ fontWeight: 600, fontSize: 16, display: 'block', color: 'var(--paper)', marginBottom: 2 }}>Add Confession</span>
+                              <span style={{ fontSize: 14, color: 'var(--dim)', display: 'block' }}>Post straight to the Confessions feed</span>
+                            </div>
+                          </button>
 
                           <div className="stagger-item" style={{ animationDelay: '0.15s', fontSize: 13, fontWeight: 700, textTransform: 'uppercase', letterSpacing: 0.5, color: 'var(--dim)', marginBottom: 16, marginLeft: 8 }}>My Questions</div>
 
                           {loadingList ? (
                             <div style={{ padding: '0' }}><MessageSkeleton variant="list-row" count={3} /></div>
                           ) : myQuestions.length === 0 ? (
-                            <div className="stagger-item" style={{ animationDelay: '0.2s', padding: '20px 0', textAlign: 'center', color: 'var(--dim)', fontSize: 15, background: 'rgba(255,255,255,0.03)', borderRadius: 16, boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.2)' }}>
+                            <div className="stagger-item" style={{ animationDelay: '0.2s', padding: '20px 0', textAlign: 'center', color: 'var(--dim)', fontSize: 15, background: 'rgba(255,255,255,0.03)', borderRadius: 16, border: '1px solid var(--separator)' }}>
                               You haven't created any questions yet.
                             </div>
                           ) : (
@@ -1546,7 +1180,7 @@ const [sharingReply, setSharingReply] = useState(null); // NEW — { question, r
             ) : (
               <div style={{ flex: 1, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', color: 'var(--dim)' }}>
                 <div style={{ marginBottom: 20, animation: 'pop-in 0.6s cubic-bezier(0.2, 0.8, 0.2, 1)' }}>{Icons.EmptyChat}</div>
-                <p style={{ fontSize: 15, fontWeight: 600, background: 'var(--ink-2)', boxShadow: 'inset 0 1px 2px rgba(0,0,0,0.25), 0 4px 12px rgba(0,0,0,0.2)', padding: '8px 20px', borderRadius: 24, color: 'var(--paper)' }}>Select a chat or question to view</p>
+                <p style={{ fontSize: 15, fontWeight: 600, background: 'var(--ink-2)', border: '1px solid var(--separator)', padding: '8px 20px', borderRadius: 24, color: 'var(--paper)' }}>Select a chat or question to view</p>
               </div>
             )}
           </div>
@@ -1564,7 +1198,7 @@ const [sharingReply, setSharingReply] = useState(null); // NEW — { question, r
       {/* Push Notification Prompt */}
       {showPushPrompt && (
         <div style={{ position: 'fixed', inset: 0, zIndex: 9999, background: 'rgba(0,0,0,0.6)', display: 'flex', alignItems: 'flex-end', justifyContent: 'center', backdropFilter: 'blur(10px)', animation: 'pop-in 0.3s ease-out' }}>
-          <div style={{ width: '100%', maxWidth: 400, background: 'var(--ink-2)', borderRadius: '28px 28px 0 0', padding: '32px 24px 40px', boxShadow: 'var(--shadow-sheet)', textAlign: 'center', animation: 'slide-up-modal 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.05)' }}>
+          <div style={{ width: '100%', maxWidth: 400, background: 'var(--ink-2)', borderRadius: '28px 28px 0 0', padding: '32px 24px 40px', border: '1px solid var(--separator)', borderBottom: 'none', boxShadow: 'var(--shadow-sheet)', textAlign: 'center', animation: 'slide-up-modal 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.05)' }}>
             <div style={{ color: 'var(--ember)', marginBottom: 16, display: 'inline-flex', padding: 12, background: 'rgba(63,120,255,0.06)', borderRadius: '50%' }}>{Icons.Bell}</div>
             <h2 style={{ margin: '0 0 12px 0', fontSize: 22, fontWeight: 800, color: 'var(--paper)' }}>Enable Notifications</h2>
             <p style={{ margin: '0 0 24px 0', color: 'var(--dim)', fontSize: 15, lineHeight: 1.4 }}>Get instantly notified about new messages, mentions, and replies.</p>
