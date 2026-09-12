@@ -25,6 +25,12 @@ import { Capacitor } from '@capacitor/core';
  * - UNREAD ROWS are now fully bold (name + preview), not just the badge.
  * - GLASS EFFECT: rows, panels, and sheets are translucent + blurred so the
  *   background shows through, instead of solid matte fills.
+ * - THEME-AWARE GLASS: the glass rows/surface/backdrop-orb colors that used
+ *   to be hardcoded to dark-theme rgba(255,255,255,...) values now read
+ *   from CSS variables (--row-glass-*, --surface-glass-*, --backdrop-wash,
+ *   --orb-color-*) defined per-theme in tokens.css. Light theme now gets
+ *   its own vibrant, genuinely-translucent glass with a visibly thicker
+ *   border, instead of silently reusing dark-mode's white-on-white values.
  * 
  * Dependencies: React, Supabase, AuthContext, Shared Components
  * ============================================================================
@@ -283,23 +289,34 @@ function useTabSwipe(activeTab, setActiveTab, disabled, onSwitch) {
 function DarkGlassBackground() {
   return (
     <div aria-hidden="true" style={{ position: 'fixed', inset: 0, overflow: 'hidden', zIndex: -1, pointerEvents: 'none', background: 'var(--ink)' }}>
-      {/* Dull grey wash over the raw --ink canvas. Pure black/near-black
-          made every glass surface on top of it (rows, headers, sheets)
-          blend straight into the backdrop instead of reading as a distinct
-          floating object — a slight neutral-grey tint desaturates the
-          background just enough that translucent/blurred objects pop by
-          contrast, without meaningfully lightening the page. */}
-      <div style={{ position: 'absolute', inset: 0, background: 'rgba(150, 155, 170, 0.12)' }} />
-      <div style={{ position: 'absolute', top: '-15%', left: '-10%', width: '60vw', height: '60vw', borderRadius: '50%', background: 'radial-gradient(circle, var(--ink-2), transparent 60%)', animation: 'floatOrb 22s ease-in-out infinite', filter: 'blur(40px)' }} />
-      <div style={{ position: 'absolute', bottom: '-20%', right: '-10%', width: '70vw', height: '70vw', borderRadius: '50%', background: 'radial-gradient(circle, var(--ink-2), transparent 60%)', animation: 'floatOrb 28s ease-in-out infinite reverse', filter: 'blur(50px)' }} />
+      {/* Wash over the raw --ink canvas. Pure black/near-black made every
+          glass surface on top of it (rows, headers, sheets) blend straight
+          into the backdrop instead of reading as a distinct floating
+          object — a tint desaturates/tints the background just enough
+          that translucent/blurred objects pop by contrast, without
+          meaningfully lightening the page. Themed via --backdrop-wash:
+          dark theme keeps the original neutral grey wash, light theme
+          uses a saturated accent tint instead of grey so the glass reads
+          as vibrant rather than washed-out white-on-grey. */}
+      <div style={{ position: 'absolute', inset: 0, background: 'var(--backdrop-wash)' }} />
+      {/* Floating orbs — themed via --orb-color-1/2. Dark theme keeps the
+          original panel-colored glow; light theme uses a saturated
+          blue/purple duo so light-mode glass has real color drifting
+          behind it instead of being invisible near-white-on-white blobs. */}
+      <div style={{ position: 'absolute', top: '-15%', left: '-10%', width: '60vw', height: '60vw', borderRadius: '50%', background: 'radial-gradient(circle, var(--orb-color-1), transparent 60%)', animation: 'floatOrb 22s ease-in-out infinite', filter: 'blur(40px)' }} />
+      <div style={{ position: 'absolute', bottom: '-20%', right: '-10%', width: '70vw', height: '70vw', borderRadius: '50%', background: 'radial-gradient(circle, var(--orb-color-2), transparent 60%)', animation: 'floatOrb 28s ease-in-out infinite reverse', filter: 'blur(50px)' }} />
       <style>{`
         * { -webkit-tap-highlight-color: transparent !important; }
         .touch-bounce { transition: transform 0.15s cubic-bezier(0.2, 0.8, 0.2, 1), opacity 0.15s ease-in-out; cursor: pointer; touch-action: manipulation; }
         .touch-bounce:active { transform: scale(0.95); opacity: 0.85; }
 
-        /* Glass Chat Row Shape — translucent + blurred so the dull
-           grey-black backdrop (and drifting orbs) show through, instead
-           of a flat matte fill. */
+        /* Glass Chat Row Shape — translucent + blurred so the backdrop
+           wash and drifting orbs show through, instead of a flat matte
+           fill. Colors/border-width come from --row-glass-* variables so
+           each theme (tokens.css) controls its own look: dark theme keeps
+           the original subtle white-on-dark glass, light theme gets a
+           vibrant, more opaque frost with a visibly thicker border so the
+           row doesn't disappear into a bright page. */
         .chat-row { 
           position: relative;
           display: flex;
@@ -309,10 +326,10 @@ function DarkGlassBackground() {
           margin: 6px 12px 10px 12px;
           width: calc(100% - 24px);
           box-sizing: border-box;
-          background: rgba(255, 255, 255, 0.08);
+          background: var(--row-glass-bg);
           backdrop-filter: blur(28px) saturate(180%);
           -webkit-backdrop-filter: blur(28px) saturate(180%);
-          border: 1px solid rgba(255, 255, 255, 0.14);
+          border: var(--row-glass-border-width) solid var(--row-glass-border);
           border-radius: 20px; 
           color: var(--paper);
           text-align: left;
@@ -320,24 +337,23 @@ function DarkGlassBackground() {
           touch-action: manipulation;
           cursor: pointer;
           overflow: visible;
-          box-shadow: 0 8px 24px rgba(0,0,0,0.06), inset 0 1px 0 rgba(255,255,255,0.08);
+          box-shadow: var(--row-glass-shadow);
         }
         
         .chat-row:active { 
           transform: scale(0.96) translateY(2px);
-          /* Was a hardcoded dark hex (#252630) that ignored the light
-             theme entirely, so tapping/selecting a row still flashed a
-             near-black background even with data-theme="light" — a
-             semi-transparent tint reads as a subtle highlight over
-             whichever theme's --ink-2 is underneath instead. */
-          background: rgba(120, 170, 255, 0.16);
+          /* Themed tap-highlight (--row-tap-bg) instead of a hardcoded
+             dark hex, so tapping/selecting a row reads as a subtle
+             highlight over whichever theme's glass is underneath instead
+             of always flashing the same color regardless of theme. */
+          background: var(--row-tap-bg);
           box-shadow: 0 2px 8px rgba(0,0,0,0.1);
         }
 
         .chat-row.active-chat {
-          background: rgba(255, 255, 255, 0.14);
-          border-color: rgba(255,255,255,0.28);
-          box-shadow: 0 10px 28px rgba(0,0,0,0.12), inset 0 1px 0 rgba(255,255,255,0.12);
+          background: var(--row-glass-active-bg);
+          border-color: var(--row-glass-active-border);
+          box-shadow: var(--row-glass-active-shadow);
           transform: translateY(-1px);
         }
 
@@ -364,12 +380,14 @@ function DarkGlassBackground() {
 
         /* Reusable glass surface for panels/sheets/modals that want the
            same translucent-blur look as chat rows but as a full container
-           rather than a list item. */
+           rather than a list item. Themed via --surface-glass-* so light
+           mode gets its own vibrant, thicker-bordered frost instead of
+           reusing dark mode's white-on-dark values. */
         .glass-surface {
-          background: rgba(255, 255, 255, 0.1);
+          background: var(--surface-glass-bg);
           backdrop-filter: blur(40px) saturate(190%);
           -webkit-backdrop-filter: blur(40px) saturate(190%);
-          border: 1px solid rgba(255,255,255,0.12);
+          border: var(--surface-glass-border-width) solid var(--surface-glass-border);
         }
 
         @keyframes tab-slide-in { 0% { opacity: 0; transform: translateX(20px); } 100% { opacity: 1; transform: translateX(0); } }

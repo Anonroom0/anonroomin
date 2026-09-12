@@ -34,6 +34,7 @@ import { AudioBubble, VideoBubble } from '../components/shared/MediaBubble';
 import InstagramCard from '../components/shared/InstagramCard';
 import ShareStorySheet from '../components/questions/ShareStorySheet';
 import { BACKGROUND_STRUCTURES, ACCENT_COLORS, BODY_SHAPES, BODY_SCALES } from '../lib/storyStylePresets';
+import { generateConfessionCardImage } from '../lib/storyImageGenerator';
 
 const MESSAGE_LIMIT = 20;
 const REPLY_SNIPPET_LENGTH = 80;
@@ -167,165 +168,222 @@ function randomStoryStyle() {
 }
 
 function ConfessionModal({ open, onClose, onSubmit }) {
-  const [text, setText] = useState('');
-  const [anon, setAnon] = useState(true);
-  const [media, setMedia] = useState(null);
+  const [text, setText] = useState(''); 
+  const [anon, setAnon] = useState(true); 
+  const [media, setMedia] = useState(null); 
   const mediaInputRef = useRef(null);
 
-  // Optional bubble style JSON for ConfessionBubble. Full visual preview /
-  // Standard forms live only in ShareStorySheet (opened via Preview).
+  // Customize — pick a Background/Colour/Shape/Size combo (same preset
+  // lists ShareStorySheet/CreateConfessionModal use) to store as small JSON
+  // on the message row rather than rendering + uploading a PNG up front —
+  // see storyStylePresets.js and the 0003 migration. `storyStyle` null
+  // means "not customized"; the confession renders as a plain bubble.
+  const [customizeOpen, setCustomizeOpen] = useState(false);
   const [storyStyle, setStoryStyle] = useState(null);
-  const [styleSheetOpen, setStyleSheetOpen] = useState(false);
+  const [previewUrl, setPreviewUrl] = useState(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const previewUrlRef = useRef(null);
+  const previewTokenRef = useRef(0);
 
   useEffect(() => {
     return () => { if (media) URL.revokeObjectURL(media.previewUrl); };
   }, [media]);
+
+  // Live preview of the customized card — renders through the exact same
+  // generateConfessionCardImage() pipeline the chat bubble itself will use
+  // (see ConfessionBubble.jsx), so what's shown here is what the group will
+  // actually see.
+  useEffect(() => {
+    if (!customizeOpen || !storyStyle) {
+      if (previewUrlRef.current) { URL.revokeObjectURL(previewUrlRef.current); previewUrlRef.current = null; }
+      setPreviewUrl(null);
+      return undefined;
+    }
+    const token = ++previewTokenRef.current;
+    setPreviewLoading(true);
+    let cancelled = false;
+    Promise.resolve()
+      .then(() => {
+        if (typeof generateConfessionCardImage !== 'function') {
+          throw new Error('generateConfessionCardImage unavailable');
+        }
+        return generateConfessionCardImage({
+          text: text.trim() || 'Your confession will appear here…',
+          backgroundId: storyStyle.backgroundId,
+          colorId: storyStyle.colorId,
+          shapeId: storyStyle.shapeId,
+          scaleId: storyStyle.scaleId,
+        });
+      })
+      .then((blob) => {
+        if (cancelled || previewTokenRef.current !== token) return;
+        if (!blob) { setPreviewLoading(false); return; }
+        const url = URL.createObjectURL(blob);
+        if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current);
+        previewUrlRef.current = url;
+        setPreviewUrl(url);
+        setPreviewLoading(false);
+      })
+      .catch((err) => {
+        console.warn('Confession style preview failed:', err);
+        if (!cancelled && previewTokenRef.current === token) setPreviewLoading(false);
+      });
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [customizeOpen, storyStyle, text]);
+
+  useEffect(() => {
+    return () => { if (previewUrlRef.current) URL.revokeObjectURL(previewUrlRef.current); };
+  }, []);
 
   if (!open) return null;
 
   function handleFileChange(e) {
     const file = e.target.files?.[0];
     e.target.value = '';
-    if (!file) return;
-    if (media) URL.revokeObjectURL(media.previewUrl);
-    setMedia({ file, isVideo: file.type.startsWith('video/'), previewUrl: URL.createObjectURL(file) });
+    if (file) {
+      setMedia({ file, isVideo: file.type.startsWith('video/'), previewUrl: URL.createObjectURL(file) });
+    }
   }
 
-  function handleOpenStyleSheet() {
-    hapticTap();
+  function handleToggleCustomize() {
+    if (customizeOpen) { setCustomizeOpen(false); return; }
+    setCustomizeOpen(true);
     if (!storyStyle) setStoryStyle(randomStoryStyle());
-    setStyleSheetOpen(true);
   }
 
-  function handleShuffleStyle() {
-    hapticTap();
-    setStoryStyle(randomStoryStyle());
-  }
-
-  function handleRemoveCustomization() {
-    setStoryStyle(null);
-  }
+  function handleShuffleStyle() { setStoryStyle(randomStoryStyle()); }
+  function handleRemoveCustomization() { setStoryStyle(null); setCustomizeOpen(false); }
 
   function handleSubmit() {
-    if (!text.trim() && !media) return;
-    onSubmit(text.trim(), anon, media?.file, storyStyle);
-    setText('');
-    setMedia(null);
-    setStoryStyle(null);
-    setStyleSheetOpen(false);
+    if (text.trim() || media) {
+      onSubmit(text.trim(), anon, media?.file, storyStyle);
+      setText(''); setMedia(null); setStoryStyle(null); setCustomizeOpen(false);
+    }
   }
 
-  const draftMessage = {
-    id: 'draft',
-    text: text.trim() || 'Your confession will appear here…',
-    sender_name: anon ? 'Anonymous' : 'You',
-    avatar_url: null,
-    is_anon: anon,
-    is_confession: true,
-    media_url: media && !media.isVideo ? media.previewUrl : null,
-    media_type: media ? (media.isVideo ? 'video' : 'image') : null,
-    story_style: storyStyle,
-  };
-
+  // Mirrors CreateConfessionModal.jsx's (Ask Me tab) layout: rendered through
+  // GlassPanel's portal-based sheet (so it repositions correctly above the
+  // on-screen keyboard instead of a hand-rolled fixed overlay), with the
+  // "Add Media" button living inline right under the textarea rather than
+  // in a separate row that can end up hidden behind the keyboard.
   return (
-    <>
-      <GlassPanel variant="sheet" onClose={onClose}>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 20, padding: '4px 20px 28px' }}>
-          <div style={{ fontSize: 20, fontWeight: 700, color: 'var(--paper)' }}>New Confession</div>
+    <GlassPanel variant="sheet" onClose={onClose}>
+      <div style={{ display: 'flex', flexDirection: 'column', gap: 20, padding: '4px 20px 28px' }}>
+        <div style={{ fontSize: 20, fontWeight: 700, color: 'var(--paper)' }}>New Confession</div>
 
-          <div style={{ borderRadius: 24, border: '1px solid var(--separator)', background: 'var(--ink-2)', padding: '4px 4px 0' }}>
-            <textarea
-              name="group-confession-composer"
-              autoComplete="off"
-              data-lpignore="true"
-              data-1p-ignore
-              data-form-type="other"
-              value={text}
-              onChange={(e) => setText(e.target.value.slice(0, MAX_TEXT_LENGTH))}
-              maxLength={MAX_TEXT_LENGTH}
-              placeholder="Type your confession…"
-              rows={media ? 3 : 5}
-              style={{ width: '100%', resize: 'none', border: 'none', outline: 'none', background: 'transparent', color: 'var(--paper)', fontSize: 16, fontFamily: 'inherit', padding: '14px 16px 4px', boxSizing: 'border-box' }}
-            />
+        <div style={{ borderRadius: 20, border: '1px solid var(--separator)', background: 'var(--ink-2)', padding: '4px 4px 0' }}>
+          <textarea
+            name="group-confession-composer"
+            autoComplete="off"
+            data-lpignore="true"
+            data-1p-ignore
+            data-form-type="other"
+            value={text}
+            onChange={(e) => setText(e.target.value.slice(0, MAX_TEXT_LENGTH))}
+            maxLength={MAX_TEXT_LENGTH}
+            placeholder="Type your confession…"
+            rows={media ? 3 : 5}
+            style={{ width: '100%', resize: 'none', border: 'none', outline: 'none', background: 'transparent', color: 'var(--paper)', fontSize: 16, fontFamily: 'inherit', padding: '14px 16px 4px', boxSizing: 'border-box' }}
+          />
 
-            {media && (
-              <div style={{ position: 'relative', width: 80, height: 80, margin: '0 16px 12px' }}>
-                {media.isVideo ? (
-                  <video src={media.previewUrl} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 16 }} />
-                ) : (
-                  <img src={media.previewUrl} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 16 }} alt="preview" />
-                )}
-                <button onClick={() => setMedia(null)} style={{ position: 'absolute', top: -6, right: -6, background: 'var(--ink-2)', color: 'var(--paper)', border: 'none', borderRadius: '50%', width: 22, height: 22, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 8px rgba(0,0,0,0.3)' }}>{Vectors.Close}</button>
-              </div>
-            )}
-
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 16px 10px' }}>
-              <button
-                type="button"
-                onClick={() => mediaInputRef.current?.click()}
-                style={{ border: 'none', background: 'transparent', color: 'var(--dim)', fontWeight: 700, fontSize: 13, display: 'flex', alignItems: 'center', gap: 6, cursor: 'pointer' }}
-              >
-                {Vectors.Photo} Add media
-              </button>
-              <input ref={mediaInputRef} type="file" accept="image/*,video/*" onChange={handleFileChange} style={{ display: 'none' }} />
-              <span style={{ fontSize: 12, color: 'var(--dim)' }}>{text.length}/{MAX_TEXT_LENGTH}</span>
+          {media && (
+            <div style={{ position: 'relative', width: 80, height: 80, margin: '0 16px 12px' }}>
+              {media.isVideo ? (
+                <video src={media.previewUrl} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 12 }} />
+              ) : (
+                <img src={media.previewUrl} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 12 }} alt="preview" />
+              )}
+              <button onClick={() => setMedia(null)} style={{ position: 'absolute', top: -6, right: -6, background: 'var(--ink-2)', color: 'var(--paper)', border: 'none', borderRadius: '50%', width: 22, height: 22, cursor: 'pointer', display: 'flex', alignItems: 'center', justifyContent: 'center', boxShadow: '0 2px 8px rgba(0,0,0,0.3)' }}>{Vectors.Close}</button>
             </div>
-          </div>
+          )}
 
-          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '0 16px 10px' }}>
             <button
               type="button"
-              onClick={handleOpenStyleSheet}
-              disabled={text.trim().length === 0 && !media}
+              onClick={() => mediaInputRef.current?.click()}
+              disabled={!!media}
+              style={{ background: 'transparent', border: 'none', color: media ? 'rgba(255,255,255,0.1)' : 'var(--dim)', cursor: media ? 'default' : 'pointer', display: 'flex', alignItems: 'center', gap: 6, padding: 0, fontSize: 13, fontWeight: 600 }}
+            >
+              {Vectors.Photo} {media ? 'Media Added' : 'Add Media'}
+            </button>
+            <input type="file" accept="image/*,video/*" ref={mediaInputRef} style={{ display: 'none' }} onChange={handleFileChange} />
+
+            {/* Customize — pick a story style for this confession's bubble
+                without rendering/uploading an image; see the panel below. */}
+            <button
+              type="button"
+              onClick={handleToggleCustomize}
+              disabled={text.trim().length === 0}
               style={{
-                flex: 1,
-                minWidth: 140,
-                padding: '12px 14px',
-                borderRadius: 16,
-                border: '1px solid var(--glass-border)',
-                background: storyStyle ? 'rgba(47,111,255,0.14)' : 'var(--ink-2)',
-                color: text.trim().length === 0 && !media ? 'rgba(255,255,255,0.15)' : storyStyle ? 'var(--ember)' : 'var(--paper)',
-                fontWeight: 800,
-                fontSize: 13.5,
-                cursor: text.trim().length === 0 && !media ? 'default' : 'pointer',
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                gap: 8,
+                background: storyStyle ? 'rgba(47,111,255,0.14)' : 'transparent',
+                border: 'none', borderRadius: 999, padding: '5px 10px',
+                color: text.trim().length === 0 ? 'rgba(255,255,255,0.15)' : storyStyle ? 'var(--ember)' : 'var(--dim)',
+                cursor: text.trim().length === 0 ? 'default' : 'pointer',
+                display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 700,
               }}
             >
-              {Vectors.Palette} {storyStyle ? 'Preview & style' : 'Preview story'}
+              {Vectors.Palette} {customizeOpen ? 'Hide style' : (storyStyle ? 'Customized' : 'Customize')}
             </button>
-            {storyStyle && (
-              <>
-                <button type="button" onClick={handleShuffleStyle} style={{ border: 'none', background: 'transparent', color: 'var(--ember)', fontSize: 13, fontWeight: 800, padding: '0 8px' }}>Shuffle</button>
-                <button type="button" onClick={handleRemoveCustomization} style={{ border: 'none', background: 'transparent', color: 'var(--dim)', fontSize: 13, fontWeight: 700, padding: '0 8px' }}>Remove</button>
-              </>
-            )}
+
+            <div style={{ fontSize: 12, color: 'var(--dim)' }}>{text.length}/{MAX_TEXT_LENGTH}</div>
           </div>
-
-          <label style={{ display: 'flex', alignItems: 'center', gap: 10, color: 'var(--paper)', fontWeight: 600, fontSize: 14 }}>
-            <input type="checkbox" checked={anon} onChange={(e) => setAnon(e.target.checked)} />
-            Post anonymously
-          </label>
-
-          <button onClick={handleSubmit} style={{ width: '100%', padding: 16, borderRadius: 24, border: 'none', background: 'var(--ember)', color: '#fff', fontWeight: 700, cursor: 'pointer', fontSize: 16 }}>Post Confession</button>
         </div>
-      </GlassPanel>
 
-      {/* Preview / Standard forms / full Customization — ShareStorySheet only */}
-      {styleSheetOpen && (
-        <ShareStorySheet
-          mode="message"
-          open={styleSheetOpen}
-          onClose={() => setStyleSheetOpen(false)}
-          message={draftMessage}
-          customizable
-          initialStyle={storyStyle}
-          lockedStyle={null}
-        />
-      )}
-    </>
+        {customizeOpen && storyStyle && (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 14, padding: 16, borderRadius: 20, border: '1px solid var(--separator)', background: 'var(--ink-2)' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+              <span style={{ fontSize: 14, fontWeight: 800, color: 'var(--paper)' }}>Bubble style</span>
+              <div style={{ display: 'flex', gap: 14 }}>
+                <button type="button" onClick={handleShuffleStyle} style={{ border: 'none', background: 'transparent', color: 'var(--ember)', fontSize: 13, fontWeight: 800, padding: 0 }}>Shuffle</button>
+                <button type="button" onClick={handleRemoveCustomization} style={{ border: 'none', background: 'transparent', color: 'var(--dim)', fontSize: 13, fontWeight: 700, padding: 0 }}>Remove</button>
+              </div>
+            </div>
+
+            <div style={{ display: 'flex', gap: 14, alignItems: 'flex-start' }}>
+              <div style={{ width: 96, aspectRatio: '3 / 4', borderRadius: 14, overflow: 'hidden', background: 'var(--ink-2)', border: '1px solid var(--separator)', flexShrink: 0, position: 'relative' }}>
+                {previewUrl && (
+                  <img src={previewUrl} alt="Bubble preview" style={{ width: '100%', height: '100%', objectFit: 'cover', opacity: previewLoading ? 0.5 : 1, transition: 'opacity 150ms ease' }} />
+                )}
+              </div>
+
+              <div style={{ flex: 1, display: 'flex', flexDirection: 'column', gap: 10, minWidth: 0 }}>
+                {[
+                  { label: 'Background', list: BACKGROUND_STRUCTURES, key: 'backgroundId' },
+                  { label: 'Colour', list: ACCENT_COLORS, key: 'colorId' },
+                  { label: 'Shape', list: BODY_SHAPES, key: 'shapeId' },
+                  { label: 'Size', list: BODY_SCALES, key: 'scaleId' },
+                ].map(({ label, list, key }) => (
+                  <label key={key} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 10 }}>
+                    <span style={{ fontSize: 12.5, fontWeight: 700, color: 'var(--dim)' }}>{label}</span>
+                    <select
+                      value={storyStyle[key]}
+                      onChange={(e) => setStoryStyle((prev) => ({ ...prev, [key]: e.target.value }))}
+                      style={{ flex: 1, maxWidth: 150, background: 'var(--ink-2)', color: 'var(--paper)', border: '1px solid var(--separator)', borderRadius: 10, padding: '6px 10px', fontSize: 13, fontWeight: 700 }}
+                    >
+                      {list.map((p) => (
+                        <option key={p.id} value={p.id} style={{ background: 'var(--ink-2)', color: 'var(--paper)' }}>{p.name}</option>
+                      ))}
+                    </select>
+                  </label>
+                ))}
+              </div>
+            </div>
+
+            <p style={{ margin: 0, fontSize: 12, color: 'var(--dim)', lineHeight: 1.4 }}>
+              Only this style choice is saved — the group sees this rendered right inside the chat bubble, no label, just the shape and background.
+            </p>
+          </div>
+        )}
+
+        <label style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, padding: '12px 16px', borderRadius: 20, border: '1px solid var(--separator)', background: 'var(--ink-2)', cursor: 'pointer' }}>
+          <span style={{ fontSize: 15, fontWeight: 700, color: 'var(--paper)' }}>Post anonymously</span>
+          <input type="checkbox" checked={anon} onChange={(e) => setAnon(e.target.checked)} />
+        </label>
+
+        <button onClick={handleSubmit} style={{ width: '100%', padding: 16, borderRadius: 20, border: 'none', background: 'var(--ember)', color: '#fff', fontWeight: 700, cursor: 'pointer', fontSize: 16 }}>Post Confession</button>
+      </div>
+    </GlassPanel>
   );
 }
 
